@@ -1,0 +1,15 @@
+D:/Projek/AntigravityWorkspaces/Manifast/build/CMakeFiles/test.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/CMakeFiles/edit_cache.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/CMakeFiles/rebuild_cache.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/src/lib/CMakeFiles/manifast_lib.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/src/lib/CMakeFiles/test.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/src/lib/CMakeFiles/edit_cache.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/src/lib/CMakeFiles/rebuild_cache.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/src/cmd/CMakeFiles/manifast.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/src/cmd/CMakeFiles/test.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/src/cmd/CMakeFiles/edit_cache.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/src/cmd/CMakeFiles/rebuild_cache.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/tests/CMakeFiles/manifast_tests.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/tests/CMakeFiles/test.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/tests/CMakeFiles/edit_cache.dir
+D:/Projek/AntigravityWorkspaces/Manifast/build/tests/CMakeFiles/rebuild_cache.dir

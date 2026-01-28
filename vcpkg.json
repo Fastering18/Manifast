@@ -1,0 +1,17 @@
+{
+  "name": "manifast",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "fmt",
+    "argparse",
+    "gtest",
+    {
+      "name": "llvm",
+      "version>=": "21.0.0",
+      "features": [
+        "target-all",
+        "utils"
+      ]
+    }
+  ]
+}

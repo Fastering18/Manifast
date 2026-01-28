@@ -1,0 +1,25 @@
+-- Manifast Test Script
+
+fungsi tambah(a, b)
+    kembali a + b
+tutup
+
+lokal arr = [1, 2, 3]
+lokal obj = { x: 10, y: 20 }
+
+lokal val = 10
+val += 5 -- 15
+val *= 2 -- 30
+val %= 4 -- 2
+
+lokal flags = 1 | 2 -- 3
+flags = flags & 2 -- 2
+flags = flags << 1 -- 4
+
+lokal first = arr[1]
+
+jika val == 2 maka
+    kembali benar
+tutup
+
+kembali salah

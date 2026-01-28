@@ -1,0 +1,8 @@
+# ninja log v6
+13	93	7913364668739319	tests/CMakeFiles/manifast_tests.dir/TestMain.cpp.obj	febd00b9e4cff158
+9	996	7913364668715791	src/cmd/CMakeFiles/manifast.dir/main.cpp.obj	eac9a543e5d2a05c
+7	1910	7913364668689476	src/lib/CMakeFiles/manifast_lib.dir/Parser.cpp.obj	d112857c0829d851
+41	522	7913364931188999	src/lib/CMakeFiles/manifast_lib.dir/Lexer.cpp.obj	cc3d31353c658b9f
+523	862	7913364935913177	lib/libmanifast_lib.a	ac020dc4b200057a
+871	1219	7913364939480629	bin/manifast_tests.exe	2eff836ec802b5d4
+863	1355	7913364939386604	bin/manifast.exe	3ceaa39d627fba65
