@@ -1,0 +1,36 @@
+# Build directories
+build/
+out/
+bin/
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.ninja
+*.ninja_deps
+*.ninja_log
+
+# IDEs
+.vscode/
+.idea/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.a
+*.lib
+*.pdb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.mnf_log
