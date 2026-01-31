@@ -13,37 +13,27 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Cache vcpkg
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/vcpkg
-          vcpkg_installed
-        key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
-        restore-keys: |
-          ${{ runner.os }}-vcpkg-
-
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ninja-build cmake g++-11
+        # Install LLVM, fmt, GTest via apt to save build time
+        sudo apt-get install -y ninja-build cmake g++-11 llvm-dev libfmt-dev libgtest-dev
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
-
-    - name: Run vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgJsonGlob: 'vcpkg.json'
+        
+        # Install argparse manually (header-only)
+        sudo mkdir -p /usr/local/include/argparse
+        sudo wget -O /usr/local/include/argparse/argparse.hpp https://raw.githubusercontent.com/p-ranav/argparse/master/include/argparse/argparse.hpp
 
     - name: Configure CMake
       run: |
         cmake -S . -B build -G "Ninja" \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_BUILD_TYPE=Release
+          # No vcpkg toolchain -> uses system libs found by find_package
 
     - name: Build
       run: cmake --build build
 
     - name: Run Tests
       run: |
-        ./build/bin/manifast tests/Manifast/test.mnf
+        ./build/bin/manifast --test tests/Manifast
 
