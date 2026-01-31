@@ -70,6 +70,7 @@ llvm::Value* CodeGen::generateExpr(const Expr* expr) {
     if (auto* bin = dynamic_cast<const BinaryExpr*>(expr)) return visitBinaryExpr(bin);
     if (auto* var = dynamic_cast<const VariableExpr*>(expr)) return visitVariableExpr(var);
     if (auto* assign = dynamic_cast<const AssignExpr*>(expr)) return visitAssignExpr(assign);
+    if (auto* call = dynamic_cast<const CallExpr*>(expr)) return visitCallExpr(call);
     return nullptr;
 }
 
@@ -277,6 +278,34 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
 
     builder->CreateStore(val, V);
     return val;
+}
+
+llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
+    // Assuming callee is a VariableExpr (function name)
+    auto* var = dynamic_cast<VariableExpr*>(expr->callee.get());
+    if (!var) {
+        std::cerr << "Only simple function calls are supported now\n";
+        return nullptr;
+    }
+
+    llvm::Function* func = module->getFunction(var->name);
+    if (!func) {
+        std::cerr << "Unknown function: " << var->name << "\n";
+        return nullptr;
+    }
+
+    if (func->arg_size() != expr->args.size()) {
+        std::cerr << "Incorrect number of arguments for " << var->name << "\n";
+        return nullptr;
+    }
+
+    std::vector<llvm::Value*> argsV;
+    for (const auto& arg : expr->args) {
+        argsV.push_back(generateExpr(arg.get()));
+        if (!argsV.back()) return nullptr;
+    }
+
+    return builder->CreateCall(func, argsV, "calltmp");
 }
 
 void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
