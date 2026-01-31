@@ -1,0 +1,13 @@
+-- Core Operators Test
+lokal a = 10 + 5 * 2
+lokal b = (10 + 5) * 2
+lokal c = 100 / 4 - 5
+lokal d = 10 % 3
+
+jika a == 20 maka
+    c += 1
+tutup
+
+jika b != 20 maka
+    d = 0
+tutup

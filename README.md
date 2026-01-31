@@ -1,6 +1,27 @@
 # Manifast Programming Language
 https://github.com/Fastering18/Manifast  
-Fast, manipulation programming language with Indonesian-based syntax, powered by LLVM.
+Fast, scriptable programming language with Indonesian-based syntax, powered by LLVM.
+
+## Syntax Samples
+```manifast
+-- Functions
+fungsi hitung(x, y)
+    kembali x * y + 10
+tutup
+
+-- Variables and Control Flow
+lokal a = 5
+jika a < 10 maka
+    untuk i = 1 ke 5 lakukan
+        a += i
+    tutup
+tutup
+
+-- Tables/Objects
+lokal user = { nama: "Manifast", versi: 0.1 }
+```
+
+[Full Grammar Definition (BNF)](docs/GRAMMAR.md)
 
 ## Welcome Contributors!
 We are open to anyone who wants to contribute to this project. Whether it's reporting bugs, suggesting features, or submitting pull requests, your help is appreciated!
