@@ -26,16 +26,19 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        # Install LLVM 18 and other tools
-        sudo apt-get install -y ninja-build cmake g++-11 llvm-18-dev libfmt-dev
+        sudo apt-get install -y ninja-build cmake g++-11
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
+
+    - name: Run vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Configure CMake
       run: |
-        # We tell CMake to look for system LLVM instead of building via vcpkg in CI
-        # This prevents the 2-hour build time in CI
         cmake -S . -B build -G "Ninja" \
-          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
 
     - name: Build
       run: cmake --build build
