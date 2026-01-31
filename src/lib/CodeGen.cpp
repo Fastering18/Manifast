@@ -148,11 +148,42 @@ llvm::Value* CodeGen::visitBinaryExpr(const BinaryExpr* expr) {
     if (!L || !R) return nullptr;
 
     switch (expr->op) {
-        case TokenType::Plus: return builder->CreateFAdd(L, R, "addtmp");
+        case TokenType::Plus:  return builder->CreateFAdd(L, R, "addtmp");
         case TokenType::Minus: return builder->CreateFSub(L, R, "subtmp");
-        case TokenType::Star: return builder->CreateFMul(L, R, "multmp");
+        case TokenType::Star:  return builder->CreateFMul(L, R, "multmp");
         case TokenType::Slash: return builder->CreateFDiv(L, R, "divtmp"); 
-        default: return nullptr;
+        
+        // Comparisons
+        case TokenType::EqualEqual: {
+            L = builder->CreateFCmpOEQ(L, R, "eqtmp");
+            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+        }
+        case TokenType::BangEqual: {
+            L = builder->CreateFCmpONE(L, R, "netmp");
+            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+        }
+        case TokenType::Less: {
+            L = builder->CreateFCmpOLT(L, R, "lttmp");
+            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+        }
+        case TokenType::LessEqual: {
+            L = builder->CreateFCmpOLE(L, R, "letmp");
+            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+        }
+        case TokenType::Greater: {
+            L = builder->CreateFCmpOGT(L, R, "gttmp");
+            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+        }
+        case TokenType::GreaterEqual: {
+            L = builder->CreateFCmpOGE(L, R, "getmp");
+            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+        }
+
+        // TODO: Logical And/Or with short-circuiting
+
+        default: 
+            std::cerr << "Unimplemented binary operator: " << tokenTypeToString(expr->op) << "\n";
+            return nullptr;
     }
 }
 
