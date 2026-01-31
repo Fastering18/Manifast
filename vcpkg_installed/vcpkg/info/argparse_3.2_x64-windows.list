@@ -1,0 +1,11 @@
+x64-windows/
+x64-windows/include/
+x64-windows/include/argparse/
+x64-windows/include/argparse/argparse.hpp
+x64-windows/share/
+x64-windows/share/argparse/
+x64-windows/share/argparse/argparseConfig-version.cmake
+x64-windows/share/argparse/argparseConfig.cmake
+x64-windows/share/argparse/copyright
+x64-windows/share/argparse/vcpkg.spdx.json
+x64-windows/share/argparse/vcpkg_abi_info.txt

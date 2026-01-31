@@ -7,7 +7,6 @@
     "gtest",
     {
       "name": "llvm",
-      "version>=": "21.0.0",
       "features": [
         "target-all",
         "utils"

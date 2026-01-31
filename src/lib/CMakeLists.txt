@@ -1,6 +1,7 @@
 add_library(manifast_lib
   Lexer.cpp
   Parser.cpp
+  CodeGen.cpp
 )
 
 # Allow including "manifast/..."
@@ -9,9 +10,12 @@ target_include_directories(manifast_lib PUBLIC
 )
 
 target_link_libraries(manifast_lib PUBLIC
-  # fmt::fmt
-  # LLVMCore
-  # LLVMOrcJIT
-  # LLVMSupport
-  # LLVMTarget
+  fmt::fmt
+  LLVMCore
+  LLVMOrcJIT
+  LLVMSupport
+  LLVMTarget
+  LLVMExecutionEngine
+  LLVMAnalysis
+  LLVMNative
 )

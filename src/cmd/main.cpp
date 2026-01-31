@@ -18,6 +18,8 @@ void printTokens(const std::string& source) {
     } while (token.type != manifast::TokenType::EndOfFile);
 }
 
+#include "manifast/CodeGen.h"
+
 void parseAndVisualize(const std::string& source) {
     // For verifying Parser (Stage 2)
     manifast::SyntaxConfig config;
@@ -27,10 +29,22 @@ void parseAndVisualize(const std::string& source) {
     try {
         auto statements = parser.parse();
         std::cout << "Parsed " << statements.size() << " statements successfully.\n";
+        
+        // CodeGen
+        std::cout << "--- Code Generation ---\n";
+        manifast::CodeGen codegen;
+        codegen.compile(statements);
+        codegen.printIR();
+
+        std::cout << "--- Execution ---\n";
+        codegen.run();
+
+        
     } catch (...) {
-        std::cerr << "Parse Error.\n";
+        std::cerr << "Parse/Compile Error.\n";
     }
 }
+
 
 void runREPL() {
     std::cout << "Manifast 0.1.0 (REPL)\n";

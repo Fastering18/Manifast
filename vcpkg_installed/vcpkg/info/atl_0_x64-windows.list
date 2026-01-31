@@ -1,0 +1,5 @@
+x64-windows/
+x64-windows/share/
+x64-windows/share/atl/
+x64-windows/share/atl/vcpkg.spdx.json
+x64-windows/share/atl/vcpkg_abi_info.txt

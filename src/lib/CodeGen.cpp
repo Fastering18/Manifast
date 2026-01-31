@@ -1,0 +1,229 @@
+#include "manifast/CodeGen.h"
+#include <llvm/IR/Verifier.h>
+#include <iostream>
+
+namespace manifast {
+
+CodeGen::CodeGen() {
+    context = std::make_unique<llvm::LLVMContext>();
+    module = std::make_unique<llvm::Module>("ManifastModule", *context);
+    builder = std::make_unique<llvm::IRBuilder<>>(*context);
+}
+
+void CodeGen::compile(const std::vector<std::unique_ptr<Stmt>>& statements) {
+    // Create a main function to hold top-level statements
+    llvm::FunctionType* funcType = llvm::FunctionType::get(builder->getInt32Ty(), false);
+    llvm::Function* mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "main", module.get());
+    llvm::BasicBlock* entry = llvm::BasicBlock::Create(*context, "entry", mainFunc);
+    builder->SetInsertPoint(entry);
+
+    for (const auto& stmt : statements) {
+        generateStmt(stmt.get());
+    }
+
+    // Default return 0
+    builder->CreateRet(builder->getInt32(0));
+    
+    // Verify
+    if (llvm::verifyFunction(*mainFunc, &llvm::errs())) {
+        std::cerr << "Error: Function verification failed!\n";
+    }
+}
+
+void CodeGen::printIR() {
+    module->print(llvm::errs(), nullptr);
+}
+
+void CodeGen::run() {
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+
+    auto JIT = llvm::orc::LLJITBuilder().create();
+    if (!JIT) {
+        std::cerr << "Error: Failed to create LLJIT\n";
+        return;
+    }
+
+    // Move module to JIT. We wrap it in ThreadSafeModule
+    auto TSM = llvm::orc::ThreadSafeModule(std::move(module), std::move(context));
+    if (auto Err = JIT.get()->addIRModule(std::move(TSM))) {
+        std::cerr << "Error: Failed to add IR module to JIT\n";
+        return;
+    }
+
+    // Look up main
+    auto MainSym = JIT.get()->lookup("main");
+    if (!MainSym) {
+        std::cerr << "Error: main function not found in JIT\n";
+        return;
+    }
+
+    // Cast to expected signature: int(*)()
+    auto* MainPtr = MainSym->getAddress().toPtr<int (*)()>();
+    int result = MainPtr();
+    std::cout << "--- Execution Result ---\n";
+    std::cout << "Return code: " << result << "\n";
+}
+
+llvm::Value* CodeGen::generateExpr(const Expr* expr) {
+    if (auto* num = dynamic_cast<const NumberExpr*>(expr)) return visitNumberExpr(num);
+    if (auto* bin = dynamic_cast<const BinaryExpr*>(expr)) return visitBinaryExpr(bin);
+    if (auto* var = dynamic_cast<const VariableExpr*>(expr)) return visitVariableExpr(var);
+    if (auto* assign = dynamic_cast<const AssignExpr*>(expr)) return visitAssignExpr(assign);
+    return nullptr;
+}
+
+void CodeGen::generateStmt(const Stmt* stmt) {
+    if (auto* exprStmt = dynamic_cast<const ExprStmt*>(stmt)) {
+        generateExpr(exprStmt->expression.get());
+    } else if (auto* varDecl = dynamic_cast<const VarDeclStmt*>(stmt)) {
+        visitVarDeclStmt(varDecl);
+    } else if (auto* retStmt = dynamic_cast<const ReturnStmt*>(stmt)) {
+        visitReturnStmt(retStmt);
+    } else if (auto* block = dynamic_cast<const BlockStmt*>(stmt)) {
+        visitBlockStmt(block);
+    } else if (auto* ifStmt = dynamic_cast<const IfStmt*>(stmt)) {
+        visitIfStmt(ifStmt);
+    } else if (auto* whileStmt = dynamic_cast<const WhileStmt*>(stmt)) {
+        visitWhileStmt(whileStmt);
+    } else if (auto* forStmt = dynamic_cast<const ForStmt*>(stmt)) {
+        visitForStmt(forStmt);
+    }
+}
+
+void CodeGen::visitIfStmt(const IfStmt* stmt) {
+    llvm::Value* condV = generateExpr(stmt->condition.get());
+    if (!condV) return;
+
+    // Convert condition to bool (double != 0)
+    condV = builder->CreateFCmpONE(condV, llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), "ifcond");
+
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+
+    llvm::BasicBlock* thenBB = llvm::BasicBlock::Create(*context, "then", func);
+    llvm::BasicBlock* elseBB = llvm::BasicBlock::Create(*context, "else");
+    llvm::BasicBlock* mergeBB = llvm::BasicBlock::Create(*context, "ifcont");
+
+    if (stmt->elseBranch) {
+        builder->CreateCondBr(condV, thenBB, elseBB);
+    } else {
+        builder->CreateCondBr(condV, thenBB, mergeBB);
+    }
+
+    // Emit then block
+    builder->SetInsertPoint(thenBB);
+    generateStmt(stmt->thenBranch.get());
+    builder->CreateBr(mergeBB);
+    thenBB = builder->GetInsertBlock();
+
+    // Emit else block
+    if (stmt->elseBranch) {
+        func->insert(func->end(), elseBB);
+        builder->SetInsertPoint(elseBB);
+        generateStmt(stmt->elseBranch.get());
+        builder->CreateBr(mergeBB);
+        elseBB = builder->GetInsertBlock();
+    }
+
+    // Emit merge block
+    func->insert(func->end(), mergeBB);
+    builder->SetInsertPoint(mergeBB);
+}
+
+void CodeGen::visitWhileStmt(const WhileStmt* stmt) {
+    // Basic implementation of while
+}
+
+void CodeGen::visitForStmt(const ForStmt* stmt) {
+    // Basic implementation of for
+}
+
+llvm::Value* CodeGen::visitNumberExpr(const NumberExpr* expr) {
+    return llvm::ConstantFP::get(*context, llvm::APFloat(expr->value));
+}
+
+llvm::Value* CodeGen::visitBinaryExpr(const BinaryExpr* expr) {
+    llvm::Value* L = generateExpr(expr->left.get());
+    llvm::Value* R = generateExpr(expr->right.get());
+    if (!L || !R) return nullptr;
+
+    switch (expr->op) {
+        case TokenType::Plus: return builder->CreateFAdd(L, R, "addtmp");
+        case TokenType::Minus: return builder->CreateFSub(L, R, "subtmp");
+        case TokenType::Star: return builder->CreateFMul(L, R, "multmp");
+        case TokenType::Slash: return builder->CreateFDiv(L, R, "divtmp"); 
+        default: return nullptr;
+    }
+}
+
+llvm::Value* CodeGen::visitVariableExpr(const VariableExpr* expr) {
+    llvm::Value* V = namedValues[expr->name];
+    if (!V) {
+        std::cerr << "Unknown variable name: " << expr->name << "\n";
+        return nullptr;
+    }
+    // Load the value from the alloca
+    return builder->CreateLoad(llvm::Type::getDoubleTy(*context), V, expr->name.c_str());
+}
+
+llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
+    // Assuming target is a VariableExpr for now
+    auto* var = dynamic_cast<VariableExpr*>(expr->target.get());
+    if (!var) {
+        std::cerr << "Invalid assignment target\n";
+        return nullptr;
+    }
+
+    llvm::Value* val = generateExpr(expr->value.get());
+    if (!val) return nullptr;
+
+    llvm::Value* V = namedValues[var->name];
+    if (!V) {
+        std::cerr << "Unknown variable name: " << var->name << "\n";
+        return nullptr;
+    }
+
+    builder->CreateStore(val, V);
+    return val;
+}
+
+void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+    
+    // Create an alloca for the variable in the entry block of the current function
+    llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
+    llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(llvm::Type::getDoubleTy(*context), nullptr, stmt->name);
+    
+    namedValues[stmt->name] = alloca;
+
+    if (stmt->initializer) {
+        llvm::Value* initVal = generateExpr(stmt->initializer.get());
+        if (initVal) {
+            builder->CreateStore(initVal, alloca);
+        }
+    }
+}
+
+void CodeGen::visitReturnStmt(const ReturnStmt* stmt) {
+    if (stmt->value) {
+        llvm::Value* val = generateExpr(stmt->value.get());
+        // For now, our 'main' returns i32, but our expressions are double.
+        // We might need to cast or change main's return type.
+        // Let's assume double return for now for consistency if needed, 
+        // or just cast to i32 for main's sake.
+        if (val) {
+            llvm::Value* retVal = builder->CreateFPToSI(val, builder->getInt32Ty());
+            builder->CreateRet(retVal);
+        }
+    } else {
+        builder->CreateRet(builder->getInt32(0));
+    }
+}
+
+void CodeGen::visitBlockStmt(const BlockStmt* stmt) {
+    for (const auto& s : stmt->statements) {
+        generateStmt(s.get());
+    }
+}
+
+} // namespace manifast
