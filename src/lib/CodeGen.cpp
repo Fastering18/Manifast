@@ -131,7 +131,27 @@ void CodeGen::visitIfStmt(const IfStmt* stmt) {
 }
 
 void CodeGen::visitWhileStmt(const WhileStmt* stmt) {
-    // Basic implementation of while
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+
+    llvm::BasicBlock* condBB = llvm::BasicBlock::Create(*context, "whilecond", func);
+    llvm::BasicBlock* bodyBB = llvm::BasicBlock::Create(*context, "whilebody");
+    llvm::BasicBlock* afterBB = llvm::BasicBlock::Create(*context, "afterwhile");
+
+    builder->CreateBr(condBB);
+    builder->SetInsertPoint(condBB);
+
+    llvm::Value* condV = generateExpr(stmt->condition.get());
+    if (!condV) return;
+    condV = builder->CreateFCmpONE(condV, llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), "whilecond");
+    builder->CreateCondBr(condV, bodyBB, afterBB);
+
+    func->insert(func->end(), bodyBB);
+    builder->SetInsertPoint(bodyBB);
+    generateStmt(stmt->body.get());
+    builder->CreateBr(condBB);
+
+    func->insert(func->end(), afterBB);
+    builder->SetInsertPoint(afterBB);
 }
 
 void CodeGen::visitForStmt(const ForStmt* stmt) {
