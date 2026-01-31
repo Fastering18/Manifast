@@ -26,30 +26,21 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ninja-build cmake g++-11
+        # Install LLVM 18 and other tools
+        sudo apt-get install -y ninja-build cmake g++-11 llvm-18-dev libfmt-dev
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
-
-    - name: Setup vcpkg
-      run: |
-        git clone https://github.com/microsoft/vcpkg.git $GITHUB_WORKSPACE/vcpkg
-        $GITHUB_WORKSPACE/vcpkg/bootstrap-vcpkg.sh
 
     - name: Configure CMake
       run: |
+        # We tell CMake to look for system LLVM instead of building via vcpkg in CI
+        # This prevents the 2-hour build time in CI
         cmake -S . -B build -G "Ninja" \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       run: cmake --build build
 
     - name: Run Tests
       run: |
-        # Ensure binary exists and is executable
-        if [ -f "./build/bin/manifast" ]; then
-          chmod +x ./build/bin/manifast
-          ./build/bin/manifast tests/Manifast/test.mnf
-        else
-          echo "Error: manifast binary not found!"
-          exit 1
-        fi
+        ./build/bin/manifast tests/Manifast/test.mnf
+
