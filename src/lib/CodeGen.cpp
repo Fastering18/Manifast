@@ -155,7 +155,46 @@ void CodeGen::visitWhileStmt(const WhileStmt* stmt) {
 }
 
 void CodeGen::visitForStmt(const ForStmt* stmt) {
-    // Basic implementation of for
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+
+    // 1. Initializer
+    llvm::Value* startV = generateExpr(stmt->start.get());
+    if (!startV) return;
+
+    llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
+    llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(llvm::Type::getDoubleTy(*context), nullptr, stmt->varName);
+    builder->CreateStore(startV, alloca);
+    namedValues[stmt->varName] = alloca;
+
+    // 2. Blocks
+    llvm::BasicBlock* condBB = llvm::BasicBlock::Create(*context, "forcond", func);
+    llvm::BasicBlock* bodyBB = llvm::BasicBlock::Create(*context, "forbody");
+    llvm::BasicBlock* afterBB = llvm::BasicBlock::Create(*context, "afterfor");
+
+    builder->CreateBr(condBB);
+    builder->SetInsertPoint(condBB);
+
+    // 3. Condition (i <= end)
+    llvm::Value* currV = builder->CreateLoad(llvm::Type::getDoubleTy(*context), alloca, stmt->varName.c_str());
+    llvm::Value* endV = generateExpr(stmt->end.get());
+    llvm::Value* condV = builder->CreateFCmpOLE(currV, endV, "fortmp");
+    builder->CreateCondBr(condV, bodyBB, afterBB);
+
+    // 4. Body
+    func->insert(func->end(), bodyBB);
+    builder->SetInsertPoint(bodyBB);
+    generateStmt(stmt->body.get());
+
+    // 5. Update (i = i + step)
+    llvm::Value* stepV = stmt->step ? generateExpr(stmt->step.get()) : llvm::ConstantFP::get(*context, llvm::APFloat(1.0));
+    llvm::Value* nextV = builder->CreateFAdd(currV, stepV, "nextvar");
+    builder->CreateStore(nextV, alloca);
+
+    builder->CreateBr(condBB);
+
+    // 6. After
+    func->insert(func->end(), afterBB);
+    builder->SetInsertPoint(afterBB);
 }
 
 llvm::Value* CodeGen::visitNumberExpr(const NumberExpr* expr) {
