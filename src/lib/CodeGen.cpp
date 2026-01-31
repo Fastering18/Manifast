@@ -88,6 +88,8 @@ void CodeGen::generateStmt(const Stmt* stmt) {
         visitWhileStmt(whileStmt);
     } else if (auto* forStmt = dynamic_cast<const ForStmt*>(stmt)) {
         visitForStmt(forStmt);
+    } else if (auto* funcStmt = dynamic_cast<const FunctionStmt*>(stmt)) {
+        visitFunctionStmt(funcStmt);
     }
 }
 
@@ -314,6 +316,40 @@ void CodeGen::visitBlockStmt(const BlockStmt* stmt) {
     for (const auto& s : stmt->statements) {
         generateStmt(s.get());
     }
+}
+
+void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
+    std::vector<llvm::Type*> doubles(stmt->params.size(), llvm::Type::getDoubleTy(*context));
+    llvm::FunctionType* funcType = llvm::FunctionType::get(llvm::Type::getDoubleTy(*context), doubles, false);
+    llvm::Function* func = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, stmt->name, module.get());
+    
+    llvm::BasicBlock* entryBuf = llvm::BasicBlock::Create(*context, "entry", func);
+    auto* oldBB = builder->GetInsertBlock();
+    builder->SetInsertPoint(entryBuf);
+    
+    auto oldNamedValues = namedValues; 
+    unsigned idx = 0;
+    for (auto& arg : func->args()) {
+        std::string argName = stmt->params[idx++];
+        arg.setName(argName);
+        llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
+        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(llvm::Type::getDoubleTy(*context), nullptr, argName);
+        builder->CreateStore(&arg, alloca);
+        namedValues[argName] = alloca;
+    }
+    
+    generateStmt(stmt->body.get());
+    
+    if (!builder->GetInsertBlock()->getTerminator()) {
+        builder->CreateRet(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+    }
+    
+    if (llvm::verifyFunction(*func, &llvm::errs())) {
+        std::cerr << "Error: Function " << stmt->name << " verification failed!\n";
+    }
+    
+    namedValues = oldNamedValues;
+    if (oldBB) builder->SetInsertPoint(oldBB);
 }
 
 } // namespace manifast
