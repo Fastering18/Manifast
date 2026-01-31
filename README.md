@@ -1,11 +1,9 @@
 # Manifast Programming Language
 https://github.com/Fastering18/Manifast  
-Fast, scriptable programming language with Indonesian-based syntax, powered by LLVM.
+Fast, manipulation programming language with Indonesian-based syntax, powered by LLVM.
 
 ## Welcome Contributors!
 We are open to anyone who wants to contribute to this project. Whether it's reporting bugs, suggesting features, or submitting pull requests, your help is appreciated!
-
-Join our conversation here to get help or discuss development: [Discord Server](https://discord.gg/8vdZsBBGRG)
 
 ## Todo list
 - [x] Lexer (Tokens, Indonesian Keywords, Lua-style Comments)
@@ -55,4 +53,5 @@ cmake --build build
 ```
 
 ---
-Powered by LLVM. Made with ❤️ for the Indonesian Developer Community.
+
+Join our conversation here to get help or discuss development: [Discord Server](https://discord.gg/8vdZsBBGRG)
