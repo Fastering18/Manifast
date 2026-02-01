@@ -60,6 +60,10 @@ Make sure `vcpkg` is installed and in your PATH.
 vcpkg install
 ```
 
+**Alternative (Recommended for Windows Speed):**
+For installing dependencies without vcpkg: [follow these steps in docs/INSTALLING.md](docs/INSTALLING.md)
+
+
 ### LLVM Recommendation
 We recommend using **LLVM 18+**.
 - **Default**: The build system will automatically download and build the latest available LLVM via `vcpkg` (can be slow).
