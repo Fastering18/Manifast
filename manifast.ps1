@@ -38,27 +38,46 @@ if ($Command -eq "clean") {
 }
 
 if ($Command -eq "build") {
-    if (-not (Test-Path $BuildDir)) {
+    # If build directory exists but is broken (no ninja file), or if we want to be safe,
+    # we should allow re-configuration.
+    $NeedsConfig = $true
+    if (Test-Path "$BuildDir/build.ninja") {
+        $NeedsConfig = $false
+    }
+
+    if ($NeedsConfig) {
         Write-Host "Configuring Project..." -ForegroundColor Cyan
         
         $Args = @("-S", ".", "-B", $BuildDir, "-G", "Ninja")
         
+        # Toolchain detection (vcpkg)
+        $VcpkgToolchain = "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+        if (-not (Test-Path $VcpkgToolchain)) {
+            $VcpkgToolchain = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
+        }
+
         # Determine build type (Fast/System LLVM vs Default/Vcpkg)
         if ($Fast) {
              Write-Host "  Mode: FAST (System LLVM)" -ForegroundColor Magenta
              $Args += "-DVCPKG_MANIFEST_FEATURES="
              
-             # Fallback to known system paths if needed, but CMake usually finds it
              if ($LLVM_DIR) {
                  $Args += "-DLLVM_DIR=$LLVM_DIR"
+             } elseif (Test-Path "D:\Program\LLVM") {
+                 $Args += "-DLLVM_DIR=D:\Program\LLVM\lib\cmake\llvm"
              }
         } else {
              Write-Host "  Mode: DEFAULT (Vcpkg Bundle)" -ForegroundColor Blue
-             # Default features are used
+             if (Test-Path $VcpkgToolchain) {
+                 Write-Host "  Using Toolchain: $VcpkgToolchain" -ForegroundColor Gray
+                 $Args += "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain"
+             }
         }
 
-        # Toolchain defaults (optional overrides)
-        # $Args += "-DCMAKE_CXX_COMPILER=D:/Program/msys64/ucrt64/bin/g++.exe"
+        if (Test-Path $BuildDir) {
+            Write-Host "  Cleaning existing cache..." -ForegroundColor Gray
+            Remove-Item "$BuildDir\CMakeCache.txt" -ErrorAction SilentlyContinue
+        }
         
         cmake @Args
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
