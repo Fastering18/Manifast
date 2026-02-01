@@ -51,11 +51,23 @@ if ($Command -eq "build") {
     # If build directory exists but is broken (no ninja file), or if we want to be safe,
     # we should allow re-configuration.
     $NeedsConfig = $true
+    $ModeFile = "$BuildDir\build_mode.txt"
+    $CurrentMode = if ($Fast) { "FAST" } else { "DEFAULT" }
+
     if (Test-Path "$BuildDir/build.ninja") {
-        $NeedsConfig = $false
+        # Check if mode changed
+        if (Test-Path $ModeFile) {
+            $LastMode = Get-Content $ModeFile
+            if ($LastMode -eq $CurrentMode) {
+                $NeedsConfig = $false
+            }
+        }
     }
 
     if ($NeedsConfig) {
+        if (-not (Test-Path $BuildDir)) { New-Item -ItemType Directory -Path $BuildDir }
+        $CurrentMode | Out-File $ModeFile
+        
         Write-Host "Configuring Project..." -ForegroundColor Cyan
         
         $Args = @("-S", ".", "-B", $BuildDir, "-G", "Ninja")
@@ -66,15 +78,14 @@ if ($Command -eq "build") {
             $VcpkgToolchain = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
         }
         
-        if (Test-Path $VcpkgToolchain) {
-            Write-Host "  Using Toolchain: $VcpkgToolchain" -ForegroundColor Gray
-            $Args += "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain"
-        }
-
         # Determine build type (Fast/System LLVM vs Default/Vcpkg)
         if ($Fast) {
-             Write-Host "  Mode: FAST (System LLVM)" -ForegroundColor Magenta
+             # --- FAST MODE: Use System Libraries (MSYS2/etc) ---
+             Write-Host "  Mode: FAST (System LLVM & Libs)" -ForegroundColor Magenta
              $Args += "-DVCPKG_MANIFEST_FEATURES="
+             
+             # Do NOT use vcpkg toolchain in Fast mode as it hides system libs
+             # and leads to ABI mismatch (MSVC vs MinGW)
              
              if ($LLVM_DIR) {
                  $Args += "-DLLVM_DIR=$LLVM_DIR"
@@ -84,7 +95,12 @@ if ($Command -eq "build") {
                  $Args += "-DLLVM_DIR=D:\Program\LLVM\lib\cmake\llvm"
              }
         } else {
+             # --- DEFAULT MODE: Use Vcpkg ---
              Write-Host "  Mode: DEFAULT (Vcpkg Bundle)" -ForegroundColor Blue
+             if (Test-Path $VcpkgToolchain) {
+                 Write-Host "  Using Toolchain: $VcpkgToolchain" -ForegroundColor Gray
+                 $Args += "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain"
+             }
         }
 
         if (Test-Path $BuildDir) {
