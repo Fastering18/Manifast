@@ -55,22 +55,44 @@ if ($Command -eq "build") {
     $CurrentMode = if ($Fast) { "FAST" } else { "DEFAULT" }
 
     if (Test-Path "$BuildDir/build.ninja") {
-        # Check if mode changed
-        if (Test-Path $ModeFile) {
-            $LastMode = Get-Content $ModeFile
-            if ($LastMode -eq $CurrentMode) {
-                $NeedsConfig = $false
+        if ($Fast) {
+            # If we want FAST (MinGW) but find Ninja, we MUST re-config
+            $NeedsConfig = $true
+        } else {
+            # Check if mode changed
+            if (Test-Path $ModeFile) {
+                $LastMode = Get-Content $ModeFile
+                if ($LastMode -eq $CurrentMode) {
+                    $NeedsConfig = $false
+                }
             }
         }
     }
 
     if ($NeedsConfig) {
-        if (-not (Test-Path $BuildDir)) { New-Item -ItemType Directory -Path $BuildDir }
+        Write-Host "  Mode change or missing config detected. Forcing clean state..." -ForegroundColor Gray
+        
+        # Kill any hung processes that might be locking the build dir
+        taskkill /F /IM ninja.exe /T 2>$null
+        taskkill /F /IM mingw32-make.exe /T 2>$null
+        taskkill /F /IM manifast.exe /T 2>$null
+        taskkill /F /IM manifast_tests.exe /T 2>$null
+        
+        if (Test-Path $BuildDir) { 
+            Write-Host "  Wiping build directory..." -ForegroundColor Gray
+            Remove-Item $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
+            if (Test-Path $BuildDir) {
+                Write-Host "  Warning: Build directory still exists! Manual deletion might be required." -ForegroundColor Yellow
+            }
+        }
+        if (-not (Test-Path $BuildDir)) {
+            New-Item -ItemType Directory -Path $BuildDir | Out-Null
+        }
         $CurrentMode | Out-File $ModeFile
         
         Write-Host "Configuring Project..." -ForegroundColor Cyan
         
-        $Args = @("-S", ".", "-B", $BuildDir, "-G", "Ninja")
+        $CMakeArgs = @("-S", ".", "-B", $BuildDir, "-G", "Ninja")
         
         # Toolchain detection (vcpkg)
         $VcpkgToolchain = "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
@@ -82,34 +104,43 @@ if ($Command -eq "build") {
         if ($Fast) {
              # --- FAST MODE: Use System Libraries (MSYS2/etc) ---
              Write-Host "  Mode: FAST (System LLVM & Libs)" -ForegroundColor Magenta
-             $Args += "-DVCPKG_MANIFEST_FEATURES="
              
-             # Do NOT use vcpkg toolchain in Fast mode as it hides system libs
-             # and leads to ABI mismatch (MSVC vs MinGW)
-             
-             if ($LLVM_DIR) {
-                 $Args += "-DLLVM_DIR=$LLVM_DIR"
-             } elseif (Test-Path "D:\Program\msys64\ucrt64\lib\cmake\llvm") {
-                 $Args += "-DLLVM_DIR=D:\Program\msys64\ucrt64\lib\cmake\llvm"
-             } elseif (Test-Path "D:\Program\LLVM") {
-                 $Args += "-DLLVM_DIR=D:\Program\LLVM\lib\cmake\llvm"
+             # Force MSYS2 UCRT64 paths to avoid picking up Strawberry/Anaconda
+             $MsysPath = "D:\Program\msys64\ucrt64"
+             if (Test-Path $MsysPath) {
+                 Write-Host "  Forcing MSYS2 UCRT64 Toolchain..." -ForegroundColor Gray
+                 
+                 # Prepend MSYS2 bin to PATH for this process
+                 $env:PATH = "$MsysPath\bin;" + $env:PATH
+                 $env:CC = "$MsysPath\bin\gcc.exe"
+                 $env:CXX = "$MsysPath\bin\g++.exe"
+                 
+                 Write-Host "  Running CMake configuration (MinGW Makefiles)..." -ForegroundColor Gray
+                 
+                 # Using a flat string to avoid backtick issues
+                 $cmake_cmd = "cmake -S . -B $BuildDir -G `"MinGW Makefiles`" -DVCPKG_MANIFEST_FEATURES=`"`" -DCMAKE_C_COMPILER=`"$MsysPath\bin\gcc.exe`" -DCMAKE_CXX_COMPILER=`"$MsysPath\bin\g++.exe`" -DCMAKE_LINKER=`"$MsysPath\bin\ld.exe`" -DCMAKE_AR=`"$MsysPath\bin\ar.exe`" -DCMAKE_RANLIB=`"$MsysPath\bin\ranlib.exe`" -DCMAKE_MAKE_PROGRAM=`"$MsysPath\bin\mingw32-make.exe`" -DCMAKE_PREFIX_PATH=`"$MsysPath`" -DCMAKE_FIND_ROOT_PATH=`"$MsysPath`" -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_IGNORE_PATH=`"D:/Program/Anaconda`" -DLLVM_DIR=`"$MsysPath/lib/cmake/llvm`" -DGTest_DIR=`"$MsysPath/lib/cmake/GTest`" -Dfmt_DIR=`"$MsysPath/lib/cmake/fmt`""
+                 
+                 Invoke-Expression $cmake_cmd
+             } elseif ($LLVM_DIR) {
+                 cmake -S . -B $BuildDir -G Ninja -DLLVM_DIR=$LLVM_DIR
+             } else {
+                 cmake -S . -B $BuildDir -G Ninja
              }
         } else {
              # --- DEFAULT MODE: Use Vcpkg ---
              Write-Host "  Mode: DEFAULT (Vcpkg Bundle)" -ForegroundColor Blue
              if (Test-Path $VcpkgToolchain) {
                  Write-Host "  Using Toolchain: $VcpkgToolchain" -ForegroundColor Gray
-                 $Args += "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain"
+                 cmake -S . -B $BuildDir -G Ninja -DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain
+             } else {
+                 cmake -S . -B $BuildDir -G Ninja
              }
         }
 
-        if (Test-Path $BuildDir) {
-            Write-Host "  Cleaning existing cache..." -ForegroundColor Gray
-            Remove-Item "$BuildDir\CMakeCache.txt" -ErrorAction SilentlyContinue
+        if ($LASTEXITCODE -ne 0) { 
+            Write-Host "Error: CMake configuration failed with exit code $LASTEXITCODE" -ForegroundColor Red
+            exit $LASTEXITCODE 
         }
-        
-        cmake @Args
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
     
     Write-Host "Building Project..." -ForegroundColor Cyan

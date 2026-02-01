@@ -110,6 +110,8 @@ Token Lexer::nextToken() {
         case ':': return makeToken(TokenType::Colon);
         case ',': return makeToken(TokenType::Comma);
         case '.': return makeToken(TokenType::Dot);
+        case '[': return makeToken(TokenType::LBracket);
+        case ']': return makeToken(TokenType::RBracket);
         case '-': 
             if (match('=')) return makeToken(TokenType::MinusEqual);
             // Handle comments --

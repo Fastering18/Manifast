@@ -166,10 +166,17 @@ void CodeGen::run() {
 
     llvm::ExitOnError()(jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context))));
 
-    // Look up main
-    auto SymOrErr = jit->lookup("main");
+    // Look up main (handle Windows/MinGW mangling like _main)
+    std::string mainName = "main";
+    char prefix = jit->getDataLayout().getGlobalPrefix();
+    if (prefix) {
+        mainName = prefix + mainName;
+    }
+    
+    auto SymOrErr = jit->lookup(mainName);
+
     if (!SymOrErr) {
-        std::cerr << "Error: main function not found in JIT\n";
+        std::cerr << "Error: main function (" << mainName << ") not found in JIT\n";
         return;
     }
 
@@ -418,6 +425,43 @@ llvm::Value* CodeGen::visitBinaryExpr(const BinaryExpr* expr) {
             res = builder->CreateUIToFP(res, llvm::Type::getDoubleTy(*context), "booltmp");
             break;
         }
+
+        // Bitwise Operators
+        case TokenType::Ampersand: {
+            llvm::Value* LInt = builder->CreateFPToSI(LVal, llvm::Type::getInt64Ty(*context), "lint");
+            llvm::Value* RInt = builder->CreateFPToSI(RVal, llvm::Type::getInt64Ty(*context), "rint");
+            res = builder->CreateAnd(LInt, RInt, "andtmp");
+            res = builder->CreateSIToFP(res, llvm::Type::getDoubleTy(*context), "floatres");
+            break;
+        }
+        case TokenType::Pipe: {
+            llvm::Value* LInt = builder->CreateFPToSI(LVal, llvm::Type::getInt64Ty(*context), "lint");
+            llvm::Value* RInt = builder->CreateFPToSI(RVal, llvm::Type::getInt64Ty(*context), "rint");
+            res = builder->CreateOr(LInt, RInt, "ortmp");
+            res = builder->CreateSIToFP(res, llvm::Type::getDoubleTy(*context), "floatres");
+            break;
+        }
+        case TokenType::Caret: {
+            llvm::Value* LInt = builder->CreateFPToSI(LVal, llvm::Type::getInt64Ty(*context), "lint");
+            llvm::Value* RInt = builder->CreateFPToSI(RVal, llvm::Type::getInt64Ty(*context), "rint");
+            res = builder->CreateXor(LInt, RInt, "xortmp");
+            res = builder->CreateSIToFP(res, llvm::Type::getDoubleTy(*context), "floatres");
+            break;
+        }
+        case TokenType::LessLess: {
+            llvm::Value* LInt = builder->CreateFPToSI(LVal, llvm::Type::getInt64Ty(*context), "lint");
+            llvm::Value* RInt = builder->CreateFPToSI(RVal, llvm::Type::getInt64Ty(*context), "rint");
+            res = builder->CreateShl(LInt, RInt, "shltmp");
+            res = builder->CreateSIToFP(res, llvm::Type::getDoubleTy(*context), "floatres");
+            break;
+        }
+        case TokenType::GreaterGreater: {
+            llvm::Value* LInt = builder->CreateFPToSI(LVal, llvm::Type::getInt64Ty(*context), "lint");
+            llvm::Value* RInt = builder->CreateFPToSI(RVal, llvm::Type::getInt64Ty(*context), "shrtmp");
+            res = builder->CreateAShr(LInt, RInt, "ashrtmp");
+            res = builder->CreateSIToFP(res, llvm::Type::getDoubleTy(*context), "floatres");
+            break;
+        }
         
         default: 
             std::cerr << "Unimplemented binary operator: " << tokenTypeToString(expr->op) << "\n";
@@ -461,6 +505,26 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
     if (!V) {
         std::cerr << "Unknown variable name: " << var->name << "\n";
         return nullptr;
+    }
+
+    if (expr->op != TokenType::Equal) {
+        // Shorthand assignment: i += 5
+        llvm::Value* LVal = unboxNumber(V);
+        llvm::Value* RVal = unboxNumber(val);
+        llvm::Value* res = nullptr;
+        
+        switch (expr->op) {
+            case TokenType::PlusEqual:    res = builder->CreateFAdd(LVal, RVal, "addtmp"); break;
+            case TokenType::MinusEqual:   res = builder->CreateFSub(LVal, RVal, "subtmp"); break;
+            case TokenType::StarEqual:    res = builder->CreateFMul(LVal, RVal, "multmp"); break;
+            case TokenType::SlashEqual:   res = builder->CreateFDiv(LVal, RVal, "divtmp"); break;
+            case TokenType::PercentEqual: res = builder->CreateFRem(LVal, RVal, "remtmp"); break;
+            default: break;
+        }
+        
+        if (res) {
+            val = boxDouble(res);
+        }
     }
 
     // Copy content from val (temp) to V (var storage)
