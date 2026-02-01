@@ -1,9 +1,12 @@
 #include "manifast/CodeGen.h"
+#include "manifast/Runtime.h"
 #include <llvm/IR/Verifier.h>
 #include <iostream>
 
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/Core.h>
+#include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
 
 namespace manifast {
 
@@ -127,25 +130,26 @@ void CodeGen::printAny(llvm::Value* anyVal) {
 
 void CodeGen::compile(const std::vector<std::unique_ptr<Stmt>>& statements) {
     // Create a main function to hold top-level statements
-    // Main returns Any struct
-    llvm::FunctionType* funcType = llvm::FunctionType::get(anyType, false);
-    llvm::Function* mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "main", module.get());
+    // Main returns Any* (pointer to Any)
+    llvm::FunctionType* funcType = llvm::FunctionType::get(builder->getPtrTy(), false);
+    llvm::Function* mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "manifast_main", module.get());
     llvm::BasicBlock* entry = llvm::BasicBlock::Create(*context, "entry", mainFunc);
     builder->SetInsertPoint(entry);
 
     for (const auto& stmt : statements) {
+        if (builder->GetInsertBlock()->getTerminator()) break;
         generateStmt(stmt.get());
     }
 
-    // Default return 0 (Boxed)
-    llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
-    // Load structure to return
-    llvm::Value* retLoad = builder->CreateLoad(anyType, retVal);
-    builder->CreateRet(retLoad);
+    // Default return 0 (Boxed Any*) if no terminator
+    if (!builder->GetInsertBlock()->getTerminator()) {
+        llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+        builder->CreateRet(retVal);
+    }
     
     // Verify
     if (llvm::verifyFunction(*mainFunc, &llvm::errs())) {
-        std::cerr << "Error: Function verification failed!\n";
+        std::cerr << "Error: Function verification failed (manifast_main)!\n";
     }
 }
 
@@ -153,54 +157,77 @@ void CodeGen::printIR() {
     module->print(llvm::errs(), nullptr);
 }
 
-void CodeGen::run() {
+bool CodeGen::run() {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
 
     auto jit = llvm::ExitOnError()(llvm::orc::LLJITBuilder().create());
-
-    // Register runtime symbols
+    
+    // Add library search for host symbols (helps with platform symbols like printf)
     jit->getMainJITDylib().addGenerator(
         llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
             jit->getDataLayout().getGlobalPrefix())));
 
-    llvm::ExitOnError()(jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context))));
+    // Explicitly add runtime functions to the JIT to ensure they are found on all platforms
+    auto& ES = jit->getExecutionSession();
+    auto& JD = jit->getMainJITDylib();
+    auto Mangle = llvm::orc::MangleAndInterner(ES, jit->getDataLayout());
 
-    // Look up main (handle Windows/MinGW mangling like _main)
-    std::string mainName = "main";
-    char prefix = jit->getDataLayout().getGlobalPrefix();
-    if (prefix) {
-        mainName = prefix + mainName;
-    }
+    llvm::orc::SymbolMap RuntimeSymbols;
     
-    auto SymOrErr = jit->lookup(mainName);
+    #define REGISTER_SYM(name) \
+        RuntimeSymbols[Mangle(#name)] = { llvm::orc::ExecutorAddr::fromPtr((void*)&::name), llvm::JITSymbolFlags::Exported }
+
+    REGISTER_SYM(manifast_create_number);
+    REGISTER_SYM(manifast_create_string);
+    REGISTER_SYM(manifast_create_array);
+    REGISTER_SYM(manifast_create_object);
+    REGISTER_SYM(manifast_object_set);
+    REGISTER_SYM(manifast_object_get);
+    REGISTER_SYM(manifast_array_set);
+    REGISTER_SYM(manifast_array_get);
+    REGISTER_SYM(manifast_print_any);
+
+    if (auto Err = JD.define(llvm::orc::absoluteSymbols(std::move(RuntimeSymbols)))) {
+        std::cerr << "Error defining runtime symbols: " << llvm::toString(std::move(Err)) << "\n";
+    }
+
+    // Verify module before adding
+    if (llvm::verifyModule(*module, &llvm::errs())) {
+        std::cerr << "Error: Module verification failed!\n";
+        return false;
+    }
+
+    // Set module data layout and triple to match JIT
+    module->setDataLayout(jit->getDataLayout());
+    module->setTargetTriple(jit->getTargetTriple().getTriple());
+
+    auto err = jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context)));
+    if (err) {
+        std::cerr << "Error adding IR module: " << llvm::toString(std::move(err)) << "\n";
+        return false;
+    }
+
+    // Look up manifast_main
+    auto SymOrErr = jit->lookup("manifast_main");
 
     if (!SymOrErr) {
-        std::cerr << "Error: main function (" << mainName << ") not found in JIT\n";
-        return;
+        std::cerr << "Error: manifast_main function not found in JIT. Reason: " 
+                  << llvm::toString(SymOrErr.takeError()) << "\n";
+        return false;
     }
 
     // Expected<ExecutorAddr> in LLVM 18
-    auto MainAddr = *SymOrErr;
-    uint64_t rawAddr = MainAddr.getValue();
+    auto rawAddr = (*SymOrErr).getValue();
     
-    // C++ Definition of Any struct to match LLVM IR
-    struct Any {
-        int32_t type;
-        double number;
-        void* ptr;
-    };
-    
-    typedef Any (*MainFuncPtr)();
+    typedef Any* (*MainFuncPtr)();
     MainFuncPtr MainPtr = (MainFuncPtr)rawAddr;
     
-    Any result = MainPtr();
-    std::cout << "--- Execution Result ---\n";
-    if (result.type == 0) {
-        std::cout << "Return: " << result.number << "\n";
-    } else {
-        std::cout << "Return type: " << result.type << "\n";
+    Any* result = MainPtr();
+    if (result) {
+        manifast_print_any(result);
     }
+    return true;
 }
 
 llvm::Value* CodeGen::generateExpr(const Expr* expr) {
@@ -263,7 +290,9 @@ void CodeGen::visitIfStmt(const IfStmt* stmt) {
     // Emit then block
     builder->SetInsertPoint(thenBB);
     generateStmt(stmt->thenBranch.get());
-    builder->CreateBr(mergeBB);
+    if (!builder->GetInsertBlock()->getTerminator()) {
+        builder->CreateBr(mergeBB);
+    }
     thenBB = builder->GetInsertBlock();
 
     // Emit else block
@@ -271,7 +300,9 @@ void CodeGen::visitIfStmt(const IfStmt* stmt) {
         elseBB->insertInto(func);
         builder->SetInsertPoint(elseBB);
         generateStmt(stmt->elseBranch.get());
-        builder->CreateBr(mergeBB);
+        if (!builder->GetInsertBlock()->getTerminator()) {
+            builder->CreateBr(mergeBB);
+        }
         elseBB = builder->GetInsertBlock();
     }
 
@@ -300,7 +331,9 @@ void CodeGen::visitWhileStmt(const WhileStmt* stmt) {
     bodyBB->insertInto(func);
     builder->SetInsertPoint(bodyBB);
     generateStmt(stmt->body.get());
-    builder->CreateBr(condBB);
+    if (!builder->GetInsertBlock()->getTerminator()) {
+        builder->CreateBr(condBB);
+    }
 
     afterBB->insertInto(func);
     builder->SetInsertPoint(afterBB);
@@ -366,7 +399,9 @@ void CodeGen::visitForStmt(const ForStmt* stmt) {
     llvm::Value* nextLoaded = builder->CreateLoad(anyType, nextAny);
     builder->CreateStore(nextLoaded, alloca);
 
-    builder->CreateBr(condBB);
+    if (!builder->GetInsertBlock()->getTerminator()) {
+        builder->CreateBr(condBB);
+    }
 
     // 6. After
     afterBB->insertInto(func);
@@ -555,19 +590,13 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
 
     std::vector<llvm::Value*> argsV;
     for (const auto& arg : expr->args) {
-        llvm::Value* argVal = generateExpr(arg.get()); // Any* (temp)
+        llvm::Value* argVal = generateExpr(arg.get()); // Any*
         if (!argVal) return nullptr;
-        // Load Any struct to pass by value
-        argsV.push_back(builder->CreateLoad(anyType, argVal));
+        argsV.push_back(argVal);
     }
 
-    // Call returns Any struct
-    llvm::Value* retStruct = builder->CreateCall(func, argsV, "calltmp");
-    
-    // Store to temp alloca to return Any*
-    llvm::Value* temp = builder->CreateAlloca(anyType, nullptr, "call_res");
-    builder->CreateStore(retStruct, temp);
-    return temp;
+    // Call returns Any* (pointer to Any)
+    return builder->CreateCall(func, argsV, "calltmp");
 }
 
 void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
@@ -593,28 +622,26 @@ void CodeGen::visitReturnStmt(const ReturnStmt* stmt) {
     if (stmt->value) {
         llvm::Value* val = generateExpr(stmt->value.get()); // Any*
         if (val) {
-            // Load Any struct to return
-            llvm::Value* retVal = builder->CreateLoad(anyType, val);
-            builder->CreateRet(retVal);
+            builder->CreateRet(val);
         }
     } else {
-        // Return void/null? We must return Any. Return 0 for now.
+        // Return 0 for now.
          llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
-         llvm::Value* retLoad = builder->CreateLoad(anyType, retVal);
-         builder->CreateRet(retLoad);
+         builder->CreateRet(retVal);
     }
 }
 
 void CodeGen::visitBlockStmt(const BlockStmt* stmt) {
     for (const auto& s : stmt->statements) {
+        if (builder->GetInsertBlock()->getTerminator()) break;
         generateStmt(s.get());
     }
 }
 
 void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
-    // Return type Any, Args Any
-    std::vector<llvm::Type*> argTypes(stmt->params.size(), anyType);
-    llvm::FunctionType* ft = llvm::FunctionType::get(anyType, argTypes, false);
+    // Return type Any*, Args Any*
+    std::vector<llvm::Type*> argTypes(stmt->params.size(), builder->getPtrTy());
+    llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), argTypes, false);
     llvm::Function* func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, stmt->name, module.get());
 
     llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
@@ -622,36 +649,29 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
     llvm::BasicBlock* oldBB = builder->GetInsertBlock();
     builder->SetInsertPoint(bb);
 
-    std::map<std::string, llvm::Value*> oldNamedValues = namedValues;
-    namedValues.clear();
-
-    unsigned idx = 0;
+    auto oldNamedValues = namedValues;
+    
+    uint32_t idx = 0;
     for (auto& arg : func->args()) {
-        // Create alloca for arg
+        // Create alloca for arg (Type Any)
         llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
         llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->params[idx]);
         
-        // Store passed value (Any struct) into alloca
-        builder->CreateStore(&arg, alloca);
+        // Load Any struct from the passed pointer and store into alloca
+        llvm::Value* loadedArg = builder->CreateLoad(anyType, &arg);
+        builder->CreateStore(loadedArg, alloca);
         
         namedValues[stmt->params[idx]] = alloca;
         idx++;
     }
 
     // Body
-    if (auto* bodyBlock = dynamic_cast<const BlockStmt*>(stmt->body.get())) {
-        for (const auto& s : bodyBlock->statements) {
-            generateStmt(s.get());
-        }
-    } else {
-        generateStmt(stmt->body.get());
-    }
+    generateStmt(stmt->body.get());
     
     // Default return 0 if no return stmt
-    if (!func->back().getTerminator()) {
+    if (!builder->GetInsertBlock()->getTerminator()) {
          llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
-         llvm::Value* retLoad = builder->CreateLoad(anyType, retVal);
-         builder->CreateRet(retLoad);
+         builder->CreateRet(retVal);
     }
     
     if (llvm::verifyFunction(*func, &llvm::errs())) {

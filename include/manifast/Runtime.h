@@ -6,6 +6,12 @@
 #include <string>
 #include <iostream>
 
+#ifdef _WIN32
+#define MF_API __declspec(dllexport)
+#else
+#define MF_API
+#endif
+
 extern "C" {
 
 struct Any {
@@ -32,15 +38,15 @@ struct ManifastObject {
 };
 
 // Runtime functions called by LLVM IR
-Any* manifast_create_number(double val);
-Any* manifast_create_string(const char* str);
-Any* manifast_create_array(uint32_t initial_size);
-Any* manifast_create_object();
-void manifast_object_set(Any* obj_any, const char* key, Any* val_any);
-Any* manifast_object_get(Any* obj_any, const char* key);
-void manifast_array_set(Any* arr_any, double index, Any* val_any);
-Any* manifast_array_get(Any* arr_any, double index);
-void manifast_print_any(Any* any);
+MF_API Any* manifast_create_number(double val);
+MF_API Any* manifast_create_string(const char* str);
+MF_API Any* manifast_create_array(uint32_t initial_size);
+MF_API Any* manifast_create_object();
+MF_API void manifast_object_set(Any* obj_any, const char* key, Any* val_any);
+MF_API Any* manifast_object_get(Any* obj_any, const char* key);
+MF_API void manifast_array_set(Any* arr_any, double index, Any* val_any);
+MF_API Any* manifast_array_get(Any* arr_any, double index);
+MF_API void manifast_print_any(Any* any);
 
 } // extern "C"
 

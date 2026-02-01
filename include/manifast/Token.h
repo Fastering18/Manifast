@@ -106,19 +106,48 @@ inline std::string_view tokenTypeToString(TokenType type) {
         case TokenType::K_String: return "StringToken";
         case TokenType::K_Boolean: return "BooleanToken";
         case TokenType::K_Int32: return "Int32Token";
+        
+        case TokenType::Plus: return "+";
+        case TokenType::Minus: return "-";
+        case TokenType::Star: return "*";
+        case TokenType::Slash: return "/";
+        case TokenType::Percent: return "%";
+        
+        case TokenType::Equal: return "=";
+        case TokenType::EqualEqual: return "==";
+        case TokenType::Bang: return "!";
+        case TokenType::BangEqual: return "!=";
+        case TokenType::Less: return "<";
+        case TokenType::LessEqual: return "<=";
+        case TokenType::Greater: return ">";
+        case TokenType::GreaterEqual: return ">=";
+        
         case TokenType::PlusEqual: return "+=";
         case TokenType::MinusEqual: return "-=";
         case TokenType::StarEqual: return "*=";
         case TokenType::SlashEqual: return "/=";
-        case TokenType::Percent: return "%";
         case TokenType::PercentEqual: return "%=";
+        
         case TokenType::Ampersand: return "&";
         case TokenType::Pipe: return "|";
         case TokenType::Caret: return "^";
+        case TokenType::Tilde: return "~";
         case TokenType::LessLess: return "<<";
         case TokenType::GreaterGreater: return ">>";
-        case TokenType::Colon: return "Colon";
-        default: return "Token";
+        
+        case TokenType::LParen: return "(";
+        case TokenType::RParen: return ")";
+        case TokenType::LBrace: return "{";
+        case TokenType::RBrace: return "}";
+        case TokenType::LBracket: return "[";
+        case TokenType::RBracket: return "]";
+        
+        case TokenType::Comma: return ",";
+        case TokenType::Dot: return ".";
+        case TokenType::Semicolon: return ";";
+        case TokenType::Colon: return ":";
+        case TokenType::Error: return "Error";
+        default: return "UnknownToken";
     }
 }
 

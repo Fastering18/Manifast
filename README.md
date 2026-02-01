@@ -38,7 +38,9 @@ We are open to anyone who wants to contribute to this project. Whether it's repo
 - [ ] Tables & Arrays (Object-oriented features)
 - [ ] Memory Management (C++ RAII/Ownership)
 - [ ] Standard Library (print, io, math)
+- [ ] ECMAScript/WebAssembly Support
 - [ ] JIT Compiler Pipeline
+- [ ] Embedding Language Support
 - [ ] IDE Support (LSP)
 
 ## How to compile & run?

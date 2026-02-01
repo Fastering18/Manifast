@@ -5,7 +5,7 @@
 
 extern "C" {
 
-Any* manifast_create_number(double val) {
+MF_API Any* manifast_create_number(double val) {
     Any* a = (Any*)malloc(sizeof(Any));
     a->type = 0;
     a->number = val;
@@ -13,7 +13,7 @@ Any* manifast_create_number(double val) {
     return a;
 }
 
-Any* manifast_create_string(const char* str) {
+MF_API Any* manifast_create_string(const char* str) {
     Any* a = (Any*)malloc(sizeof(Any));
     a->type = 3;
     a->number = 0;
@@ -21,7 +21,7 @@ Any* manifast_create_string(const char* str) {
     return a;
 }
 
-Any* manifast_create_array(uint32_t initial_size) {
+MF_API Any* manifast_create_array(uint32_t initial_size) {
     Any* a = (Any*)malloc(sizeof(Any));
     a->type = 1;
     a->number = 0;
@@ -42,7 +42,7 @@ Any* manifast_create_array(uint32_t initial_size) {
     return a;
 }
 
-Any* manifast_create_object() {
+MF_API Any* manifast_create_object() {
     Any* a = (Any*)malloc(sizeof(Any));
     a->type = 2;
     a->number = 0;
@@ -56,7 +56,7 @@ Any* manifast_create_object() {
     return a;
 }
 
-void manifast_object_set(Any* obj_any, const char* key, Any* val_any) {
+MF_API void manifast_object_set(Any* obj_any, const char* key, Any* val_any) {
     if (obj_any->type != 2) return;
     ManifastObject* obj = (ManifastObject*)obj_any->ptr;
     
@@ -80,7 +80,7 @@ void manifast_object_set(Any* obj_any, const char* key, Any* val_any) {
     obj->size++;
 }
 
-Any* manifast_object_get(Any* obj_any, const char* key) {
+MF_API Any* manifast_object_get(Any* obj_any, const char* key) {
     if (obj_any->type != 2) return manifast_create_number(0);
     ManifastObject* obj = (ManifastObject*)obj_any->ptr;
     for (uint32_t i = 0; i < obj->size; ++i) {
@@ -93,7 +93,7 @@ Any* manifast_object_get(Any* obj_any, const char* key) {
     return manifast_create_number(0);
 }
 
-void manifast_array_set(Any* arr_any, double index_dbl, Any* val_any) {
+MF_API void manifast_array_set(Any* arr_any, double index_dbl, Any* val_any) {
     if (arr_any->type != 1) return;
     ManifastArray* arr = (ManifastArray*)arr_any->ptr;
     uint32_t idx = (uint32_t)index_dbl;
@@ -103,7 +103,7 @@ void manifast_array_set(Any* arr_any, double index_dbl, Any* val_any) {
     }
 }
 
-Any* manifast_array_get(Any* arr_any, double index_dbl) {
+MF_API Any* manifast_array_get(Any* arr_any, double index_dbl) {
     if (arr_any->type != 1) return manifast_create_number(0);
     ManifastArray* arr = (ManifastArray*)arr_any->ptr;
     uint32_t idx = (uint32_t)index_dbl;
@@ -116,7 +116,7 @@ Any* manifast_array_get(Any* arr_any, double index_dbl) {
     return manifast_create_number(0);
 }
 
-void manifast_print_any(Any* any) {
+MF_API void manifast_print_any(Any* any) {
     if (!any) {
         printf("null\n");
         return;

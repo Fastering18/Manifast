@@ -16,7 +16,7 @@ public:
     CodeGen();
     void compile(const std::vector<std::unique_ptr<Stmt>>& statements);
     void printIR(); 
-    void run(); // JIT Execution entry
+    bool run(); // JIT Execution entry
 
 private:
     std::unique_ptr<llvm::LLVMContext> context;

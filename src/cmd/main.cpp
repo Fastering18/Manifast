@@ -31,8 +31,9 @@ bool runSilent(const std::string& source) {
         auto statements = parser.parse();
         manifast::CodeGen codegen;
         codegen.compile(statements);
-        codegen.run(); 
-        return true;
+        return codegen.run(); 
+    } catch (const std::exception& e) {
+        return false;
     } catch (...) {
         return false;
     }
@@ -57,7 +58,9 @@ void runVerbose(const std::string& path) {
         codegen.compile(statements);
         codegen.printIR();
         std::cout << "--- Execution ---\n";
-        codegen.run();
+        if (!codegen.run()) {
+            std::cerr << "Execution failed.\n";
+        }
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
     } catch (...) {
