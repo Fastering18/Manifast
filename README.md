@@ -90,4 +90,4 @@ We provide a unified helper script: `manifast.ps1` (Windows) or `manifast.sh` (L
 
 ---
 
-Join our conversation here to get help or discuss development: [Discord Server](https://discord.gg/8vdZsBBGRG)
+Join our conversation here for development: [Discord Server](https://discord.gg/8vdZsBBGRG)

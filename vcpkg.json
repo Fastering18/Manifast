@@ -4,13 +4,23 @@
   "dependencies": [
     "fmt",
     "argparse",
-    "gtest",
-    {
-      "name": "llvm",
-      "features": [
-        "target-all",
-        "utils"
+    "gtest"
+  ],
+  "features": {
+    "bundled-llvm": {
+      "description": "Build and bundle LLVM from source via vcpkg",
+      "dependencies": [
+        {
+          "name": "llvm",
+          "features": [
+            "target-all",
+            "utils"
+          ]
+        }
       ]
     }
+  },
+  "default-features": [
+    "bundled-llvm"
   ]
 }
