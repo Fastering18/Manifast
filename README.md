@@ -60,17 +60,32 @@ Make sure `vcpkg` is installed and in your PATH.
 vcpkg install
 ```
 
+### LLVM Recommendation
+We recommend using **LLVM 18+**.
+- **Default**: The build system will automatically download and build the latest available LLVM via `vcpkg` (can be slow).
+- **Fast Build**: Install LLVM 18+ manually and use the `--fast` flag to skip the vcpkg build.
+
 ### Build & Run
-You can use the provided helper script:
+We provide a unified helper script: `manifast.ps1` (Windows) or `manifast.sh` (Linux/macOS).
+
+**Standard Build (Clone & Go):**
 ```powershell
-.\build.ps1 -Clean -Run
+.\manifast.ps1 build
 ```
 
-Or manually:
+**Fast Build (Uses System LLVM):**
 ```powershell
-cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-.\build\bin\manifast tests/Manifast/test.mnf
+.\manifast.ps1 build --fast
+```
+
+**Run Tests:**
+```powershell
+.\manifast.ps1 test
+```
+
+**Clean:**
+```powershell
+.\manifast.ps1 clean
 ```
 
 ---
