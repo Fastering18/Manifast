@@ -15,7 +15,7 @@ set(CMAKE_CXX_EXTENSIONS OFF) # Enforce standards
 
 # --- Dependencies (vcpkg) ---
 find_package(fmt CONFIG REQUIRED)
-find_package(LLVM REQUIRED CONFIG)
+find_package(LLVM REQUIRED CONFIG COMPONENTS core orcjit native)
 
 message(STATUS "Found LLVM ${LLVM_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
