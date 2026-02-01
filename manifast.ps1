@@ -4,7 +4,10 @@ param (
     [string]$Command,
 
     [switch]$Fast,
-    [string]$LLVM_DIR = ""
+    [string]$LLVM_DIR = "",
+
+    [Parameter(ValueFromRemainingArguments=$true)]
+    $RemainingArgs
 )
 
 $BuildDir = "build"
@@ -23,8 +26,8 @@ function Show-Help {
     Write-Host "  --fast     Disable vcpkg LLVM download (uses system LLVM)"
 }
 
-# Check for --fast or -Fast in $args manually to support both styles
-foreach ($arg in $args) {
+# Check for --fast or -Fast in $RemainingArgs manually to support both styles
+foreach ($arg in $RemainingArgs) {
     if ($arg -match "^--?fast$") {
         $Fast = $true
     }
