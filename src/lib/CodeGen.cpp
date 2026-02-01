@@ -42,6 +42,16 @@ llvm::Value* CodeGen::boxDouble(llvm::Value* v) {
     return builder->CreateCall(func, {v}, "num_box");
 }
 
+llvm::Value* CodeGen::createString(const std::string& value) {
+    llvm::Function* func = module->getFunction("manifast_create_string");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(llvm::PointerType::getUnqual(*context), {builder->getPtrTy()}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_string", module.get());
+    }
+    llvm::Value* globalStr = builder->CreateGlobalStringPtr(value);
+    return builder->CreateCall(func, {globalStr}, "str");
+}
+
 llvm::Value* CodeGen::unboxNumber(llvm::Value* anyPtr) {
     // Assume it's a number for now (skip type check for MVP speed)
     // anyPtr is Any*
@@ -194,6 +204,9 @@ llvm::Value* CodeGen::generateExpr(const Expr* expr) {
     if (auto* call = dynamic_cast<const CallExpr*>(expr)) return visitCallExpr(call);
     if (auto* arr = dynamic_cast<const ArrayExpr*>(expr)) return visitArrayExpr(arr);
     if (auto* obj = dynamic_cast<const ObjectExpr*>(expr)) return visitObjectExpr(obj);
+    if (auto* str = dynamic_cast<const StringExpr*>(expr)) return visitStringExpr(str);
+    if (auto* idx = dynamic_cast<const IndexExpr*>(expr)) return visitIndexExpr(idx);
+    if (auto* get = dynamic_cast<const GetExpr*>(expr)) return visitGetExpr(get);
     return nullptr;
 }
 
@@ -611,6 +624,39 @@ llvm::Value* CodeGen::visitObjectExpr(const ObjectExpr* expr) {
          }
     }
     return createObject(pairs);
+}
+
+llvm::Value* CodeGen::visitStringExpr(const StringExpr* expr) {
+    return createString(expr->value);
+}
+
+llvm::Value* CodeGen::visitIndexExpr(const IndexExpr* expr) {
+    llvm::Value* obj = generateExpr(expr->object.get());
+    llvm::Value* idx = generateExpr(expr->index.get());
+    if (!obj || !idx) return nullptr;
+
+    // idx is Any*, we need the double value
+    llvm::Value* idxVal = unboxNumber(idx);
+
+    llvm::Function* func = module->getFunction("manifast_array_get");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getPtrTy(), builder->getDoubleTy()}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_array_get", module.get());
+    }
+    return builder->CreateCall(func, {obj, idxVal}, "index_res");
+}
+
+llvm::Value* CodeGen::visitGetExpr(const GetExpr* expr) {
+    llvm::Value* obj = generateExpr(expr->object.get());
+    if (!obj) return nullptr;
+
+    llvm::Function* func = module->getFunction("manifast_object_get");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getPtrTy(), builder->getPtrTy()}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_object_get", module.get());
+    }
+    llvm::Value* keyStr = builder->CreateGlobalStringPtr(expr->name);
+    return builder->CreateCall(func, {obj, keyStr}, "get_res");
 }
 
 void CodeGen::visitTryStmt(const TryStmt* stmt) {

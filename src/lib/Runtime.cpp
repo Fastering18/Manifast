@@ -13,6 +13,14 @@ Any* manifast_create_number(double val) {
     return a;
 }
 
+Any* manifast_create_string(const char* str) {
+    Any* a = (Any*)malloc(sizeof(Any));
+    a->type = 3;
+    a->number = 0;
+    a->ptr = strdup(str);
+    return a;
+}
+
 Any* manifast_create_array(uint32_t initial_size) {
     Any* a = (Any*)malloc(sizeof(Any));
     a->type = 1;
@@ -72,6 +80,19 @@ void manifast_object_set(Any* obj_any, const char* key, Any* val_any) {
     obj->size++;
 }
 
+Any* manifast_object_get(Any* obj_any, const char* key) {
+    if (obj_any->type != 2) return manifast_create_number(0);
+    ManifastObject* obj = (ManifastObject*)obj_any->ptr;
+    for (uint32_t i = 0; i < obj->size; ++i) {
+        if (strcmp(obj->entries[i].key, key) == 0) {
+            Any* res = (Any*)malloc(sizeof(Any));
+            *res = obj->entries[i].value;
+            return res;
+        }
+    }
+    return manifast_create_number(0);
+}
+
 void manifast_array_set(Any* arr_any, double index_dbl, Any* val_any) {
     if (arr_any->type != 1) return;
     ManifastArray* arr = (ManifastArray*)arr_any->ptr;
@@ -112,6 +133,9 @@ void manifast_print_any(Any* any) {
             break;
         case 2:
             printf("{Object}\n");
+            break;
+        case 3:
+            printf("%s\n", (char*)any->ptr);
             break;
         default:
             printf("unknown type %d\n", any->type);

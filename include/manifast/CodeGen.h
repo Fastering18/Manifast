@@ -37,6 +37,9 @@ private:
     llvm::Value* visitCallExpr(const CallExpr* expr);
     llvm::Value* visitArrayExpr(const ArrayExpr* expr);
     llvm::Value* visitObjectExpr(const ObjectExpr* expr);
+    llvm::Value* visitStringExpr(const StringExpr* expr);
+    llvm::Value* visitIndexExpr(const IndexExpr* expr);
+    llvm::Value* visitGetExpr(const GetExpr* expr);
     
     // Statements
     void visitVarDeclStmt(const VarDeclStmt* stmt);
@@ -57,6 +60,7 @@ private:
     // Helpers
     void initializeTypes();
     llvm::Value* createNumber(double value); // Literals
+    llvm::Value* createString(const std::string& value);
     llvm::Value* boxDouble(llvm::Value* v);  // Runtime values
     llvm::Value* createArray(const std::vector<llvm::Value*>& elements);
     llvm::Value* createObject(const std::vector<std::pair<std::string, llvm::Value*>>& pairs);
