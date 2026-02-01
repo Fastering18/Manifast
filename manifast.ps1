@@ -65,6 +65,11 @@ if ($Command -eq "build") {
         if (-not (Test-Path $VcpkgToolchain)) {
             $VcpkgToolchain = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
         }
+        
+        if (Test-Path $VcpkgToolchain) {
+            Write-Host "  Using Toolchain: $VcpkgToolchain" -ForegroundColor Gray
+            $Args += "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain"
+        }
 
         # Determine build type (Fast/System LLVM vs Default/Vcpkg)
         if ($Fast) {
@@ -73,15 +78,13 @@ if ($Command -eq "build") {
              
              if ($LLVM_DIR) {
                  $Args += "-DLLVM_DIR=$LLVM_DIR"
+             } elseif (Test-Path "D:\Program\msys64\ucrt64\lib\cmake\llvm") {
+                 $Args += "-DLLVM_DIR=D:\Program\msys64\ucrt64\lib\cmake\llvm"
              } elseif (Test-Path "D:\Program\LLVM") {
                  $Args += "-DLLVM_DIR=D:\Program\LLVM\lib\cmake\llvm"
              }
         } else {
              Write-Host "  Mode: DEFAULT (Vcpkg Bundle)" -ForegroundColor Blue
-             if (Test-Path $VcpkgToolchain) {
-                 Write-Host "  Using Toolchain: $VcpkgToolchain" -ForegroundColor Gray
-                 $Args += "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain"
-             }
         }
 
         if (Test-Path $BuildDir) {
