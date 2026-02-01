@@ -139,6 +139,7 @@ Token Lexer::nextToken() {
         case '|': return makeToken(TokenType::Pipe);
         case '^': return makeToken(TokenType::Caret);
         case '~': return makeToken(TokenType::Tilde);
+        case '"': return string();
         
         case '!': return makeToken(match('=') ? TokenType::BangEqual : TokenType::Bang);
         case '=': return makeToken(match('=') ? TokenType::EqualEqual : TokenType::Equal);

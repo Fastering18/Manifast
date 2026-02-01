@@ -23,6 +23,13 @@ function Show-Help {
     Write-Host "  --fast     Disable vcpkg LLVM download (uses system LLVM)"
 }
 
+# Check for --fast or -Fast in $args manually to support both styles
+foreach ($arg in $args) {
+    if ($arg -match "^--?fast$") {
+        $Fast = $true
+    }
+}
+
 if ($Command -eq "help") {
     Show-Help
     exit

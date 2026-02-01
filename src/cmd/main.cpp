@@ -31,7 +31,7 @@ bool runSilent(const std::string& source) {
         auto statements = parser.parse();
         manifast::CodeGen codegen;
         codegen.compile(statements);
-        // codegen.run(); // For now just test if it compiles without crashing
+        codegen.run(); 
         return true;
     } catch (...) {
         return false;

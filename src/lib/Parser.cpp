@@ -9,10 +9,12 @@ Parser::Parser(Lexer& lexer) : lexer(lexer) {
 
 Token Parser::advance() {
     previousToken = currentToken;
-    for (;;) {
-        currentToken = lexer.nextToken();
-        if (currentToken.type != TokenType::Error) break;
+    currentToken = lexer.nextToken();
+    
+    if (currentToken.type == TokenType::Error) {
+        std::cerr << "Lexer Error: " << currentToken.lexeme << " at line " << currentToken.location.line << "\n";
     }
+    
     return previousToken;
 }
 
@@ -332,6 +334,11 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
     if (match(TokenType::K_True)) return std::make_unique<NumberExpr>(1);
     if (match(TokenType::K_Null)) return std::make_unique<NumberExpr>(0); 
     if (match(TokenType::Number)) return std::make_unique<NumberExpr>(std::stod(std::string(previous().lexeme)));
+    if (match(TokenType::String)) {
+        std::string lex = std::string(previous().lexeme);
+        // Remove quotes
+        return std::make_unique<StringExpr>(lex.substr(1, lex.length() - 2));
+    }
     if (match(TokenType::Identifier)) return std::make_unique<VariableExpr>(std::string(previous().lexeme));
     
     if (match(TokenType::LParen)) {
