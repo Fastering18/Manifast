@@ -15,81 +15,104 @@ CodeGen::CodeGen() {
 }
 
 void CodeGen::initializeTypes() {
-    // struct Any {
-    //   i32 type;      // 0=Number, 1=Array, 2=Object
-    //   double number; // Optimization for numbers
-    //   i8* ptr;       // Pointer to heap data (Array/Object)
-    // }
-    std::vector<llvm::Type*> anyFields = {
-        llvm::Type::getInt32Ty(*context),
+    // struct Any { i32, double, i8* }
+    anyType = llvm::StructType::create(*context, "Any");
+    anyType->setBody({
+        builder->getInt32Ty(),
         llvm::Type::getDoubleTy(*context),
         llvm::PointerType::getUnqual(*context)
-    };
-    anyType = llvm::StructType::create(*context, anyFields, "Any");
-    
-    // Define other types later as needed (Array/Object internals)
+    });
 }
 
 llvm::Value* CodeGen::createNumber(double value) {
-    // Create struct instance on stack (simplest for now)
-    llvm::Value* alloc = builder->CreateAlloca(anyType, nullptr, "num_alloc");
-    
-    // Set type = 0
-    llvm::Value* typePtr = builder->CreateStructGEP(anyType, alloc, 0);
-    builder->CreateStore(builder->getInt32(0), typePtr);
-    
-    // Set number = value
-    llvm::Value* numPtr = builder->CreateStructGEP(anyType, alloc, 1);
-    builder->CreateStore(llvm::ConstantFP::get(*context, llvm::APFloat(value)), numPtr);
-    
-    // Set ptr = null
-    llvm::Value* dataPtr = builder->CreateStructGEP(anyType, alloc, 2);
-    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(*context)), dataPtr);
-    
-    return alloc; 
+    llvm::Function* func = module->getFunction("manifast_create_number");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(llvm::PointerType::getUnqual(*context), {llvm::Type::getDoubleTy(*context)}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_number", module.get());
+    }
+    return builder->CreateCall(func, {llvm::ConstantFP::get(*context, llvm::APFloat(value))}, "num");
 }
 
 llvm::Value* CodeGen::boxDouble(llvm::Value* v) {
-    llvm::Value* alloc = builder->CreateAlloca(anyType, nullptr, "num_box");
-    // Type 0
-    builder->CreateStore(builder->getInt32(0), builder->CreateStructGEP(anyType, alloc, 0));
-    // Number
-    builder->CreateStore(v, builder->CreateStructGEP(anyType, alloc, 1));
-    // Ptr null
-    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(*context)), builder->CreateStructGEP(anyType, alloc, 2));
-    return alloc;
+    llvm::Function* func = module->getFunction("manifast_create_number");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(llvm::PointerType::getUnqual(*context), {llvm::Type::getDoubleTy(*context)}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_number", module.get());
+    }
+    return builder->CreateCall(func, {v}, "num_box");
 }
 
 llvm::Value* CodeGen::unboxNumber(llvm::Value* anyPtr) {
     // Assume it's a number for now (skip type check for MVP speed)
+    // anyPtr is Any*
     llvm::Value* numPtr = builder->CreateStructGEP(anyType, anyPtr, 1);
     return builder->CreateLoad(llvm::Type::getDoubleTy(*context), numPtr, "unbox");
 }
 
 llvm::Value* CodeGen::createArray(const std::vector<llvm::Value*>& elements) {
-    llvm::Value* alloc = builder->CreateAlloca(anyType, nullptr, "arr_alloc");
-    // Type 1 = Array
-    builder->CreateStore(builder->getInt32(1), builder->CreateStructGEP(anyType, alloc, 0));
-    // Number = 0
-    builder->CreateStore(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), builder->CreateStructGEP(anyType, alloc, 1));
-    // Ptr = TODO (malloc)
-    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(*context)), builder->CreateStructGEP(anyType, alloc, 2));
-    return alloc;
+    llvm::Function* func = module->getFunction("manifast_create_array");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(llvm::PointerType::getUnqual(*context), {builder->getInt32Ty()}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_array", module.get());
+    }
+    
+    llvm::Value* arrVal = builder->CreateCall(func, {builder->getInt32(elements.size())}, "arr");
+    
+    // Set elements
+    llvm::Function* setFunc = module->getFunction("manifast_array_set");
+    if (!setFunc) {
+        llvm::FunctionType* sft = llvm::FunctionType::get(builder->getVoidTy(), 
+            {llvm::PointerType::getUnqual(*context), llvm::Type::getDoubleTy(*context), llvm::PointerType::getUnqual(*context)}, false);
+        setFunc = llvm::Function::Create(sft, llvm::Function::ExternalLinkage, "manifast_array_set", module.get());
+    }
+    
+    for (uint32_t i = 0; i < elements.size(); ++i) {
+        // elements[i] is Any (loaded from temp)
+        // We need to pass Any* to manifast_array_set
+        llvm::Value* elemPtr = builder->CreateAlloca(anyType);
+        builder->CreateStore(elements[i], elemPtr);
+        builder->CreateCall(setFunc, {arrVal, llvm::ConstantFP::get(*context, llvm::APFloat((double)i)), elemPtr});
+    }
+    
+    return arrVal;
 }
 
 llvm::Value* CodeGen::createObject(const std::vector<std::pair<std::string, llvm::Value*>>& pairs) {
-    llvm::Value* alloc = builder->CreateAlloca(anyType, nullptr, "obj_alloc");
-    // Type 2 = Object
-    builder->CreateStore(builder->getInt32(2), builder->CreateStructGEP(anyType, alloc, 0));
-    // Number = 0
-    builder->CreateStore(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), builder->CreateStructGEP(anyType, alloc, 1));
-    // Ptr = TODO (malloc)
-    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(*context)), builder->CreateStructGEP(anyType, alloc, 2));
-    return alloc;
+    llvm::Function* func = module->getFunction("manifast_create_object");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(llvm::PointerType::getUnqual(*context), {}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_object", module.get());
+    }
+    
+    llvm::Value* objVal = builder->CreateCall(func, {}, "obj");
+    
+    // Set properties
+    llvm::Function* setFunc = module->getFunction("manifast_object_set");
+    if (!setFunc) {
+        llvm::FunctionType* sft = llvm::FunctionType::get(builder->getVoidTy(), 
+            {llvm::PointerType::getUnqual(*context), llvm::PointerType::getUnqual(*context), llvm::PointerType::getUnqual(*context)}, false);
+        setFunc = llvm::Function::Create(sft, llvm::Function::ExternalLinkage, "manifast_object_set", module.get());
+    }
+    
+    for (const auto& pair : pairs) {
+        // pair.second is Any (loaded)
+        llvm::Value* valPtr = builder->CreateAlloca(anyType);
+        builder->CreateStore(pair.second, valPtr);
+        
+        llvm::Value* keyStr = builder->CreateGlobalStringPtr(pair.first);
+        builder->CreateCall(setFunc, {objVal, keyStr, valPtr});
+    }
+    
+    return objVal;
 }
 
 void CodeGen::printAny(llvm::Value* anyVal) {
-    // Stub
+    llvm::Function* func = module->getFunction("manifast_print_any");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(builder->getVoidTy(), {llvm::PointerType::getUnqual(*context)}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_print_any", module.get());
+    }
+    builder->CreateCall(func, {anyVal});
 }
 
 void CodeGen::compile(const std::vector<std::unique_ptr<Stmt>>& statements) {
@@ -124,22 +147,17 @@ void CodeGen::run() {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
 
-    auto JIT = llvm::orc::LLJITBuilder().create();
-    if (!JIT) {
-        std::cerr << "Error: Failed to create LLJIT\n";
-        return;
-    }
+    auto jit = llvm::ExitOnError()(llvm::orc::LLJITBuilder().create());
 
-    // Move module to JIT
-    auto TSM = llvm::orc::ThreadSafeModule(std::move(module), std::move(context));
-    if (auto Err = JIT.get()->addIRModule(std::move(TSM))) {
-        std::cerr << "Error: Failed to add IR module to JIT\n";
-        return;
-    }
+    // Register runtime symbols
+    jit->getMainJITDylib().addGenerator(
+        llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+            jit->getDataLayout().getGlobalPrefix())));
+
+    llvm::ExitOnError()(jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context))));
 
     // Look up main
-    // LLVM 18: lookup returns Expected<ExecutorSymbolDef>
-    auto SymOrErr = JIT.get()->lookup("main");
+    auto SymOrErr = jit->lookup("main");
     if (!SymOrErr) {
         std::cerr << "Error: main function not found in JIT\n";
         return;

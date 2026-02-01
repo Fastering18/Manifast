@@ -2,6 +2,7 @@ add_library(manifast_lib
   Lexer.cpp
   Parser.cpp
   CodeGen.cpp
+  Runtime.cpp
 )
 
 # Allow including "manifast/..."
