@@ -1,0 +1,11 @@
+-- Exception Verification
+coba
+    lokal x = 10 / 0 -- Potential error
+tangkap err maka
+    -- Error handling block
+    lokal recovered = 1
+tutup
+
+coba
+    lokal safe = 1
+tutup

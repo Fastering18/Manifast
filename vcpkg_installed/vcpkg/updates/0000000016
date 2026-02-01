@@ -1,8 +1,0 @@
-Package: atl
-Version: 0
-Port-Version: 1
-Architecture: x64-windows
-Multi-Arch: same
-Abi: dab11bda2b5f697b1c02dc6c5f23272f13e60e6155e643330db6d34295ed912c
-Description: A stub package that ensures Visual Studio has Active Template Library (ATL) installed.
-Status: install ok half-installed

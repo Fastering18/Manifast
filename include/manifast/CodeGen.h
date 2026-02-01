@@ -35,6 +35,8 @@ private:
     llvm::Value* visitVariableExpr(const VariableExpr* expr);
     llvm::Value* visitAssignExpr(const AssignExpr* expr);
     llvm::Value* visitCallExpr(const CallExpr* expr);
+    llvm::Value* visitArrayExpr(const ArrayExpr* expr);
+    llvm::Value* visitObjectExpr(const ObjectExpr* expr);
     
     // Statements
     void visitVarDeclStmt(const VarDeclStmt* stmt);
@@ -44,6 +46,7 @@ private:
     void visitWhileStmt(const WhileStmt* stmt);
     void visitForStmt(const ForStmt* stmt);
     void visitFunctionStmt(const FunctionStmt* stmt);
+    void visitTryStmt(const TryStmt* stmt);
 };
 
 } // namespace manifast

@@ -1,0 +1,77 @@
+Package: vcpkg-cmake-config
+Version: 2024-05-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 42e5ea02575a165f5de01be13ac784bf3e861df37615b065018d78b5c9e428de
+Status: install ok installed
+
+Package: vcpkg-cmake
+Version: 2024-04-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 9ea3c39c4861aeff4b4159a94d1113dadaa070fad441125f24fc4f451671b125
+Status: install ok installed
+
+Package: argparse
+Version: 3.2
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 88e22ba4e2b7c8188975a7f6dbed42fd04a386b7a8c2860334832ca8c4b62fa3
+Description: Argument parser for modern C++
+Status: install ok installed
+
+Package: fmt
+Version: 12.1.0
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: b3aa6158b086a1ae752269cbceace66047ab99e350f1896b3d058c3a0888a423
+Description: {fmt} is an open-source formatting library providing a fast and safe alternative to C stdio and C++ iostreams.
+Status: install ok installed
+
+Package: gtest
+Version: 1.17.0
+Port-Version: 2
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 66b7f806058bc659f70637ab1602631659f4b9c9f0079a45960683f7e498f0ca
+Description: Google Testing and Mocking Framework
+Status: install ok installed
+
+Package: zstd
+Version: 1.5.7
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 9e237e714d7decba65c8dcdecb7f253c59c763e47ff13e0b4dad9b8da49d302f
+Description: Zstandard - Fast real-time compression algorithm
+Status: install ok installed
+
+Package: zlib
+Version: 1.3.1
+Depends: vcpkg-cmake
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 7b618aff6749d195922d06496a682048a4f545693bd9ffbd4537cac3b62f7d47
+Description: A compression library
+Status: install ok installed
+
+Package: vcpkg-cmake-get-vars
+Version: 2025-05-29
+Depends: vcpkg-cmake
+Architecture: x64-windows
+Multi-Arch: same
+Abi: b3d550e6a249f07fbf87016259770ea5c9363e8967c7fb505e797c20890f9698
+Status: install ok installed
+
+Package: atl
+Version: 0
+Port-Version: 1
+Architecture: x64-windows
+Multi-Arch: same
+Abi: dab11bda2b5f697b1c02dc6c5f23272f13e60e6155e643330db6d34295ed912c
+Description: A stub package that ensures Visual Studio has Active Template Library (ATL) installed.
+Status: install ok installed
+

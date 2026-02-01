@@ -77,6 +77,8 @@ llvm::Value* CodeGen::generateExpr(const Expr* expr) {
     if (auto* var = dynamic_cast<const VariableExpr*>(expr)) return visitVariableExpr(var);
     if (auto* assign = dynamic_cast<const AssignExpr*>(expr)) return visitAssignExpr(assign);
     if (auto* call = dynamic_cast<const CallExpr*>(expr)) return visitCallExpr(call);
+    if (auto* arr = dynamic_cast<const ArrayExpr*>(expr)) return visitArrayExpr(arr);
+    if (auto* obj = dynamic_cast<const ObjectExpr*>(expr)) return visitObjectExpr(obj);
     return nullptr;
 }
 
@@ -95,6 +97,8 @@ void CodeGen::generateStmt(const Stmt* stmt) {
         visitWhileStmt(whileStmt);
     } else if (auto* forStmt = dynamic_cast<const ForStmt*>(stmt)) {
         visitForStmt(forStmt);
+    } else if (auto* tryStmt = dynamic_cast<const TryStmt*>(stmt)) {
+        visitTryStmt(tryStmt);
     } else if (auto* funcStmt = dynamic_cast<const FunctionStmt*>(stmt)) {
         visitFunctionStmt(funcStmt);
     }
@@ -384,7 +388,35 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
     }
     
     namedValues = oldNamedValues;
+    namedValues = oldNamedValues;
     if (oldBB) builder->SetInsertPoint(oldBB);
+}
+
+llvm::Value* CodeGen::visitArrayExpr(const ArrayExpr* expr) {
+    // TODO: Implement actual array allocation
+    std::cerr << "Warning: Array generation not yet implemented. Returning 0.0\n";
+    for (const auto& el : expr->elements) {
+        generateExpr(el.get());
+    }
+    return llvm::ConstantFP::get(*context, llvm::APFloat(0.0));
+}
+
+llvm::Value* CodeGen::visitObjectExpr(const ObjectExpr* expr) {
+    // TODO: Implement actual object allocation
+    std::cerr << "Warning: Object generation not yet implemented. Returning 0.0\n";
+    for (const auto& kv : expr->pairs) {
+        generateExpr(kv.second.get());
+    }
+    return llvm::ConstantFP::get(*context, llvm::APFloat(0.0));
+}
+
+void CodeGen::visitTryStmt(const TryStmt* stmt) {
+    // Simple implementation: just generate the try block.
+    // Real exception handling requires landingpads headers.
+    generateStmt(stmt->tryBlock.get());
+    
+    // We optionally generate catch block if we had a mechanism to jump there
+    // For now, we ignore it or treat it as unreachable until we add throw support.
 }
 
 } // namespace manifast

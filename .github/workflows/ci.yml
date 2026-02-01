@@ -16,8 +16,8 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        # Install LLVM, fmt, GTest via apt to save build time
-        sudo apt-get install -y ninja-build cmake g++-11 llvm-dev libfmt-dev libgtest-dev
+        # Install specific LLVM version to be safe (LLVM 15 is standard on ubuntu-22.04)
+        sudo apt-get install -y ninja-build cmake g++-11 llvm-15-dev libfmt-dev libgtest-dev
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
         
         # Install argparse manually (header-only)
@@ -26,8 +26,10 @@ jobs:
 
     - name: Configure CMake
       run: |
+        # Explicitly tell CMake where to find LLVM Config
         cmake -S . -B build -G "Ninja" \
-          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_BUILD_TYPE=Release \
+          -DLLVM_DIR=/usr/lib/llvm-15/lib/cmake/llvm
           # No vcpkg toolchain -> uses system libs found by find_package
 
     - name: Build
