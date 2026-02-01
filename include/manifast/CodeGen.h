@@ -47,6 +47,21 @@ private:
     void visitForStmt(const ForStmt* stmt);
     void visitFunctionStmt(const FunctionStmt* stmt);
     void visitTryStmt(const TryStmt* stmt);
+
+private:
+    // Dynamic Typing Support
+    llvm::StructType* anyType;
+    llvm::StructType* arrayType;
+    llvm::StructType* objectType;
+
+    // Helpers
+    void initializeTypes();
+    llvm::Value* createNumber(double value); // Literals
+    llvm::Value* boxDouble(llvm::Value* v);  // Runtime values
+    llvm::Value* createArray(const std::vector<llvm::Value*>& elements);
+    llvm::Value* createObject(const std::vector<std::pair<std::string, llvm::Value*>>& pairs);
+    llvm::Value* unboxNumber(llvm::Value* anyVal);
+    void printAny(llvm::Value* anyVal); // Runtime helper stub
 };
 
 } // namespace manifast

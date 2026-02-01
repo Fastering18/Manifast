@@ -145,14 +145,9 @@ void CodeGen::run() {
         return;
     }
 
-    // Expected<ExecutorAddr> or Expected<ExecutorSymbolDef>
-    // We try to get the address as a uint64_t for the raw cast.
-    uint64_t rawAddr = 0;
-    if constexpr (std::is_same_v<std::remove_reference_t<decltype(*SymOrErr)>, llvm::orc::ExecutorAddr>) {
-        rawAddr = SymOrErr->getValue();
-    } else {
-        rawAddr = SymOrErr->getAddress().getValue();
-    }
+    // Expected<ExecutorAddr> in LLVM 18
+    auto MainAddr = *SymOrErr;
+    uint64_t rawAddr = MainAddr.getValue();
     
     // C++ Definition of Any struct to match LLVM IR
     struct Any {
@@ -445,19 +440,26 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
 }
 
 llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
-    llvm::Function* func = module->getFunction(expr->callee);
-    if (!func) {
-        std::cerr << "Unknown function: " << expr->callee << "\n";
+    // Callee is now a generalized Expr, for now we only support VariableExpr (function name)
+    auto* var = dynamic_cast<VariableExpr*>(expr->callee.get());
+    if (!var) {
+        std::cerr << "Dynamic function calls not yet supported\n";
         return nullptr;
     }
 
-    if (func->arg_size() != expr->arguments.size()) {
-        std::cerr << "Incorrect number of arguments for " << expr->callee << "\n";
+    llvm::Function* func = module->getFunction(var->name);
+    if (!func) {
+        std::cerr << "Unknown function: " << var->name << "\n";
+        return nullptr;
+    }
+
+    if (func->arg_size() != expr->args.size()) {
+        std::cerr << "Incorrect number of arguments for " << var->name << "\n";
         return nullptr;
     }
 
     std::vector<llvm::Value*> argsV;
-    for (const auto& arg : expr->arguments) {
+    for (const auto& arg : expr->args) {
         llvm::Value* argVal = generateExpr(arg.get()); // Any* (temp)
         if (!argVal) return nullptr;
         // Load Any struct to pass by value
@@ -525,7 +527,7 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
     llvm::BasicBlock* oldBB = builder->GetInsertBlock();
     builder->SetInsertPoint(bb);
 
-    std::map<std::string, llvm::AllocaInst*> oldNamedValues = namedValues;
+    std::map<std::string, llvm::Value*> oldNamedValues = namedValues;
     namedValues.clear();
 
     unsigned idx = 0;
