@@ -16,9 +16,12 @@ jobs:
     - name: Install System Dependencies
       run: |
         sudo apt-get update
-        # Install specific LLVM version to be safe (LLVM 15 is standard on ubuntu-22.04)
-        sudo apt-get install -y ninja-build cmake g++-11 llvm-15-dev libfmt-dev libgtest-dev
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
+        sudo apt-get install -y wget software-properties-common
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 18
+        sudo apt-get install -y ninja-build cmake g++-12 llvm-18-dev libfmt-dev libgtest-dev
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
         
         # Install argparse manually (header-only)
         sudo mkdir -p /usr/local/include/argparse
@@ -29,7 +32,7 @@ jobs:
         # Explicitly tell CMake where to find LLVM Config
         cmake -S . -B build -G "Ninja" \
           -DCMAKE_BUILD_TYPE=Release \
-          -DLLVM_DIR=/usr/lib/llvm-15/lib/cmake/llvm
+          -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm
           # No vcpkg toolchain -> uses system libs found by find_package
 
     - name: Build

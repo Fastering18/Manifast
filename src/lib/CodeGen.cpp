@@ -11,11 +11,91 @@ CodeGen::CodeGen() {
     context = std::make_unique<llvm::LLVMContext>();
     module = std::make_unique<llvm::Module>("ManifastModule", *context);
     builder = std::make_unique<llvm::IRBuilder<>>(*context);
+    initializeTypes();
+}
+
+void CodeGen::initializeTypes() {
+    // struct Any {
+    //   i32 type;      // 0=Number, 1=Array, 2=Object
+    //   double number; // Optimization for numbers
+    //   i8* ptr;       // Pointer to heap data (Array/Object)
+    // }
+    std::vector<llvm::Type*> anyFields = {
+        llvm::Type::getInt32Ty(*context),
+        llvm::Type::getDoubleTy(*context),
+        llvm::PointerType::getUnqual(*context)
+    };
+    anyType = llvm::StructType::create(*context, anyFields, "Any");
+    
+    // Define other types later as needed (Array/Object internals)
+}
+
+llvm::Value* CodeGen::createNumber(double value) {
+    // Create struct instance on stack (simplest for now)
+    llvm::Value* alloc = builder->CreateAlloca(anyType, nullptr, "num_alloc");
+    
+    // Set type = 0
+    llvm::Value* typePtr = builder->CreateStructGEP(anyType, alloc, 0);
+    builder->CreateStore(builder->getInt32(0), typePtr);
+    
+    // Set number = value
+    llvm::Value* numPtr = builder->CreateStructGEP(anyType, alloc, 1);
+    builder->CreateStore(llvm::ConstantFP::get(*context, llvm::APFloat(value)), numPtr);
+    
+    // Set ptr = null
+    llvm::Value* dataPtr = builder->CreateStructGEP(anyType, alloc, 2);
+    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(*context)), dataPtr);
+    
+    return alloc; 
+}
+
+llvm::Value* CodeGen::boxDouble(llvm::Value* v) {
+    llvm::Value* alloc = builder->CreateAlloca(anyType, nullptr, "num_box");
+    // Type 0
+    builder->CreateStore(builder->getInt32(0), builder->CreateStructGEP(anyType, alloc, 0));
+    // Number
+    builder->CreateStore(v, builder->CreateStructGEP(anyType, alloc, 1));
+    // Ptr null
+    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(*context)), builder->CreateStructGEP(anyType, alloc, 2));
+    return alloc;
+}
+
+llvm::Value* CodeGen::unboxNumber(llvm::Value* anyPtr) {
+    // Assume it's a number for now (skip type check for MVP speed)
+    llvm::Value* numPtr = builder->CreateStructGEP(anyType, anyPtr, 1);
+    return builder->CreateLoad(llvm::Type::getDoubleTy(*context), numPtr, "unbox");
+}
+
+llvm::Value* CodeGen::createArray(const std::vector<llvm::Value*>& elements) {
+    llvm::Value* alloc = builder->CreateAlloca(anyType, nullptr, "arr_alloc");
+    // Type 1 = Array
+    builder->CreateStore(builder->getInt32(1), builder->CreateStructGEP(anyType, alloc, 0));
+    // Number = 0
+    builder->CreateStore(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), builder->CreateStructGEP(anyType, alloc, 1));
+    // Ptr = TODO (malloc)
+    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(*context)), builder->CreateStructGEP(anyType, alloc, 2));
+    return alloc;
+}
+
+llvm::Value* CodeGen::createObject(const std::vector<std::pair<std::string, llvm::Value*>>& pairs) {
+    llvm::Value* alloc = builder->CreateAlloca(anyType, nullptr, "obj_alloc");
+    // Type 2 = Object
+    builder->CreateStore(builder->getInt32(2), builder->CreateStructGEP(anyType, alloc, 0));
+    // Number = 0
+    builder->CreateStore(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), builder->CreateStructGEP(anyType, alloc, 1));
+    // Ptr = TODO (malloc)
+    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(*context)), builder->CreateStructGEP(anyType, alloc, 2));
+    return alloc;
+}
+
+void CodeGen::printAny(llvm::Value* anyVal) {
+    // Stub
 }
 
 void CodeGen::compile(const std::vector<std::unique_ptr<Stmt>>& statements) {
     // Create a main function to hold top-level statements
-    llvm::FunctionType* funcType = llvm::FunctionType::get(builder->getInt32Ty(), false);
+    // Main returns Any struct
+    llvm::FunctionType* funcType = llvm::FunctionType::get(anyType, false);
     llvm::Function* mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "main", module.get());
     llvm::BasicBlock* entry = llvm::BasicBlock::Create(*context, "entry", mainFunc);
     builder->SetInsertPoint(entry);
@@ -24,8 +104,11 @@ void CodeGen::compile(const std::vector<std::unique_ptr<Stmt>>& statements) {
         generateStmt(stmt.get());
     }
 
-    // Default return 0
-    builder->CreateRet(builder->getInt32(0));
+    // Default return 0 (Boxed)
+    llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+    // Load structure to return
+    llvm::Value* retLoad = builder->CreateLoad(anyType, retVal);
+    builder->CreateRet(retLoad);
     
     // Verify
     if (llvm::verifyFunction(*mainFunc, &llvm::errs())) {
@@ -62,13 +145,32 @@ void CodeGen::run() {
         return;
     }
 
-    // ExecutorSymbolDef -> getAddress() -> ExecutorAddr -> toPtr()
-    auto MainAddr = SymOrErr->getAddress();
-    int (*MainPtr)() = MainAddr.toPtr<int (*)()>();
+    // Expected<ExecutorAddr> or Expected<ExecutorSymbolDef>
+    // We try to get the address as a uint64_t for the raw cast.
+    uint64_t rawAddr = 0;
+    if constexpr (std::is_same_v<std::remove_reference_t<decltype(*SymOrErr)>, llvm::orc::ExecutorAddr>) {
+        rawAddr = SymOrErr->getValue();
+    } else {
+        rawAddr = SymOrErr->getAddress().getValue();
+    }
     
-    int result = MainPtr();
+    // C++ Definition of Any struct to match LLVM IR
+    struct Any {
+        int32_t type;
+        double number;
+        void* ptr;
+    };
+    
+    typedef Any (*MainFuncPtr)();
+    MainFuncPtr MainPtr = (MainFuncPtr)rawAddr;
+    
+    Any result = MainPtr();
     std::cout << "--- Execution Result ---\n";
-    std::cout << "Return code: " << result << "\n";
+    if (result.type == 0) {
+        std::cout << "Return: " << result.number << "\n";
+    } else {
+        std::cout << "Return type: " << result.type << "\n";
+    }
 }
 
 llvm::Value* CodeGen::generateExpr(const Expr* expr) {
@@ -108,8 +210,10 @@ void CodeGen::visitIfStmt(const IfStmt* stmt) {
     llvm::Value* condV = generateExpr(stmt->condition.get());
     if (!condV) return;
 
+    // Unbox condition (Any* -> double)
+    llvm::Value* unpacked = unboxNumber(condV);
     // Convert condition to bool (double != 0)
-    condV = builder->CreateFCmpONE(condV, llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), "ifcond");
+    unpacked = builder->CreateFCmpONE(unpacked, llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), "ifcond");
 
     llvm::Function* func = builder->GetInsertBlock()->getParent();
 
@@ -118,9 +222,9 @@ void CodeGen::visitIfStmt(const IfStmt* stmt) {
     llvm::BasicBlock* mergeBB = llvm::BasicBlock::Create(*context, "ifcont");
 
     if (stmt->elseBranch) {
-        builder->CreateCondBr(condV, thenBB, elseBB);
+        builder->CreateCondBr(unpacked, thenBB, elseBB);
     } else {
-        builder->CreateCondBr(condV, thenBB, mergeBB);
+        builder->CreateCondBr(unpacked, thenBB, mergeBB);
     }
 
     // Emit then block
@@ -131,7 +235,7 @@ void CodeGen::visitIfStmt(const IfStmt* stmt) {
 
     // Emit else block
     if (stmt->elseBranch) {
-        func->insert(func->end(), elseBB);
+        elseBB->insertInto(func);
         builder->SetInsertPoint(elseBB);
         generateStmt(stmt->elseBranch.get());
         builder->CreateBr(mergeBB);
@@ -139,7 +243,7 @@ void CodeGen::visitIfStmt(const IfStmt* stmt) {
     }
 
     // Emit merge block
-    func->insert(func->end(), mergeBB);
+    mergeBB->insertInto(func);
     builder->SetInsertPoint(mergeBB);
 }
 
@@ -155,15 +259,17 @@ void CodeGen::visitWhileStmt(const WhileStmt* stmt) {
 
     llvm::Value* condV = generateExpr(stmt->condition.get());
     if (!condV) return;
-    condV = builder->CreateFCmpONE(condV, llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), "whilecond");
-    builder->CreateCondBr(condV, bodyBB, afterBB);
+    
+    llvm::Value* unpacked = unboxNumber(condV);
+    unpacked = builder->CreateFCmpONE(unpacked, llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), "whilecond");
+    builder->CreateCondBr(unpacked, bodyBB, afterBB);
 
-    func->insert(func->end(), bodyBB);
+    bodyBB->insertInto(func);
     builder->SetInsertPoint(bodyBB);
     generateStmt(stmt->body.get());
     builder->CreateBr(condBB);
 
-    func->insert(func->end(), afterBB);
+    afterBB->insertInto(func);
     builder->SetInsertPoint(afterBB);
 }
 
@@ -171,12 +277,16 @@ void CodeGen::visitForStmt(const ForStmt* stmt) {
     llvm::Function* func = builder->GetInsertBlock()->getParent();
 
     // 1. Initializer
-    llvm::Value* startV = generateExpr(stmt->start.get());
+    llvm::Value* startV = generateExpr(stmt->start.get()); // Any*
     if (!startV) return;
 
     llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
-    llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(llvm::Type::getDoubleTy(*context), nullptr, stmt->varName);
-    builder->CreateStore(startV, alloca);
+    llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->varName);
+    
+    // Copy startV to alloca
+    llvm::Value* startLoaded = builder->CreateLoad(anyType, startV);
+    builder->CreateStore(startLoaded, alloca);
+    
     namedValues[stmt->varName] = alloca;
 
     // 2. Blocks
@@ -188,30 +298,50 @@ void CodeGen::visitForStmt(const ForStmt* stmt) {
     builder->SetInsertPoint(condBB);
 
     // 3. Condition (i <= end)
-    llvm::Value* currV = builder->CreateLoad(llvm::Type::getDoubleTy(*context), alloca, stmt->varName.c_str());
+    llvm::Value* currV = builder->CreateLoad(anyType, alloca, stmt->varName.c_str());
+    llvm::Value* currValPtr = builder->CreateAlloca(anyType); // Temp ptr for unbox
+    builder->CreateStore(currV, currValPtr);
+    
+    llvm::Value* currDouble = unboxNumber(currValPtr);
+    
     llvm::Value* endV = generateExpr(stmt->end.get());
-    llvm::Value* condV = builder->CreateFCmpOLE(currV, endV, "fortmp");
+    llvm::Value* endDouble = unboxNumber(endV);
+    
+    llvm::Value* condV = builder->CreateFCmpOLE(currDouble, endDouble, "fortmp");
     builder->CreateCondBr(condV, bodyBB, afterBB);
 
     // 4. Body
-    func->insert(func->end(), bodyBB);
+    bodyBB->insertInto(func);
     builder->SetInsertPoint(bodyBB);
     generateStmt(stmt->body.get());
 
     // 5. Update (i = i + step)
-    llvm::Value* stepV = stmt->step ? generateExpr(stmt->step.get()) : llvm::ConstantFP::get(*context, llvm::APFloat(1.0));
-    llvm::Value* nextV = builder->CreateFAdd(currV, stepV, "nextvar");
-    builder->CreateStore(nextV, alloca);
+    llvm::Value* stepV = stmt->step ? generateExpr(stmt->step.get()) : boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(1.0)));
+    llvm::Value* stepDouble = unboxNumber(stepV);
+    
+    // currDouble is potentially stale, should reload? No, we are in correct block order?
+    // Actually we need to reload i inside the loop/latch if it was modified?
+    // Simplified: i = i + step.
+    // Reload currVal
+    llvm::Value* loadedCurr = builder->CreateLoad(anyType, alloca);
+    builder->CreateStore(loadedCurr, currValPtr); // Reuse temp
+    llvm::Value* valNow = unboxNumber(currValPtr);
+    
+    llvm::Value* nextDouble = builder->CreateFAdd(valNow, stepDouble, "nextvar");
+    llvm::Value* nextAny = boxDouble(nextDouble); // Returns Any* (temp)
+    
+    llvm::Value* nextLoaded = builder->CreateLoad(anyType, nextAny);
+    builder->CreateStore(nextLoaded, alloca);
 
     builder->CreateBr(condBB);
 
     // 6. After
-    func->insert(func->end(), afterBB);
+    afterBB->insertInto(func);
     builder->SetInsertPoint(afterBB);
 }
 
 llvm::Value* CodeGen::visitNumberExpr(const NumberExpr* expr) {
-    return llvm::ConstantFP::get(*context, llvm::APFloat(expr->value));
+    return createNumber(expr->value);
 }
 
 llvm::Value* CodeGen::visitBinaryExpr(const BinaryExpr* expr) {
@@ -219,44 +349,57 @@ llvm::Value* CodeGen::visitBinaryExpr(const BinaryExpr* expr) {
     llvm::Value* R = generateExpr(expr->right.get());
     if (!L || !R) return nullptr;
 
+    // Unbox inputs (assuming they are Any*)
+    llvm::Value* LVal = unboxNumber(L);
+    llvm::Value* RVal = unboxNumber(R);
+
+    // Compute result (double or bool)
+    llvm::Value* res = nullptr;
     switch (expr->op) {
-        case TokenType::Plus:  return builder->CreateFAdd(L, R, "addtmp");
-        case TokenType::Minus: return builder->CreateFSub(L, R, "subtmp");
-        case TokenType::Star:  return builder->CreateFMul(L, R, "multmp");
-        case TokenType::Slash: return builder->CreateFDiv(L, R, "divtmp"); 
+        case TokenType::Plus:  res = builder->CreateFAdd(LVal, RVal, "addtmp"); break;
+        case TokenType::Minus: res = builder->CreateFSub(LVal, RVal, "subtmp"); break;
+        case TokenType::Star:  res = builder->CreateFMul(LVal, RVal, "multmp"); break;
+        case TokenType::Slash: res = builder->CreateFDiv(LVal, RVal, "divtmp"); break;
         
         // Comparisons
         case TokenType::EqualEqual: {
-            L = builder->CreateFCmpOEQ(L, R, "eqtmp");
-            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+            res = builder->CreateFCmpOEQ(LVal, RVal, "eqtmp");
+            res = builder->CreateUIToFP(res, llvm::Type::getDoubleTy(*context), "booltmp");
+            break;
         }
         case TokenType::BangEqual: {
-            L = builder->CreateFCmpONE(L, R, "netmp");
-            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+            res = builder->CreateFCmpONE(LVal, RVal, "netmp");
+            res = builder->CreateUIToFP(res, llvm::Type::getDoubleTy(*context), "booltmp");
+            break;
         }
         case TokenType::Less: {
-            L = builder->CreateFCmpOLT(L, R, "lttmp");
-            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+            res = builder->CreateFCmpOLT(LVal, RVal, "lttmp");
+            res = builder->CreateUIToFP(res, llvm::Type::getDoubleTy(*context), "booltmp");
+            break;
         }
         case TokenType::LessEqual: {
-            L = builder->CreateFCmpOLE(L, R, "letmp");
-            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+            res = builder->CreateFCmpOLE(LVal, RVal, "letmp");
+            res = builder->CreateUIToFP(res, llvm::Type::getDoubleTy(*context), "booltmp");
+            break;
         }
         case TokenType::Greater: {
-            L = builder->CreateFCmpOGT(L, R, "gttmp");
-            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+            res = builder->CreateFCmpOGT(LVal, RVal, "gttmp");
+            res = builder->CreateUIToFP(res, llvm::Type::getDoubleTy(*context), "booltmp");
+            break;
         }
         case TokenType::GreaterEqual: {
-            L = builder->CreateFCmpOGE(L, R, "getmp");
-            return builder->CreateUIToFP(L, llvm::Type::getDoubleTy(*context), "booltmp");
+            res = builder->CreateFCmpOGE(LVal, RVal, "getmp");
+            res = builder->CreateUIToFP(res, llvm::Type::getDoubleTy(*context), "booltmp");
+            break;
         }
-
-        // TODO: Logical And/Or with short-circuiting
-
+        
         default: 
             std::cerr << "Unimplemented binary operator: " << tokenTypeToString(expr->op) << "\n";
             return nullptr;
     }
+    
+    // Box result
+    return boxDouble(res);
 }
 
 llvm::Value* CodeGen::visitVariableExpr(const VariableExpr* expr) {
@@ -265,19 +408,27 @@ llvm::Value* CodeGen::visitVariableExpr(const VariableExpr* expr) {
         std::cerr << "Unknown variable name: " << expr->name << "\n";
         return nullptr;
     }
-    // Load the value from the alloca
-    return builder->CreateLoad(llvm::Type::getDoubleTy(*context), V, expr->name.c_str());
+    // V is pointer to the variable's storage (Any).
+    // Return a pointer to a COPY of the value (pass by value semantics for now).
+    // Or just return V? If we return V, modifications to the return value would modify the variable.
+    // In many expressions (like binary ops), we just Read.
+    // But if we pass it to a function etc...
+    // Let's return a copy to be safe and consistent with createNumber.
+    
+    llvm::Value* temp = builder->CreateAlloca(anyType, nullptr, "var_read");
+    llvm::Value* val = builder->CreateLoad(anyType, V, expr->name.c_str());
+    builder->CreateStore(val, temp);
+    return temp;
 }
 
 llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
-    // Assuming target is a VariableExpr for now
     auto* var = dynamic_cast<VariableExpr*>(expr->target.get());
     if (!var) {
         std::cerr << "Invalid assignment target\n";
         return nullptr;
     }
 
-    llvm::Value* val = generateExpr(expr->value.get());
+    llvm::Value* val = generateExpr(expr->value.get()); // Returns Any* (temp)
     if (!val) return nullptr;
 
     llvm::Value* V = namedValues[var->name];
@@ -286,68 +437,74 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
         return nullptr;
     }
 
-    builder->CreateStore(val, V);
+    // Copy content from val (temp) to V (var storage)
+    llvm::Value* loadedVal = builder->CreateLoad(anyType, val);
+    builder->CreateStore(loadedVal, V);
+    
     return val;
 }
 
 llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
-    // Assuming callee is a VariableExpr (function name)
-    auto* var = dynamic_cast<VariableExpr*>(expr->callee.get());
-    if (!var) {
-        std::cerr << "Only simple function calls are supported now\n";
-        return nullptr;
-    }
-
-    llvm::Function* func = module->getFunction(var->name);
+    llvm::Function* func = module->getFunction(expr->callee);
     if (!func) {
-        std::cerr << "Unknown function: " << var->name << "\n";
+        std::cerr << "Unknown function: " << expr->callee << "\n";
         return nullptr;
     }
 
-    if (func->arg_size() != expr->args.size()) {
-        std::cerr << "Incorrect number of arguments for " << var->name << "\n";
+    if (func->arg_size() != expr->arguments.size()) {
+        std::cerr << "Incorrect number of arguments for " << expr->callee << "\n";
         return nullptr;
     }
 
     std::vector<llvm::Value*> argsV;
-    for (const auto& arg : expr->args) {
-        argsV.push_back(generateExpr(arg.get()));
-        if (!argsV.back()) return nullptr;
+    for (const auto& arg : expr->arguments) {
+        llvm::Value* argVal = generateExpr(arg.get()); // Any* (temp)
+        if (!argVal) return nullptr;
+        // Load Any struct to pass by value
+        argsV.push_back(builder->CreateLoad(anyType, argVal));
     }
 
-    return builder->CreateCall(func, argsV, "calltmp");
+    // Call returns Any struct
+    llvm::Value* retStruct = builder->CreateCall(func, argsV, "calltmp");
+    
+    // Store to temp alloca to return Any*
+    llvm::Value* temp = builder->CreateAlloca(anyType, nullptr, "call_res");
+    builder->CreateStore(retStruct, temp);
+    return temp;
 }
 
 void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
     llvm::Function* func = builder->GetInsertBlock()->getParent();
     
-    // Create an alloca for the variable in the entry block of the current function
     llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
-    llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(llvm::Type::getDoubleTy(*context), nullptr, stmt->name);
+    // Allocate Any struct
+    llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->name);
     
     namedValues[stmt->name] = alloca;
 
     if (stmt->initializer) {
-        llvm::Value* initVal = generateExpr(stmt->initializer.get());
+        llvm::Value* initVal = generateExpr(stmt->initializer.get()); // Any*
         if (initVal) {
-            builder->CreateStore(initVal, alloca);
+            // Copy initVal to alloca
+            llvm::Value* loaded = builder->CreateLoad(anyType, initVal);
+            builder->CreateStore(loaded, alloca);
         }
     }
 }
 
 void CodeGen::visitReturnStmt(const ReturnStmt* stmt) {
     if (stmt->value) {
-        llvm::Value* val = generateExpr(stmt->value.get());
-        // For now, our 'main' returns i32, but our expressions are double.
-        // We might need to cast or change main's return type.
-        // Let's assume double return for now for consistency if needed, 
-        // or just cast to i32 for main's sake.
+        llvm::Value* val = generateExpr(stmt->value.get()); // Any*
         if (val) {
-            llvm::Value* retVal = builder->CreateFPToSI(val, builder->getInt32Ty());
+            // Load Any struct to return
+            llvm::Value* retVal = builder->CreateLoad(anyType, val);
             builder->CreateRet(retVal);
         }
     } else {
-        builder->CreateRet(builder->getInt32(0));
+        // Return void/null? We must return Any. Return 0 for now.
+         llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+         llvm::Value* retLoad = builder->CreateLoad(anyType, retVal);
+         builder->CreateRet(retLoad);
     }
 }
 
@@ -358,65 +515,89 @@ void CodeGen::visitBlockStmt(const BlockStmt* stmt) {
 }
 
 void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
-    std::vector<llvm::Type*> doubles(stmt->params.size(), llvm::Type::getDoubleTy(*context));
-    llvm::FunctionType* funcType = llvm::FunctionType::get(llvm::Type::getDoubleTy(*context), doubles, false);
-    llvm::Function* func = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, stmt->name, module.get());
+    // Return type Any, Args Any
+    std::vector<llvm::Type*> argTypes(stmt->params.size(), anyType);
+    llvm::FunctionType* ft = llvm::FunctionType::get(anyType, argTypes, false);
+    llvm::Function* func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, stmt->name, module.get());
+
+    llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
     
-    llvm::BasicBlock* entryBuf = llvm::BasicBlock::Create(*context, "entry", func);
-    auto* oldBB = builder->GetInsertBlock();
-    builder->SetInsertPoint(entryBuf);
-    
-    auto oldNamedValues = namedValues; 
+    llvm::BasicBlock* oldBB = builder->GetInsertBlock();
+    builder->SetInsertPoint(bb);
+
+    std::map<std::string, llvm::AllocaInst*> oldNamedValues = namedValues;
+    namedValues.clear();
+
     unsigned idx = 0;
     for (auto& arg : func->args()) {
-        std::string argName = stmt->params[idx++];
-        arg.setName(argName);
+        // Create alloca for arg
         llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
-        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(llvm::Type::getDoubleTy(*context), nullptr, argName);
+        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->params[idx]);
+        
+        // Store passed value (Any struct) into alloca
         builder->CreateStore(&arg, alloca);
-        namedValues[argName] = alloca;
+        
+        namedValues[stmt->params[idx]] = alloca;
+        idx++;
+    }
+
+    // Body
+    if (auto* bodyBlock = dynamic_cast<const BlockStmt*>(stmt->body.get())) {
+        for (const auto& s : bodyBlock->statements) {
+            generateStmt(s.get());
+        }
+    } else {
+        generateStmt(stmt->body.get());
     }
     
-    generateStmt(stmt->body.get());
-    
-    if (!builder->GetInsertBlock()->getTerminator()) {
-        builder->CreateRet(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+    // Default return 0 if no return stmt
+    if (!func->back().getTerminator()) {
+         llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+         llvm::Value* retLoad = builder->CreateLoad(anyType, retVal);
+         builder->CreateRet(retLoad);
     }
     
     if (llvm::verifyFunction(*func, &llvm::errs())) {
-        std::cerr << "Error: Function " << stmt->name << " verification failed!\n";
+        std::cerr << "Error verifying function " << stmt->name << "\n";
     }
     
-    namedValues = oldNamedValues;
     namedValues = oldNamedValues;
     if (oldBB) builder->SetInsertPoint(oldBB);
 }
 
 llvm::Value* CodeGen::visitArrayExpr(const ArrayExpr* expr) {
-    // TODO: Implement actual array allocation
-    std::cerr << "Warning: Array generation not yet implemented. Returning 0.0\n";
+    std::vector<llvm::Value*> elements;
     for (const auto& el : expr->elements) {
-        generateExpr(el.get());
+        llvm::Value* val = generateExpr(el.get());
+        if (val) {
+            // Load value to store in array (by value)
+             llvm::Value* loaded = builder->CreateLoad(anyType, val);
+             elements.push_back(loaded);
+        } else {
+             // Handle null/error? Push a null-Any?
+             // For now, skip or push zero.
+        }
     }
-    return llvm::ConstantFP::get(*context, llvm::APFloat(0.0));
+    return createArray(elements);
 }
 
 llvm::Value* CodeGen::visitObjectExpr(const ObjectExpr* expr) {
-    // TODO: Implement actual object allocation
-    std::cerr << "Warning: Object generation not yet implemented. Returning 0.0\n";
-    for (const auto& kv : expr->pairs) {
-        generateExpr(kv.second.get());
+    std::vector<std::pair<std::string, llvm::Value*>> pairs;
+    for (const auto& kv : expr->entries) {
+         llvm::Value* val = generateExpr(kv.second.get());
+         if (val) {
+             llvm::Value* loaded = builder->CreateLoad(anyType, val);
+             pairs.push_back({kv.first, loaded});
+         }
     }
-    return llvm::ConstantFP::get(*context, llvm::APFloat(0.0));
+    return createObject(pairs);
 }
 
 void CodeGen::visitTryStmt(const TryStmt* stmt) {
-    // Simple implementation: just generate the try block.
-    // Real exception handling requires landingpads headers.
-    generateStmt(stmt->tryBlock.get());
-    
-    // We optionally generate catch block if we had a mechanism to jump there
-    // For now, we ignore it or treat it as unreachable until we add throw support.
+    // Simple implementation: just generate the try body.
+    if (stmt->tryBody) {
+        generateStmt(stmt->tryBody.get());
+    }
 }
 
 } // namespace manifast
