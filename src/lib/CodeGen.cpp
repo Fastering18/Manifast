@@ -2,6 +2,9 @@
 #include <llvm/IR/Verifier.h>
 #include <iostream>
 
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
+
 namespace manifast {
 
 CodeGen::CodeGen() {
@@ -34,11 +37,6 @@ void CodeGen::printIR() {
     module->print(llvm::errs(), nullptr);
 }
 
-#include <llvm/Support/TargetSelect.h>
-#include <llvm/ExecutionEngine/Orc/LLJIT.h>
-
-// ...
-
 void CodeGen::run() {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -57,22 +55,16 @@ void CodeGen::run() {
     }
 
     // Look up main
-    // LLVM 18: lookup returns Expected<ExecutorSymbolDef> or Expected<ExecutorAddr>
-    // Actually in recent LLVM, lookup returns Expected<ExecutorAddr> directly if using bare LLJIT?
-    // Let's check typical usage. In 17+, lookup returns Expected<ExecutorSymbolDef>.
-    // But ExecutorSymbolDef has getAddress() returning ExecutorAddr.
-    // However, the error said `ExecutorAddr` has no member `getAddress`. 
-    // This implies `lookup` returned `Expected<ExecutorAddr>` (so *MainSym is ExecutorAddr).
-    
-    auto MainSym = JIT.get()->lookup("main");
-    if (!MainSym) {
+    // LLVM 18: lookup returns Expected<ExecutorSymbolDef>
+    auto SymOrErr = JIT.get()->lookup("main");
+    if (!SymOrErr) {
         std::cerr << "Error: main function not found in JIT\n";
         return;
     }
 
-    // MainSym is Expected<...> so we dereference it to get the value.
-    // If the value IS ExecutorAddr, we call toPtr directly on it.
-    auto* MainPtr = MainSym->toPtr<int (*)()>();
+    // ExecutorSymbolDef -> getAddress() -> ExecutorAddr -> toPtr()
+    auto MainAddr = SymOrErr->getAddress();
+    int (*MainPtr)() = MainAddr.toPtr<int (*)()>();
     
     int result = MainPtr();
     std::cout << "--- Execution Result ---\n";
