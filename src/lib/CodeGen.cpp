@@ -34,6 +34,11 @@ void CodeGen::printIR() {
     module->print(llvm::errs(), nullptr);
 }
 
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
+
+// ...
+
 void CodeGen::run() {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -44,7 +49,7 @@ void CodeGen::run() {
         return;
     }
 
-    // Move module to JIT. We wrap it in ThreadSafeModule
+    // Move module to JIT
     auto TSM = llvm::orc::ThreadSafeModule(std::move(module), std::move(context));
     if (auto Err = JIT.get()->addIRModule(std::move(TSM))) {
         std::cerr << "Error: Failed to add IR module to JIT\n";
@@ -52,14 +57,23 @@ void CodeGen::run() {
     }
 
     // Look up main
+    // LLVM 18: lookup returns Expected<ExecutorSymbolDef> or Expected<ExecutorAddr>
+    // Actually in recent LLVM, lookup returns Expected<ExecutorAddr> directly if using bare LLJIT?
+    // Let's check typical usage. In 17+, lookup returns Expected<ExecutorSymbolDef>.
+    // But ExecutorSymbolDef has getAddress() returning ExecutorAddr.
+    // However, the error said `ExecutorAddr` has no member `getAddress`. 
+    // This implies `lookup` returned `Expected<ExecutorAddr>` (so *MainSym is ExecutorAddr).
+    
     auto MainSym = JIT.get()->lookup("main");
     if (!MainSym) {
         std::cerr << "Error: main function not found in JIT\n";
         return;
     }
 
-    // Cast to expected signature: int(*)()
-    auto* MainPtr = MainSym->getAddress().toPtr<int (*)()>();
+    // MainSym is Expected<...> so we dereference it to get the value.
+    // If the value IS ExecutorAddr, we call toPtr directly on it.
+    auto* MainPtr = MainSym->toPtr<int (*)()>();
+    
     int result = MainPtr();
     std::cout << "--- Execution Result ---\n";
     std::cout << "Return code: " << result << "\n";
