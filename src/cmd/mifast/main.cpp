@@ -21,6 +21,7 @@
 #define DUP _dup
 #define DUP2 _dup2
 #define FILENO _fileno
+#define CLOSE _close
 #define NULL_DEVICE "NUL"
 #else
 #include <unistd.h>
@@ -28,6 +29,7 @@
 #define DUP dup
 #define DUP2 dup2
 #define FILENO fileno
+#define CLOSE close
 #define NULL_DEVICE "/dev/null"
 #endif
 
@@ -70,14 +72,14 @@ public:
             DUP2(old_stdout, FILENO(stdout));
             DUP2(old_stderr, FILENO(stderr));
             std::fclose(log_file);
-            _close(old_stdout);
-            _close(old_stderr);
+            CLOSE(old_stdout);
+            CLOSE(old_stderr);
         }
     }
 };
 
 bool runTestInProcess(const std::string& path, std::string& outputLog) {
-    OutputSilencer silencer("NUL"); // Suppress output directly to null device
+    OutputSilencer silencer(NULL_DEVICE);
 
     std::ifstream file(path);
     if (!file) return false;

@@ -207,13 +207,7 @@ static struct LLVMInit {
 } llvmInit;
 
 bool CodeGen::run() {
-    // Use LLLazyJIT for lazy per-function compilation (near-zero startup)
-    auto jitOrErr = llvm::orc::LLLazyJITBuilder().create();
-    if (!jitOrErr) {
-        std::cerr << "Error creating lazy JIT: " << llvm::toString(jitOrErr.takeError()) << "\n";
-        return false;
-    }
-    auto jit = std::move(*jitOrErr);
+    auto jit = llvm::ExitOnError()(llvm::orc::LLJITBuilder().create());
     
     // Add library search for host symbols
     jit->getMainJITDylib().addGenerator(
@@ -257,8 +251,7 @@ bool CodeGen::run() {
     module->setDataLayout(jit->getDataLayout());
     module->setTargetTriple(jit->getTargetTriple().getTriple());
 
-    // Use lazy add - functions compiled only when called
-    auto err = jit->addLazyIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context)));
+    auto err = jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context)));
     if (err) {
         std::cerr << "Error adding IR module: " << llvm::toString(std::move(err)) << "\n";
         return false;
