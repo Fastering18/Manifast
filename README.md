@@ -26,22 +26,38 @@ lokal user = { nama: "Manifast", versi: 0.1 }
 ## Welcome Contributors!
 We are open to anyone who wants to contribute to this project. Whether it's reporting bugs, suggesting features, or submitting pull requests, your help is appreciated!
 
+## Performance
+
+Manifast uses an in-process JIT compiler via LLVM. Benchmark results on Windows (AMD Ryzen 7, 8 cores):
+
+| Category | Min | Avg | Max |
+|----------|-----|-----|-----|
+| Control Flow | 5.44ms | 7.23ms | 9.03ms |
+| Literals | 3.68ms | 4.28ms | 5.89ms |
+| Scoping | 3.38ms | 3.38ms | 3.38ms |
+| OS/IO | 3.22ms | 3.22ms | 3.22ms |
+
+> **Note**: LLVM JIT has inherent per-invocation overhead (~3-5ms). For sub-millisecond performance, consider AOT compilation (planned feature).
+
 ## Todo list
 - [x] Lexer (Tokens, Indonesian Keywords, Lua-style Comments)
 - [x] Parser (Hand-written Recursive Descent, AST)
 - [x] Optional Semicolons
-- [/] LLVM Code Generation (Foundation, IR Extraction)
-- [ ] Variables & Scoping
-- [ ] Function Codegen
-- [ ] Control Flow (jika, sementara, untuk)
-- [ ] Try-Catch Implementation (coba-tangkap)
-- [ ] Tables & Arrays (Object-oriented features)
-- [ ] Memory Management (C++ RAII/Ownership)
-- [ ] Standard Library (print, io, math)
+- [x] LLVM Code Generation (Foundation, IR Extraction)
+- [x] Variables & Scoping
+- [x] Function Codegen
+- [x] Control Flow (jika, kalau, kecuali, selama, untuk)
+- [x] Try-Catch Implementation (coba-tangkap)
+- [x] Tables & Arrays (Object-oriented features)
+- [x] Memory Management (C++ RAII/Ownership)
+- [x] Standard Library (print, println, printfmt, input)
+- [x] JIT Compiler Pipeline
 - [ ] ECMAScript/WebAssembly Support
-- [ ] JIT Compiler Pipeline
-- [ ] Embedding Language Support
+- [ ] Embedding Language Support (Web demo)
 - [ ] IDE Support (LSP)
+- [ ] Self compilation
+- [ ] System Embedding Language (Game engine)
+- [ ] AOT Compilation (for sub-millisecond startup)
 
 ## How to compile & run?
 ### Requirements

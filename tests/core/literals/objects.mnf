@@ -1,0 +1,4 @@
+lokal obj = { key: "value", num: 123 }
+println(obj.key)
+obj.num = 456
+println(obj.num)

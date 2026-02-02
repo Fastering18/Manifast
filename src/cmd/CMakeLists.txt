@@ -1,10 +1,7 @@
-add_executable(manifast
-  main.cpp
-)
+add_executable(mifastc mifastc/main.cpp)
+target_link_libraries(mifastc PRIVATE manifast_lib)
+set_target_properties(mifastc PROPERTIES ENABLE_EXPORTS ON)
 
-target_link_libraries(manifast PRIVATE
-  manifast_lib
-  # argparse::argparse
-)
-
-set_target_properties(manifast PROPERTIES ENABLE_EXPORTS ON)
+add_executable(mifast mifast/main.cpp)
+target_link_libraries(mifast PRIVATE manifast_lib fmt::fmt)
+set_target_properties(mifast PROPERTIES ENABLE_EXPORTS ON)

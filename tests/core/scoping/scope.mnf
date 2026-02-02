@@ -1,0 +1,6 @@
+lokal x = 10
+lakukan
+    lokal x = 20
+    println(x)
+tutup
+println(x)

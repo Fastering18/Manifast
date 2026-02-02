@@ -60,11 +60,14 @@ void runVerbose(const std::string& path) {
         std::cout << "--- Execution ---\n";
         if (!codegen.run()) {
             std::cerr << "Execution failed.\n";
+            exit(1);
         }
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
+        exit(1);
     } catch (...) {
         std::cerr << "Unknown Error.\n";
+        exit(1);
     }
 }
 

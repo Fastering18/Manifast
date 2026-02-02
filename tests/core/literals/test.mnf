@@ -1,0 +1,3 @@
+lokal x = 10
+lokal y = 20
+println(x + y)

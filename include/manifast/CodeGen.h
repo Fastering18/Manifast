@@ -23,8 +23,11 @@ private:
     std::unique_ptr<llvm::Module> module;
     std::unique_ptr<llvm::IRBuilder<>> builder;
     
-    // Symbol table for variables (name -> llvm::Value*)
-    std::map<std::string, llvm::Value*> namedValues;
+    // Scope management
+    std::vector<std::map<std::string, llvm::Value*>> scopes;
+    void pushScope();
+    void popScope();
+    llvm::Value* lookupVariable(const std::string& name);
 
     llvm::Value* generateExpr(const Expr* expr);
     void generateStmt(const Stmt* stmt);

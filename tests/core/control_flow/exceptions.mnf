@@ -1,11 +1,14 @@
 -- Exception Verification
 coba
     lokal x = 10 / 0 -- Potential error
+    print("no way")
 tangkap err maka
     -- Error handling block
     lokal recovered = 1
+    print("error recovered nice")
 tutup
 
 coba
     lokal safe = 1
+    print("safe run")
 tutup

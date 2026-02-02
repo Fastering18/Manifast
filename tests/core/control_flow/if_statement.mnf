@@ -1,0 +1,9 @@
+lokal x = 85
+
+jika x == 100 maka
+  print("perfecto")
+kalau x >= 80 dan x < 100 maka
+  print("naisu")
+kecuali
+  print("alright")
+tutup

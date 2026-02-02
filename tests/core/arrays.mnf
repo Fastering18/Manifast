@@ -1,6 +1,0 @@
--- Array Verification
-lokal list = [1, 2 * 3, 10 / 2]
-lokal empty = []
-
--- For now, we just test that it parses and runs without crashing
--- Future: test indexing "lokal x = list[0]"

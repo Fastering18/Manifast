@@ -1,13 +1,13 @@
 -- Control Flow Depth Test
 lokal x = 0
 untuk i = 1 ke 10 lakukan
-    sementara x < 5 maka
+    selama x < 5 lakukan
         x += 1
     tutup
 tutup
 
 jika x == 5 maka
-    kembali benar
+    println("OK")
 kecuali
-    kembali salah
+    println("FAIL")
 tutup

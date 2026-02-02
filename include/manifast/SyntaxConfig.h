@@ -15,9 +15,10 @@ public:
         keywords["tutup"] = TokenType::K_End;
         
         // Primary keyword mappings
-        // 'kalau' and 'sebaliknya' both map to Else for flexibility
-        keywords["kalau"] = TokenType::K_Else; 
+        // 'kalau' maps to ElseIf, 'sebaliknya'/'kecuali' to Else
+        keywords["kalau"] = TokenType::K_ElseIf; 
         keywords["sebaliknya"] = TokenType::K_Else;
+        keywords["kecuali"] = TokenType::K_Else;
         
         keywords["fungsi"] = TokenType::K_Function;
         keywords["kembali"] = TokenType::K_Return;
@@ -27,6 +28,8 @@ public:
         keywords["untuk"] = TokenType::K_For;
         keywords["benar"] = TokenType::K_True;
         keywords["salah"] = TokenType::K_False;
+        keywords["dan"] = TokenType::K_And;
+        keywords["atau"] = TokenType::K_Or;
         keywords["nil"] = TokenType::K_Null; // changed from nihil
         
         // Loop / Flow

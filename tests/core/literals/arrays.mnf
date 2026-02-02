@@ -1,0 +1,4 @@
+lokal arr = [1, 2, 3]
+println(arr[0])
+arr[1] = 42
+println(arr[1])

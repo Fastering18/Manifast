@@ -41,8 +41,33 @@ bool Parser::match(TokenType type) {
 
 Token Parser::consume(TokenType type, const std::string& message) {
     if (check(type)) return advance();
-    std::cerr << "Parser Error: " << message << " at token " << tokenTypeToString(currentToken.type) << "\n";
+    std::cerr << "Parser Error: " << message << " at token " << tokenTypeToString(currentToken.type) 
+              << " (" << currentToken.lexeme << ") at line " << currentToken.location.line << "\n";
+    // Synchronize to next statement
+    synchronize();
     return currentToken;
+}
+
+void Parser::synchronize() {
+    advance();
+    while (currentToken.type != TokenType::EndOfFile) {
+        if (previousToken.type == TokenType::Semicolon) return;
+
+        switch (currentToken.type) {
+            case TokenType::K_Function:
+            case TokenType::K_If:
+            case TokenType::K_While:
+            case TokenType::K_For:
+            case TokenType::K_Try:
+            case TokenType::K_Return:
+            case TokenType::K_Var:
+            case TokenType::K_Do:
+                return;
+            default: break;
+        }
+
+        advance();
+    }
 }
 
 // --- Main Parse Loop ---
@@ -50,9 +75,13 @@ Token Parser::consume(TokenType type, const std::string& message) {
 std::vector<std::unique_ptr<Stmt>> Parser::parse() {
     std::vector<std::unique_ptr<Stmt>> statements;
     while (currentToken.type != TokenType::EndOfFile) {
-        auto stmt = parseStatement();
-        if (stmt) statements.push_back(std::move(stmt));
-        else advance(); 
+        try {
+            auto stmt = parseStatement();
+            if (stmt) statements.push_back(std::move(stmt));
+            else advance(); // Safety advance
+        } catch (...) {
+            synchronize();
+        }
     }
     return statements;
 }
@@ -67,6 +96,11 @@ std::unique_ptr<Stmt> Parser::parseStatement() {
     if (match(TokenType::K_Try)) return parseTryStatement();
     if (match(TokenType::K_Return)) return parseReturnStatement();
     if (match(TokenType::K_Var)) return parseVarDeclaration();
+    if (match(TokenType::K_Do)) {
+        std::vector<std::unique_ptr<Stmt>> body = parseBlock();
+        consume(TokenType::K_End, "Expect 'tutup' after block");
+        return std::make_unique<BlockStmt>(std::move(body));
+    }
     
     auto expr = parseExpression();
     if (match(TokenType::Semicolon)) { }
@@ -100,18 +134,40 @@ std::unique_ptr<Stmt> Parser::parseIfStatement() {
     auto thenBranch = std::make_unique<BlockStmt>(std::move(thenStmts));
     
     std::unique_ptr<Stmt> elseBranch = nullptr;
-    if (match(TokenType::K_Else)) {
+    
+    if (match(TokenType::K_ElseIf)) {
+        elseBranch = parseIfChain();
+    } else if (match(TokenType::K_Else)) {
         std::vector<std::unique_ptr<Stmt>> elseStmts = parseBlock();
         elseBranch = std::make_unique<BlockStmt>(std::move(elseStmts));
     }
     
-    consume(TokenType::K_End, "Expect 'tutup' after if-block");
+    consume(TokenType::K_End, "Expect 'tutup' after if-chain");
+    return std::make_unique<IfStmt>(std::move(cond), std::move(thenBranch), std::move(elseBranch));
+}
+
+std::unique_ptr<Stmt> Parser::parseIfChain() {
+    auto cond = parseExpression();
+    consume(TokenType::K_Then, "Expect 'maka' after elseif condition");
+    
+    std::vector<std::unique_ptr<Stmt>> thenStmts = parseBlock();
+    auto thenBranch = std::make_unique<BlockStmt>(std::move(thenStmts));
+    
+    std::unique_ptr<Stmt> elseBranch = nullptr;
+    
+    if (match(TokenType::K_ElseIf)) {
+        elseBranch = parseIfChain();
+    } else if (match(TokenType::K_Else)) {
+        std::vector<std::unique_ptr<Stmt>> elseStmts = parseBlock();
+        elseBranch = std::make_unique<BlockStmt>(std::move(elseStmts));
+    }
+    
     return std::make_unique<IfStmt>(std::move(cond), std::move(thenBranch), std::move(elseBranch));
 }
 
 std::unique_ptr<Stmt> Parser::parseWhileStatement() {
     auto cond = parseExpression();
-    consume(TokenType::K_Then, "Expect 'maka' after condition"); 
+    consume(TokenType::K_Do, "Expect 'lakukan' after condition"); 
     std::vector<std::unique_ptr<Stmt>> bodyStmts = parseBlock();
     consume(TokenType::K_End, "Expect 'tutup' after while-block");
     return std::make_unique<WhileStmt>(std::move(cond), std::make_unique<BlockStmt>(std::move(bodyStmts)));
@@ -181,7 +237,8 @@ std::unique_ptr<Stmt> Parser::parseVarDeclaration() {
 
 std::vector<std::unique_ptr<Stmt>> Parser::parseBlock() {
     std::vector<std::unique_ptr<Stmt>> statements;
-    while (!check(TokenType::K_End) && !check(TokenType::K_Else) && !check(TokenType::K_Catch) && !check(TokenType::EndOfFile)) {
+    while (!check(TokenType::K_End) && !check(TokenType::K_Else) && !check(TokenType::K_ElseIf) && !check(TokenType::K_Catch) && 
+           !check(TokenType::EndOfFile)) {
         statements.push_back(parseStatement());
     }
     return statements;
@@ -194,7 +251,7 @@ std::unique_ptr<Expr> Parser::parseExpression() {
 }
 
 std::unique_ptr<Expr> Parser::parseAssignment() {
-    auto expr = parseBitwiseOr(); // Start of precedence chain (assignment is lowest)
+    auto expr = parseLogicalOr(); // Start of precedence chain (assignment is lowest)
     
     // Check for assignment tokens
     // =, +=, -=, *=, /=, %=
@@ -218,8 +275,27 @@ std::unique_ptr<Expr> Parser::parseAssignment() {
     return expr;
 }
 
-// Precedence hierarchy: 
 // LogicOr -> LogicAnd -> BitwiseOr -> BitwiseXor -> BitwiseAnd -> Equality -> Comparison -> Shift -> Term -> Factor
+
+std::unique_ptr<Expr> Parser::parseLogicalOr() {
+    auto expr = parseLogicalAnd();
+    while (match(TokenType::K_Or)) {
+        TokenType op = previous().type;
+        auto right = parseLogicalAnd();
+        expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(right));
+    }
+    return expr;
+}
+
+std::unique_ptr<Expr> Parser::parseLogicalAnd() {
+    auto expr = parseBitwiseOr();
+    while (match(TokenType::K_And)) {
+        TokenType op = previous().type;
+        auto right = parseBitwiseOr();
+        expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(right));
+    }
+    return expr;
+}
 
 std::unique_ptr<Expr> Parser::parseBitwiseOr() {
     auto expr = parseBitwiseXor();

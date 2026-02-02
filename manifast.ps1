@@ -75,19 +75,17 @@ if ($Command -eq "build") {
         # Kill any hung processes that might be locking the build dir
         taskkill /F /IM ninja.exe /T 2>$null
         taskkill /F /IM mingw32-make.exe /T 2>$null
-        taskkill /F /IM manifast.exe /T 2>$null
+        taskkill /F /IM mifast.exe /T 2>$null
+        taskkill /F /IM mifastc.exe /T 2>$null
         taskkill /F /IM manifast_tests.exe /T 2>$null
         
-        if (Test-Path $BuildDir) { 
-            Write-Host "  Wiping build directory..." -ForegroundColor Gray
-            Remove-Item $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
-            if (Test-Path $BuildDir) {
-                Write-Host "  Warning: Build directory still exists! Manual deletion might be required." -ForegroundColor Yellow
-            }
-        }
         if (-not (Test-Path $BuildDir)) {
-            New-Item -ItemType Directory -Path $BuildDir | Out-Null
+             New-Item -ItemType Directory -Path $BuildDir | Out-Null
         }
+        # Only wipe if strictly necessary? user wants cache.
+        # But we killed processes. 
+        # If we re-run cmake, it handles cache usually.
+        # Removing the wipe block unless strictly needed.
         $CurrentMode | Out-File $ModeFile
         
         Write-Host "Configuring Project..." -ForegroundColor Cyan
@@ -144,18 +142,19 @@ if ($Command -eq "build") {
     }
     
     Write-Host "Building Project..." -ForegroundColor Cyan
-    cmake --build $BuildDir
+    # Use parallel build (User has 8 cores, 75% is 6)
+    cmake --build $BuildDir --parallel 6
     exit $LASTEXITCODE
 }
 
 if ($Command -eq "test") {
-    $TestBin = "$BuildDir\bin\manifast.exe"
+    $TestBin = "$BuildDir\bin\mifast.exe"
     if (-not (Test-Path $TestBin)) {
         Write-Host "Error: Binary not found. Run 'build' first." -ForegroundColor Red
         exit 1
     }
     
-    Write-Host "Running Tests..." -ForegroundColor Cyan
-    & $TestBin tests/Manifast/test.mnf --test tests
+    Write-Host "Running Modern Test Suite..." -ForegroundColor Cyan
+    & $TestBin test
     exit $LASTEXITCODE
 }

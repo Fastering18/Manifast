@@ -21,6 +21,7 @@ private:
     std::unique_ptr<Stmt> parseStatement();
     std::unique_ptr<Stmt> parseVarDeclaration();
     std::unique_ptr<Stmt> parseIfStatement();
+    std::unique_ptr<Stmt> parseIfChain();
     std::unique_ptr<Stmt> parseWhileStatement();
     std::unique_ptr<Stmt> parseForStatement();
     std::unique_ptr<Stmt> parseFunctionStatement();
@@ -31,6 +32,8 @@ private:
     // Expression Parsers 
     std::unique_ptr<Expr> parseExpression();
     std::unique_ptr<Expr> parseAssignment(); 
+    std::unique_ptr<Expr> parseLogicalOr();
+    std::unique_ptr<Expr> parseLogicalAnd();
     std::unique_ptr<Expr> parseBitwiseOr();
     std::unique_ptr<Expr> parseBitwiseXor();
     std::unique_ptr<Expr> parseBitwiseAnd();
@@ -50,6 +53,7 @@ private:
     Token advance();
     Token peek();
     Token previous();
+    void synchronize();
 
 private:
     Lexer& lexer;

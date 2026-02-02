@@ -18,7 +18,8 @@ enum class TokenType {
     // We keep generic names here to allow mapping "jika" -> K_If
     K_If,           // jika
     K_Then,         // maka
-    K_Else,         // kalau / sebaliknya / jikatidak
+    K_Else,         // kecuali / sebaliknya
+    K_ElseIf,       // kalau
     K_End,          // tutup
     K_Function,     // fungsi
     K_Return,       // kembali
@@ -36,6 +37,10 @@ enum class TokenType {
     K_Do,           // lakukan
     K_Try,          // coba
     K_Catch,        // tangkap
+    
+    // Logical Ops (Keywords)
+    K_And,          // dan
+    K_Or,           // atau
     
     // Primitive Types (Future use)
     K_String,       // string
@@ -88,6 +93,7 @@ inline std::string_view tokenTypeToString(TokenType type) {
         case TokenType::K_If: return "If";
         case TokenType::K_Then: return "Then";
         case TokenType::K_Else: return "Else";
+        case TokenType::K_ElseIf: return "ElseIf";
         case TokenType::K_End: return "End";
         case TokenType::K_Function: return "Function";
         case TokenType::K_Return: return "Return";
@@ -103,6 +109,8 @@ inline std::string_view tokenTypeToString(TokenType type) {
         case TokenType::K_Do: return "Do";
         case TokenType::K_Try: return "Try";
         case TokenType::K_Catch: return "Catch";
+        case TokenType::K_And: return "And";
+        case TokenType::K_Or: return "Or";
         case TokenType::K_String: return "StringToken";
         case TokenType::K_Boolean: return "BooleanToken";
         case TokenType::K_Int32: return "Int32Token";

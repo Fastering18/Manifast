@@ -15,6 +15,44 @@ CodeGen::CodeGen() {
     module = std::make_unique<llvm::Module>("ManifastModule", *context);
     builder = std::make_unique<llvm::IRBuilder<>>(*context);
     initializeTypes();
+    pushScope(); // Root scope
+
+    // Register Built-ins
+    llvm::Type* anyPtrTy = builder->getPtrTy();
+    
+    // print(Any*) -> void
+    llvm::FunctionType* printFT = llvm::FunctionType::get(builder->getVoidTy(), {anyPtrTy}, false);
+    llvm::Function::Create(printFT, llvm::Function::ExternalLinkage, "manifast_print_any", module.get());
+    
+    // println(Any*) -> void
+    llvm::Function::Create(printFT, llvm::Function::ExternalLinkage, "manifast_println_any", module.get());
+
+    // printfmt(Any*, Any*) -> void
+    llvm::FunctionType* printfmtFT = llvm::FunctionType::get(builder->getVoidTy(), {anyPtrTy, anyPtrTy}, false);
+    llvm::Function::Create(printfmtFT, llvm::Function::ExternalLinkage, "manifast_printfmt", module.get());
+
+    // input() -> Any*
+    llvm::FunctionType* inputFT = llvm::FunctionType::get(anyPtrTy, {}, false);
+    llvm::Function::Create(inputFT, llvm::Function::ExternalLinkage, "manifast_input", module.get());
+}
+
+void CodeGen::pushScope() {
+    scopes.push_back({});
+}
+
+void CodeGen::popScope() {
+    if (scopes.size() > 1) {
+        scopes.pop_back();
+    }
+}
+
+llvm::Value* CodeGen::lookupVariable(const std::string& name) {
+    for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
+        if (it->find(name) != it->end()) {
+            return (*it)[name];
+        }
+    }
+    return nullptr;
 }
 
 void CodeGen::initializeTypes() {
@@ -133,6 +171,9 @@ void CodeGen::compile(const std::vector<std::unique_ptr<Stmt>>& statements) {
     // Main returns Any* (pointer to Any)
     llvm::FunctionType* funcType = llvm::FunctionType::get(builder->getPtrTy(), false);
     llvm::Function* mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "manifast_main", module.get());
+    mainFunc->addFnAttr("stack-probe-size", "1048576"); 
+    mainFunc->addFnAttr("no-stack-arg-probe"); // Ensure no chkstk on MinGW
+
     llvm::BasicBlock* entry = llvm::BasicBlock::Create(*context, "entry", mainFunc);
     builder->SetInsertPoint(entry);
 
@@ -157,10 +198,15 @@ void CodeGen::printIR() {
     module->print(llvm::errs(), nullptr);
 }
 
-bool CodeGen::run() {
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
+// Static initialization - runs once per process
+static struct LLVMInit {
+    LLVMInit() {
+        llvm::InitializeNativeTarget();
+        llvm::InitializeNativeTargetAsmPrinter();
+    }
+} llvmInit;
 
+bool CodeGen::run() {
     auto jit = llvm::ExitOnError()(llvm::orc::LLJITBuilder().create());
     
     // Add library search for host symbols (helps with platform symbols like printf)
@@ -187,6 +233,9 @@ bool CodeGen::run() {
     REGISTER_SYM(manifast_array_set);
     REGISTER_SYM(manifast_array_get);
     REGISTER_SYM(manifast_print_any);
+    REGISTER_SYM(manifast_println_any);
+    REGISTER_SYM(manifast_printfmt);
+    REGISTER_SYM(manifast_input);
 
     if (auto Err = JD.define(llvm::orc::absoluteSymbols(std::move(RuntimeSymbols)))) {
         std::cerr << "Error defining runtime symbols: " << llvm::toString(std::move(Err)) << "\n";
@@ -342,9 +391,14 @@ void CodeGen::visitWhileStmt(const WhileStmt* stmt) {
 void CodeGen::visitForStmt(const ForStmt* stmt) {
     llvm::Function* func = builder->GetInsertBlock()->getParent();
 
+    pushScope(); // Loop scope for i
+
     // 1. Initializer
     llvm::Value* startV = generateExpr(stmt->start.get()); // Any*
-    if (!startV) return;
+    if (!startV) {
+        popScope();
+        return;
+    }
 
     llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
     llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->varName);
@@ -353,7 +407,7 @@ void CodeGen::visitForStmt(const ForStmt* stmt) {
     llvm::Value* startLoaded = builder->CreateLoad(anyType, startV);
     builder->CreateStore(startLoaded, alloca);
     
-    namedValues[stmt->varName] = alloca;
+    scopes.back()[stmt->varName] = alloca;
 
     // 2. Blocks
     llvm::BasicBlock* condBB = llvm::BasicBlock::Create(*context, "forcond", func);
@@ -406,6 +460,7 @@ void CodeGen::visitForStmt(const ForStmt* stmt) {
     // 6. After
     afterBB->insertInto(func);
     builder->SetInsertPoint(afterBB);
+    popScope();
 }
 
 llvm::Value* CodeGen::visitNumberExpr(const NumberExpr* expr) {
@@ -508,7 +563,7 @@ llvm::Value* CodeGen::visitBinaryExpr(const BinaryExpr* expr) {
 }
 
 llvm::Value* CodeGen::visitVariableExpr(const VariableExpr* expr) {
-    llvm::Value* V = namedValues[expr->name];
+    llvm::Value* V = lookupVariable(expr->name);
     if (!V) {
         std::cerr << "Unknown variable name: " << expr->name << "\n";
         return nullptr;
@@ -536,7 +591,7 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
     llvm::Value* val = generateExpr(expr->value.get()); // Returns Any* (temp)
     if (!val) return nullptr;
 
-    llvm::Value* V = namedValues[var->name];
+    llvm::Value* V = lookupVariable(var->name);
     if (!V) {
         std::cerr << "Unknown variable name: " << var->name << "\n";
         return nullptr;
@@ -570,14 +625,27 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
 }
 
 llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
-    // Callee is now a generalized Expr, for now we only support VariableExpr (function name)
     auto* var = dynamic_cast<VariableExpr*>(expr->callee.get());
     if (!var) {
         std::cerr << "Dynamic function calls not yet supported\n";
         return nullptr;
     }
 
-    llvm::Function* func = module->getFunction(var->name);
+    std::string funcName = var->name;
+    
+    llvm::Function* func = nullptr;
+    if (funcName == "print") {
+        func = module->getFunction("manifast_print_any");
+    } else if (funcName == "println") {
+        func = module->getFunction("manifast_println_any");
+    } else if (funcName == "printfmt") {
+        func = module->getFunction("manifast_printfmt");
+    } else if (funcName == "input") {
+        func = module->getFunction("manifast_input");
+    } else {
+        func = module->getFunction(funcName);
+    }
+
     if (!func) {
         std::cerr << "Unknown function: " << var->name << "\n";
         return nullptr;
@@ -595,8 +663,13 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
         argsV.push_back(argVal);
     }
 
-    // Call returns Any* (pointer to Any)
-    return builder->CreateCall(func, argsV, "calltmp");
+    llvm::Value* callRes = builder->CreateCall(func, argsV);
+    
+    if (func->getReturnType()->isVoidTy()) {
+        return boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+    }
+    
+    return callRes;
 }
 
 void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
@@ -606,8 +679,8 @@ void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
     // Allocate Any struct
     llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->name);
     
-    namedValues[stmt->name] = alloca;
-
+    scopes.back()[stmt->name] = alloca;
+    
     if (stmt->initializer) {
         llvm::Value* initVal = generateExpr(stmt->initializer.get()); // Any*
         if (initVal) {
@@ -632,10 +705,12 @@ void CodeGen::visitReturnStmt(const ReturnStmt* stmt) {
 }
 
 void CodeGen::visitBlockStmt(const BlockStmt* stmt) {
+    pushScope();
     for (const auto& s : stmt->statements) {
         if (builder->GetInsertBlock()->getTerminator()) break;
         generateStmt(s.get());
     }
+    popScope();
 }
 
 void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
@@ -643,13 +718,15 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
     std::vector<llvm::Type*> argTypes(stmt->params.size(), builder->getPtrTy());
     llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), argTypes, false);
     llvm::Function* func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, stmt->name, module.get());
+    func->addFnAttr("stack-probe-size", "1048576"); // Disable stack probing
+    func->addFnAttr("no-stack-arg-probe");
 
     llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
     
     llvm::BasicBlock* oldBB = builder->GetInsertBlock();
     builder->SetInsertPoint(bb);
 
-    auto oldNamedValues = namedValues;
+    pushScope();
     
     uint32_t idx = 0;
     for (auto& arg : func->args()) {
@@ -661,7 +738,7 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
         llvm::Value* loadedArg = builder->CreateLoad(anyType, &arg);
         builder->CreateStore(loadedArg, alloca);
         
-        namedValues[stmt->params[idx]] = alloca;
+        scopes.back()[stmt->params[idx]] = alloca;
         idx++;
     }
 
@@ -674,11 +751,12 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
          builder->CreateRet(retVal);
     }
     
+    popScope();
+
     if (llvm::verifyFunction(*func, &llvm::errs())) {
-        std::cerr << "Error verifying function " << stmt->name << "\n";
+        std::cerr << "Function verification failed for " << stmt->name << "\n";
     }
     
-    namedValues = oldNamedValues;
     if (oldBB) builder->SetInsertPoint(oldBB);
 }
 

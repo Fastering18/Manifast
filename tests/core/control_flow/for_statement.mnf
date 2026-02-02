@@ -1,0 +1,3 @@
+untuk i = 1 ke 5 lakukan
+    println(i)
+tutup
