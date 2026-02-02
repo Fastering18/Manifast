@@ -207,14 +207,20 @@ static struct LLVMInit {
 } llvmInit;
 
 bool CodeGen::run() {
-    auto jit = llvm::ExitOnError()(llvm::orc::LLJITBuilder().create());
+    // Use LLLazyJIT for lazy per-function compilation (near-zero startup)
+    auto jitOrErr = llvm::orc::LLLazyJITBuilder().create();
+    if (!jitOrErr) {
+        std::cerr << "Error creating lazy JIT: " << llvm::toString(jitOrErr.takeError()) << "\n";
+        return false;
+    }
+    auto jit = std::move(*jitOrErr);
     
-    // Add library search for host symbols (helps with platform symbols like printf)
+    // Add library search for host symbols
     jit->getMainJITDylib().addGenerator(
         llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
             jit->getDataLayout().getGlobalPrefix())));
 
-    // Explicitly add runtime functions to the JIT to ensure they are found on all platforms
+    // Register runtime symbols
     auto& ES = jit->getExecutionSession();
     auto& JD = jit->getMainJITDylib();
     auto Mangle = llvm::orc::MangleAndInterner(ES, jit->getDataLayout());
@@ -241,17 +247,18 @@ bool CodeGen::run() {
         std::cerr << "Error defining runtime symbols: " << llvm::toString(std::move(Err)) << "\n";
     }
 
-    // Verify module before adding
+    // Verify module
     if (llvm::verifyModule(*module, &llvm::errs())) {
         std::cerr << "Error: Module verification failed!\n";
         return false;
     }
 
-    // Set module data layout and triple to match JIT
+    // Set data layout and triple
     module->setDataLayout(jit->getDataLayout());
     module->setTargetTriple(jit->getTargetTriple().getTriple());
 
-    auto err = jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context)));
+    // Use lazy add - functions compiled only when called
+    auto err = jit->addLazyIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context)));
     if (err) {
         std::cerr << "Error adding IR module: " << llvm::toString(std::move(err)) << "\n";
         return false;
