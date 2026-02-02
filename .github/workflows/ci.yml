@@ -40,5 +40,5 @@ jobs:
 
     - name: Run Tests
       run: |
-        ./build/bin/manifast --test tests/Manifast
+        ./build/bin/mifast test
 
