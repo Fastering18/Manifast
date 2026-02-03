@@ -5,7 +5,7 @@ add_executable(manifast_tests
 )
 
 target_link_libraries(manifast_tests PRIVATE
-  manifast_lib
+  manifast_jit
   GTest::gtest
   GTest::gtest_main
 )

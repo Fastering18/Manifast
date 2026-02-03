@@ -1,12 +1,25 @@
-add_library(manifast_lib
+add_library(manifast_core
   Lexer.cpp
   Parser.cpp
-  CodeGen.cpp
   Runtime.cpp
+  VM.cpp
+  Compiler.cpp
 )
 
-# Allow including "manifast/..."
-target_include_directories(manifast_lib PUBLIC 
+target_include_directories(manifast_core PUBLIC 
+  ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(manifast_core PUBLIC
+  fmt::fmt
+)
+
+# --- JIT Library (LLVM) ---
+add_library(manifast_jit
+  CodeGen.cpp
+)
+
+target_include_directories(manifast_jit PUBLIC 
   ${CMAKE_SOURCE_DIR}/include
 )
 
@@ -20,7 +33,10 @@ llvm_map_components_to_libnames(llvm_libs
   native
 )
 
-target_link_libraries(manifast_lib PUBLIC
-  fmt::fmt
+target_link_libraries(manifast_jit PUBLIC
+  manifast_core
   ${llvm_libs}
 )
+
+# Alias for backward compatibility if needed, or just remove
+add_library(manifast_lib ALIAS manifast_jit)
