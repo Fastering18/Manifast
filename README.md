@@ -52,7 +52,7 @@ Manifast uses an in-process JIT compiler via LLVM. Benchmark results on Windows 
 - [x] Memory Management (C++ RAII/Ownership)
 - [x] Standard Library (print, println, printfmt, input)
 - [x] JIT Compiler Pipeline
-- [ ] ECMAScript/WebAssembly Support
+- [ ] Emscripten/WebAssembly Support
 - [ ] Embedding Language Support (Web demo)
 - [ ] IDE Support (LSP)
 - [ ] Self compilation
