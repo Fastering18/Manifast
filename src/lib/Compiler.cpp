@@ -108,8 +108,15 @@ int Compiler::compile(Expr* expr) {
     if (auto* e = dynamic_cast<NumberExpr*>(expr)) {
         int r = allocReg();
         int k = makeConstant({0, e->value, nullptr});
-        // Use LOADK
-        // Check if k fits in Bx
+        emit(createABx(OpCode::LOADK, r, k));
+        return r;
+    }
+    else if (auto* e = dynamic_cast<StringExpr*>(expr)) {
+        int r = allocReg();
+        // Create string constant. Note: we need to own the string memory.
+        // For MVP, relying on Runtime managing it or leaking. 
+        // Ideally Runtime.h has makeString. using mf_strdup for now.
+        int k = makeConstant({3, 0.0, mf_strdup(e->value.c_str())}); 
         emit(createABx(OpCode::LOADK, r, k));
         return r;
     }
@@ -138,8 +145,17 @@ int Compiler::compile(Expr* expr) {
         if (local != -1) {
             emit(createABC(OpCode::MOVE, r, local, 0));
         } else {
-            // Global? Or Error. For now error or nil.
-            emit(createABC(OpCode::LOADNIL, r, 0, 0));
+            // Global lookup
+            int k = makeConstant({3, 0.0, mf_strdup(e->name.c_str())}); 
+            // Note: Leaking strdup here if we don't manage constants properly.
+            // Using createABx for GETGLOBAL? 
+            // VM has GETGLOBAL as iABx?
+            // OpCode.h says GETGLOBAL is OpCode.
+            // iABx: Op(6) A(8) Bx(18).
+            
+            // Wait, VM: case OpCode::GETGLOBAL: int bx = GET_Bx(i); Any key = K(bx);
+            // Yes, iABx.
+            emit(createABx(OpCode::GETGLOBAL, r, k));
         }
         return r;
     }

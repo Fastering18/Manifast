@@ -13,7 +13,9 @@
 
 #include "manifast/Lexer.h"
 #include "manifast/Parser.h"
-#include "manifast/CodeGen.h" // For JIT Execution within test runner (optional if we link it)
+#include "manifast/VM/Compiler.h"
+#include "manifast/VM/VM.h"
+#include "manifast/CodeGen.h" 
 
 #ifdef _WIN32
 #include <io.h>
@@ -78,7 +80,7 @@ public:
     }
 };
 
-bool runTestInProcess(const std::string& path, std::string& outputLog) {
+bool runTestInProcess(const std::string& path, std::string& outputLog, bool useVM) {
     OutputSilencer silencer(NULL_DEVICE);
 
     std::ifstream file(path);
@@ -91,11 +93,24 @@ bool runTestInProcess(const std::string& path, std::string& outputLog) {
 
     try {
         auto statements = parser.parse();
-        if (statements.empty()) return true;
+        if (statements.empty()) return true; // Empty file is pass?
 
-        manifast::CodeGen codegen;
-        codegen.compile(statements);
-        return codegen.run();
+        if (useVM) {
+            manifast::vm::Chunk chunk;
+            manifast::vm::Compiler compiler;
+            if (compiler.compile(statements, chunk)) {
+                manifast::vm::VM vm;
+                vm.interpret(&chunk);
+                chunk.free();
+                return true;
+            } else {
+                return false; // Compilation failed
+            }
+        } else {
+            manifast::CodeGen codegen;
+            codegen.compile(statements);
+            return codegen.run();
+        }
     } catch (...) {
         return false;
     }
@@ -103,18 +118,18 @@ bool runTestInProcess(const std::string& path, std::string& outputLog) {
 
 
 void printUsage() {
-    fmt::print(fmt::emphasis::bold, "Manifast Management Tool (mifast) v0.2\n");
+    fmt::print(fmt::emphasis::bold, "Manifast Management Tool (mifast) v0.3\n");
     fmt::print("Usage: mifast <command> [args]\n\n");
     fmt::print("Commands:\n");
-    fmt::print("  run <file>    Compile and run a Manifast file\n");
-    fmt::print("  test          Run the project test suite (In-Process)\n");
+    fmt::print("  run <file> [--vm]    Compile and run a Manifast file\n");
+    fmt::print("  test [--vm]          Run the project test suite (In-Process)\n");
 }
 
-void runTestRunner() {
+void runTestRunner(bool useVM) {
     if (g_isInteractive) {
-        fmt::print(fmt::emphasis::bold | fg(fmt::color::cyan), "🚀 Starting Manifast Test Suite (In-Process)...\n\n");
+        fmt::print(fmt::emphasis::bold | fg(fmt::color::cyan), "🚀 Starting Manifast Test Suite ({}) ...\n\n", useVM ? "Bytecode VM" : "LLVM JIT");
     } else {
-        fmt::print("Starting Manifast Test Suite (In-Process)...\n\n");
+        fmt::print("Starting Manifast Test Suite ({})...\n\n", useVM ? "Bytecode VM" : "LLVM JIT");
     }
     
     std::map<std::string, std::vector<TestResult>> resultsByCategory;
@@ -160,7 +175,7 @@ void runTestRunner() {
         auto start = std::chrono::high_resolution_clock::now();
         
         std::string logOutput;
-        bool success = runTestInProcess(file.string(), logOutput);
+        bool success = runTestInProcess(file.string(), logOutput, useVM);
         
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = end - start;
@@ -178,7 +193,7 @@ void runTestRunner() {
     }
 
     fmt::print("\n\n");
-    fmt::print(fmt::emphasis::bold, "Test Metrics Summary\n");
+    fmt::print(fmt::emphasis::bold, "Test Metrics Summary ({})\n", useVM ? "VM" : "JIT");
     fmt::print("┌──────────────────────────┬────────────┬────────────┬────────────┬────────────┐\n");
     fmt::print("│ Category                 │ Pass/Fail  │ Min (ms)   │ Avg (ms)   │ Max (ms)   │\n");
     fmt::print("├──────────────────────────┼────────────┼────────────┼────────────┼────────────┤\n");
@@ -217,17 +232,27 @@ int main(int argc, char* argv[]) {
     }
 
     std::string cmd = argv[1];
+    
+    // Simple argument parsing
+    bool useVM = false;
+    std::string filePath;
+    
+    // Check for --vm in any position after command
+    for(int i = 2; i < argc; i++) {
+        std::string arg = argv[i];
+        if(arg == "--vm") useVM = true;
+        else if (filePath.empty()) filePath = arg;
+    }
 
     if (cmd == "test") {
-        runTestRunner();
+        runTestRunner(useVM);
     } else if (cmd == "run") {
-        if (argc < 3) {
+        if (filePath.empty()) {
             fmt::print(fg(fmt::color::red), "Error: No file specified.\n");
             return 1;
         }
-        // For 'run', we can also do in-process but maybe user wants stdout.
-        // Let's use runTestInProcess logic but without Silencer.
-        std::ifstream file(argv[2]);
+        
+        std::ifstream file(filePath);
         if (!file) {
             fmt::print(fg(fmt::color::red), "Error: Could not open file.\n");
             return 1;
@@ -238,9 +263,24 @@ int main(int argc, char* argv[]) {
         manifast::Parser parser(lexer);
         try {
             auto statements = parser.parse();
-            manifast::CodeGen codegen;
-            codegen.compile(statements);
-            if (!codegen.run()) return 1;
+            
+            if (useVM) {
+                manifast::vm::Chunk chunk;
+                manifast::vm::Compiler compiler;
+                if (compiler.compile(statements, chunk)) {
+                    manifast::vm::VM vm;
+                    vm.interpret(&chunk);
+                    chunk.free();
+                } else {
+                     fmt::print(fg(fmt::color::red), "Compilation failed.\n");
+                     return 1;
+                }
+            } else {
+                manifast::CodeGen codegen;
+                codegen.compile(statements);
+                if (!codegen.run()) return 1;
+            }
+
         } catch (const std::exception& e) {
             fmt::print(fg(fmt::color::red), "Error: {}\n", e.what());
             return 1;

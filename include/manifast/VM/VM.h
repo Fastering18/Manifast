@@ -1,7 +1,9 @@
 #pragma once
 
-#include "Chunk.h"
+#include "manifast/VM/Chunk.h"
 #include <vector>
+#include <map>
+#include <string>
 
 namespace manifast {
 namespace vm {
@@ -32,6 +34,12 @@ private:
     
     // Helpers
     void resetStack();
+    
+    // Globals
+    using NativeFn = void (*)(VM* vm, Any* args, int nargs);
+    std::map<std::string, Any> globals;
+    
+    void defineNative(const std::string& name, NativeFn fn);
 };
 
 } // namespace vm

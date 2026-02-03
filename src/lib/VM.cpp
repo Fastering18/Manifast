@@ -1,6 +1,8 @@
 #include "manifast/VM/VM.h"
+#include "manifast/Runtime.h"
 #include <iostream>
 #include <cmath>
+#include <cstring>
 
 namespace manifast {
 namespace vm {
@@ -24,12 +26,37 @@ namespace vm {
 // If index >= 256, it's a constant at index-256
 #define RK(x)       ((x) < 256 ? R(x) : K((x) - 256))
 
+// Native Print
+static void nativePrint(VM* vm, Any* args, int nargs) {
+    for (int i = 0; i < nargs; i++) {
+        manifast_print_any(&args[i]);
+    }
+}
+
+static void nativePrintln(VM* vm, Any* args, int nargs) {
+    for (int i = 0; i < nargs; i++) {
+        manifast_print_any(&args[i]);
+    }
+    std::cout << "\n";
+}
+
 VM::VM() {
     stack.resize(1024); // Initial stack size
     resetStack();
+    
+    // Define builtins
+    defineNative("print", nativePrint);
+    defineNative("println", nativePrintln);
 }
 
 VM::~VM() {
+}
+
+void VM::defineNative(const std::string& name, NativeFn fn) {
+    Any func;
+    func.type = 4; // Native Function
+    func.ptr = (void*)fn;
+    globals[name] = func;
 }
 
 void VM::resetStack() {
@@ -82,7 +109,6 @@ void VM::run() {
                 int c = GET_C(i);
                 Any vb = RK(b);
                 Any vc = RK(c);
-                // Fast path float
                 if (vb.type == 0 && vc.type == 0) {
                     R(a) = {0, vb.number + vc.number, nullptr};
                 } else {
@@ -123,13 +149,51 @@ void VM::run() {
                  }
                  break;
             }
-            case OpCode::RETURN: {
-                // Done
-                return;
-            }
             case OpCode::GETGLOBAL: {
-                // TODO
+                int a = GET_A(i);
+                int bx = GET_Bx(i);
+                Any key = K(bx); // Constant index as string name?
+                // Wait, logic in Compiler check. 
+                // In Compiler (Step 4154):
+                // emit(createABC(OpCode::LOADNIL, r, 0, 0));
+                // Wait! Compiler didn't emit GETGLOBAL!
+                // It emitted LOADNIL for unresolved vars.
+                // I need to fix Compiler to emit GETGLOBAL if it's not a local.
+                
+                // Assuming I fix compiler next:
+                if (key.type == 3 && key.ptr) {
+                    std::string name((char*)key.ptr);
+                    if (globals.count(name)) {
+                        R(a) = globals[name];
+                    } else {
+                        R(a) = {3, 0.0, nullptr}; // Nil
+                        // Or error? Lua returns nil.
+                    }
+                }
                 break;
+            }
+            case OpCode::CALL: {
+                int a = GET_A(i);
+                int b = GET_B(i); // Args + 1
+                int c = GET_C(i); // Results + 1
+                
+                // Func is at R(a)
+                Any func = R(a);
+                int nargs = b - 1;
+                
+                if (func.type == 4) { // Native
+                    NativeFn fn = (NativeFn)func.ptr;
+                    fn(this, &R(a + 1), nargs);
+                    // Result handling? NativeFn returns void for now.
+                    // Lua moves results.
+                    // For now assume 0 results.
+                } else {
+                    RUNTIME_ERROR("Call to non-function");
+                }
+                break;
+            }
+            case OpCode::RETURN: {
+                return;
             }
             default:
                 RUNTIME_ERROR("Unknown opcode");
