@@ -89,7 +89,7 @@ llvm::Value* CodeGen::createString(const std::string& value) {
         llvm::FunctionType* ft = llvm::FunctionType::get(llvm::PointerType::getUnqual(*context), {builder->getPtrTy()}, false);
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_string", module.get());
     }
-    llvm::Value* globalStr = builder->CreateGlobalStringPtr(value);
+    llvm::Value* globalStr = builder->CreateGlobalString(value);
     return builder->CreateCall(func, {globalStr}, "str");
 }
 
@@ -150,7 +150,7 @@ llvm::Value* CodeGen::createObject(const std::vector<std::pair<std::string, llvm
         llvm::Value* valPtr = builder->CreateAlloca(anyType);
         builder->CreateStore(pair.second, valPtr);
         
-        llvm::Value* keyStr = builder->CreateGlobalStringPtr(pair.first);
+        llvm::Value* keyStr = builder->CreateGlobalString(pair.first);
         builder->CreateCall(setFunc, {objVal, keyStr, valPtr});
     }
     
@@ -249,7 +249,7 @@ bool CodeGen::run() {
 
     // Set data layout and triple
     module->setDataLayout(jit->getDataLayout());
-    module->setTargetTriple(jit->getTargetTriple().getTriple());
+    module->setTargetTriple(llvm::Triple(jit->getTargetTriple().getTriple()));
 
     auto err = jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context)));
     if (err) {
@@ -817,7 +817,7 @@ llvm::Value* CodeGen::visitGetExpr(const GetExpr* expr) {
         llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getPtrTy(), builder->getPtrTy()}, false);
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_object_get", module.get());
     }
-    llvm::Value* keyStr = builder->CreateGlobalStringPtr(expr->name);
+    llvm::Value* keyStr = builder->CreateGlobalString(expr->name);
     return builder->CreateCall(func, {obj, keyStr}, "get_res");
 }
 
