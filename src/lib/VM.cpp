@@ -74,6 +74,7 @@ void VM::interpret(Chunk* chunk) {
     frame.chunk = chunk;
     frame.ip = chunk->code.data();
     frame.slots = stack.data();
+    frame.returnReg = 0;
     
     frames.push_back(frame);
     
@@ -212,6 +213,7 @@ void VM::run() {
                 bool res = false;
                 if (vb.type == 0 && vc.type == 0) res = vb.number == vc.number;
                 else if (vb.type == 1 && vc.type == 1) res = std::string((char*)vb.ptr) == std::string((char*)vc.ptr);
+                else if (vb.type == 3 && vc.type == 3) res = true; // nil == nil
                 if (res != (a != 0)) frame->ip++;
                 break;
             }
@@ -225,6 +227,7 @@ void VM::run() {
                 bool val = true;
                 if (R(a).type == 3) val = false; // Nil
                 else if (R(a).type == 2) val = (R(a).number != 0); // Bool
+                else if (R(a).type == 1) val = true; // Non-empty string (simplified)
                 else if (R(a).type == 0) val = (R(a).number != 0); // Num
                 if (val != (c != 0)) frame->ip++;
                 break;
@@ -236,6 +239,7 @@ void VM::run() {
                 bool val = true;
                 if (R(b).type == 3) val = false;
                 else if (R(b).type == 2) val = (R(b).number != 0);
+                else if (R(b).type == 1) val = true;
                 else if (R(b).type == 0) val = (R(b).number != 0);
                 if (val == (c != 0)) R(a) = R(b); else frame->ip++;
                 break;
@@ -294,13 +298,11 @@ void VM::run() {
                     CallFrame newFrame;
                     newFrame.chunk = subChunk;
                     newFrame.ip = subChunk->code.data();
-                    // Arguments follow the function in the stack.
-                    // R(a) is the function, R(a+1) is Arg 0.
-                    // We want Arg 0 to be R(0) in the new frame.
                     newFrame.slots = &R(a + 1); 
+                    newFrame.returnReg = a; // Store result back in R(a)
                     
                     frames.push_back(newFrame);
-                    frame = &frames.back(); // Update local frame pointer
+                    frame = &frames.back(); 
                 }
                 else {
                     RUNTIME_ERROR("Call to non-function");
@@ -313,16 +315,12 @@ void VM::run() {
                 
                 Any result = (b > 1) ? R(a) : Any{3, 0.0, nullptr}; // Default nil
                 
+                int retReg = frame->returnReg;
                 frames.pop_back();
                 if (frames.empty()) return; // Exit main interpret
                 
                 frame = &frames.back();
-                // Find where the function was on the previous frame and put result there
-                // The previous frame's 'slots' at the call site was where R(a) was.
-                // Wait, in my CALL implementation: newFrame.slots = &R(a).
-                // So the result just needs to stay at R(0) of the popped frame,
-                // which IS R(a) of the current frame.
-                R(getA(*(frame->ip - 1))) = result; 
+                frame->slots[retReg] = result;
                 break;
             }
             case OpCode::COUNT: break;

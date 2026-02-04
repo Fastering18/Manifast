@@ -8,6 +8,8 @@
 
 namespace manifast {
 
+class Stmt;
+
 // Base class for all AST nodes
 class ASTNode {
 public:
@@ -92,6 +94,15 @@ public:
     
     ArrayExpr(std::vector<std::unique_ptr<Expr>> elements)
         : elements(std::move(elements)) {}
+};
+
+class FunctionExpr : public Expr {
+public:
+    std::vector<std::string> params;
+    std::unique_ptr<Stmt> body;
+    
+    FunctionExpr(std::vector<std::string> params, std::unique_ptr<Stmt> body)
+        : params(std::move(params)), body(std::move(body)) {}
 };
 
 class ObjectExpr : public Expr {

@@ -44,6 +44,7 @@ private:
     std::unique_ptr<Expr> parseFactor();
     std::unique_ptr<Expr> parseUnary();
     std::unique_ptr<Expr> parseCall();  
+    std::unique_ptr<Expr> parseFunctionExpression();
     std::unique_ptr<Expr> parsePrimary();
 
     // Helpers

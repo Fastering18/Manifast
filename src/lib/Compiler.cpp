@@ -186,50 +186,15 @@ void Compiler::compile(Stmt* stmt) {
         endScope();
     }
     else if (auto* s = dynamic_cast<FunctionStmt*>(stmt)) {
-        // 1. Create sub-chunk for function body
-        auto subChunk = std::make_unique<Chunk>();
+        int funcIdx = compileFunctionBody(s->params, s->body.get());
         
-        // 2. Compile body in a new compiler context (or save/restore state)
-        // For simplicity, we use same nextReg but reset it? No, functions have their own stack frame.
-        int oldReg = nextReg;
-        auto oldLocals = locals;
-        int oldScope = scopeDepth;
-        Chunk* oldChunk = currentChunk;
-        
-        currentChunk = subChunk.get();
-        nextReg = 0;
-        locals.clear();
-        scopeDepth = 0;
-        
-        // Setup parameters as locals
-        for (int i = 0; i < (int)s->params.size(); i++) {
-            locals.push_back({s->params[i], 0, i});
-            nextReg++;
-        }
-        
-        compile(s->body.get());
-        
-        // Emit implicit return if needed
-        emit(createABC(OpCode::RETURN, 0, 1, 0));
-        
-        // 3. Store sub-chunk in parent chunk
-        oldChunk->functions.push_back(std::move(subChunk));
-        int funcIdx = (int)oldChunk->functions.size() - 1;
-        
-        // 4. Restore state
-        currentChunk = oldChunk;
-        nextReg = oldReg;
-        locals = oldLocals;
-        scopeDepth = oldScope;
-        
-        // 5. Define as global or local? 
-        // For now, Manifast functions are global.
-        int kName = makeConstant({1, 0.0, mf_strdup(s->name.c_str())});
+        // Define as global
+        int kName = makeConstant({1, 0.0, mf_strdup(s->name.c_str())}); // Type 1: String
         
         // Create function object
         Any funcVal;
-        funcVal.type = 5; // Bytecode Function
-        funcVal.number = (double)funcIdx; // Store index in sub-functions vector
+        funcVal.type = 5; // Type 5: Bytecode Function
+        funcVal.number = (double)funcIdx;
         funcVal.ptr = nullptr;
         
         int kFunc = makeConstant(funcVal);
@@ -247,6 +212,43 @@ void Compiler::compile(Stmt* stmt) {
             emit(createABC(OpCode::RETURN, 0, 1, 0)); // Return 0 results (nil)
         }
     }
+}
+
+int Compiler::compileFunctionBody(const std::vector<std::string>& params, Stmt* body) {
+    auto subChunk = std::make_unique<Chunk>();
+    
+    int oldReg = nextReg;
+    auto oldLocals = locals;
+    int oldScope = scopeDepth;
+    Chunk* oldChunk = currentChunk;
+    
+    currentChunk = subChunk.get();
+    nextReg = 0;
+    locals.clear();
+    scopeDepth = 0;
+    
+    // Setup parameters as locals
+    for (int i = 0; i < (int)params.size(); i++) {
+        locals.push_back({params[i], 0, i});
+        nextReg++;
+    }
+    
+    compile(body);
+    
+    // Emit implicit return if needed
+    emit(createABC(OpCode::RETURN, 0, 1, 0));
+    
+    // Store sub-chunk in parent chunk
+    oldChunk->functions.push_back(std::move(subChunk));
+    int funcIdx = (int)oldChunk->functions.size() - 1;
+    
+    // Restore state
+    currentChunk = oldChunk;
+    nextReg = oldReg;
+    locals = oldLocals;
+    scopeDepth = oldScope;
+    
+    return funcIdx;
 }
 
 int Compiler::compile(Expr* expr) {
@@ -328,6 +330,20 @@ int Compiler::compile(Expr* expr) {
         // Free args registers
         nextReg -= (int)e->args.size();
         return funcReg;
+    }
+    else if (auto* e = dynamic_cast<FunctionExpr*>(expr)) {
+        int funcIdx = compileFunctionBody(e->params, e->body.get());
+        
+        // Create function object result
+        Any funcVal;
+        funcVal.type = 5; // Type 5: Bytecode Function
+        funcVal.number = (double)funcIdx;
+        funcVal.ptr = nullptr;
+        
+        int kFunc = makeConstant(funcVal);
+        int r = allocReg();
+        emit(createABx(OpCode::LOADK, r, kFunc));
+        return r;
     }
 
     return allocReg(); // Fallback

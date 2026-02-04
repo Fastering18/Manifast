@@ -403,6 +403,24 @@ std::unique_ptr<Expr> Parser::parseCall() {
     return expr;
 }
 
+std::unique_ptr<Expr> Parser::parseFunctionExpression() {
+    consume(TokenType::LParen, "Expect '(' after 'fungsi'");
+    
+    std::vector<std::string> params;
+    if (!check(TokenType::RParen)) {
+        do {
+            Token param = consume(TokenType::Identifier, "Expect parameter name");
+            params.push_back(std::string(param.lexeme));
+        } while (match(TokenType::Comma));
+    }
+    consume(TokenType::RParen, "Expect ')' after parameters");
+    
+    std::vector<std::unique_ptr<Stmt>> body = parseBlock(); 
+    consume(TokenType::K_End, "Expect 'tutup' after function body");
+    
+    return std::make_unique<FunctionExpr>(std::move(params), std::make_unique<BlockStmt>(std::move(body)));
+}
+
 std::unique_ptr<Expr> Parser::parsePrimary() {
     if (match(TokenType::K_False)) return std::make_unique<NumberExpr>(0);
     if (match(TokenType::K_True)) return std::make_unique<NumberExpr>(1);
@@ -446,6 +464,10 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
         }
         consume(TokenType::RBrace, "Expect '}' after object entries");
         return std::make_unique<ObjectExpr>(std::move(entries));
+    }
+    
+    if (match(TokenType::K_Function)) {
+        return parseFunctionExpression();
     }
     
     return nullptr;

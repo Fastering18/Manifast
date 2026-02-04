@@ -19,9 +19,15 @@ std::string outputBuffer;
 // Custom Print functions for Web (Capture to buffer)
 void wasm_print(manifast::vm::VM* vm, ::Any* args, int nargs) {
     for (int i = 0; i < nargs; ++i) {
-        if (args[i].type == 0) outputBuffer += std::to_string(args[i].number);
-        else if (args[i].type == 3 && args[i].ptr) outputBuffer += (char*)args[i].ptr;
-        else outputBuffer += "nil";
+        if (args[i].type == 0) {
+            char buf[64];
+            sprintf(buf, "%g", args[i].number);
+            outputBuffer += buf;
+        }
+        else if (args[i].type == 1 && args[i].ptr) outputBuffer += (char*)args[i].ptr;
+        else if (args[i].type == 2) outputBuffer += (args[i].number ? "true" : "false");
+        else if (args[i].type == 3) outputBuffer += "nil";
+        else outputBuffer += "[Object/Function]";
     }
 }
 

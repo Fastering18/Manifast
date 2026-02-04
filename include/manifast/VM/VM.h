@@ -30,6 +30,7 @@ private:
         Chunk* chunk;
         Instruction* ip;
         Any* slots; // Register window start (R0)
+        int returnReg; // Target register in caller frame
     };
     
     std::vector<CallFrame> frames;
