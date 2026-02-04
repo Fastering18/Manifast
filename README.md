@@ -36,8 +36,6 @@ Manifast features a **Tier-0 Bytecode VM** designed for ultra-low latency embedd
 | **Execution** | **<0.01 ms** (10µs) | VM Loop Only (Est.) |
 | **Memory** | **<500 KB** | Core Library Size |
 
-> **Real World Context**: 50µs is effectively "instant" for human perception and fits comfortably within a single game frame (16ms).
-
 ## Todo list
 - [x] Lexer (Tokens, Indonesian Keywords, Lua-style Comments)
 - [x] Parser (Hand-written Recursive Descent, AST)
