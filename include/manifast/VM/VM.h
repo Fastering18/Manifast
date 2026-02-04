@@ -2,7 +2,7 @@
 
 #include "manifast/VM/Chunk.h"
 #include <vector>
-#include <map>
+#include <unordered_map>
 #include <string>
 
 namespace manifast {
@@ -37,7 +37,7 @@ private:
     
     // Globals
     using NativeFn = void (*)(VM* vm, Any* args, int nargs);
-    std::map<std::string, Any> globals;
+    std::unordered_map<std::string, Any> globals;
     
     void defineNative(const std::string& name, NativeFn fn);
 };

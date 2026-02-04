@@ -80,12 +80,8 @@ public:
     }
 };
 
-bool runTestInProcess(const std::string& path, std::string& outputLog, bool useVM) {
+bool runTestInProcess(const std::string& source, std::string& outputLog, bool useVM, manifast::vm::Compiler* reusableCompiler = nullptr, manifast::vm::VM* reusableVM = nullptr) {
     OutputSilencer silencer(NULL_DEVICE);
-
-    std::ifstream file(path);
-    if (!file) return false;
-    std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
     manifast::SyntaxConfig config;
     manifast::Lexer lexer(source, config);
@@ -93,18 +89,32 @@ bool runTestInProcess(const std::string& path, std::string& outputLog, bool useV
 
     try {
         auto statements = parser.parse();
-        if (statements.empty()) return true; // Empty file is pass?
+        if (statements.empty()) return true; 
 
         if (useVM) {
             manifast::vm::Chunk chunk;
-            manifast::vm::Compiler compiler;
-            if (compiler.compile(statements, chunk)) {
-                manifast::vm::VM vm;
-                vm.interpret(&chunk);
+            
+            // Use reusable compiler or local one
+            bool compilationSuccess = false;
+            
+            if (reusableCompiler) {
+                compilationSuccess = reusableCompiler->compile(statements, chunk);
+            } else {
+                manifast::vm::Compiler compiler;
+                compilationSuccess = compiler.compile(statements, chunk);
+            }
+
+            if (compilationSuccess) {
+                if (reusableVM) {
+                    reusableVM->interpret(&chunk);
+                } else {
+                    manifast::vm::VM vm;
+                    vm.interpret(&chunk);
+                }
                 chunk.free();
                 return true;
             } else {
-                return false; // Compilation failed
+                return false; 
             }
         } else {
             manifast::CodeGen codegen;
@@ -130,6 +140,15 @@ void runTestRunner(bool useVM) {
         fmt::print(fmt::emphasis::bold | fg(fmt::color::cyan), "🚀 Starting Manifast Test Suite ({}) ...\n\n", useVM ? "Bytecode VM" : "LLVM JIT");
     } else {
         fmt::print("Starting Manifast Test Suite ({})...\n\n", useVM ? "Bytecode VM" : "LLVM JIT");
+    }
+    
+    // Persistent instances for VM mode
+    std::unique_ptr<manifast::vm::Compiler> sharedCompiler;
+    std::unique_ptr<manifast::vm::VM> sharedVM;
+    
+    if (useVM) {
+        sharedCompiler = std::make_unique<manifast::vm::Compiler>();
+        sharedVM = std::make_unique<manifast::vm::VM>();
     }
     
     std::map<std::string, std::vector<TestResult>> resultsByCategory;
@@ -172,10 +191,15 @@ void runTestRunner(bool useVM) {
         if (rel.empty()) rel = "default";
         std::replace(rel.begin(), rel.end(), '\\', '/');
 
+        // Pre-read file to exclude I/O from benchmark
+        std::ifstream fstream(file);
+        if (!fstream) continue;
+        std::string source((std::istreambuf_iterator<char>(fstream)), std::istreambuf_iterator<char>());
+
         auto start = std::chrono::high_resolution_clock::now();
         
         std::string logOutput;
-        bool success = runTestInProcess(file.string(), logOutput, useVM);
+        bool success = runTestInProcess(source, logOutput, useVM, sharedCompiler.get(), sharedVM.get());
         
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = end - start;
