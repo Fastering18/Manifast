@@ -249,7 +249,7 @@ bool CodeGen::run() {
 
     // Set data layout and triple
     module->setDataLayout(jit->getDataLayout());
-    module->setTargetTriple(llvm::Triple(jit->getTargetTriple().getTriple()));
+    module->setTargetTriple(jit->getTargetTriple().getTriple());
 
     auto err = jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context)));
     if (err) {

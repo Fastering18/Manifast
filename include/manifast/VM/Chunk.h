@@ -4,6 +4,7 @@
 #include "../Runtime.h"
 #include <vector>
 #include <string>
+#include <memory>
 
 namespace manifast {
 namespace vm {

@@ -1,4 +1,5 @@
 # Manifast Programming Language
+[![Build and Test](https://github.com/Fastering18/Manifast/actions/workflows/ci.yml/badge.svg)](https://github.com/Fastering18/Manifast/actions/workflows/ci.yml)
 https://github.com/Fastering18/Manifast  
 Fast, scriptable programming language with Indonesian-based syntax, powered by LLVM.
 
