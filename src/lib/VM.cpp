@@ -135,15 +135,50 @@ void VM::run() {
                  break;
             }
              case OpCode::DIV: {
-                 int a = GET_A(i);
-                 int b = GET_B(i);
-                 int c = GET_C(i);
-                 Any vb = RK(b);
-                 Any vc = RK(c);
-                 if (vb.type == 0 && vc.type == 0) {
-                     R(a) = {0, vb.number / vc.number, nullptr};
-                 }
-                 break;
+                int a = GET_A(i);
+                int b = GET_B(i);
+                int c = GET_C(i);
+                Any vb = RK(b);
+                Any vc = RK(c);
+                if (vb.type == 0 && vc.type == 0) {
+                    R(a) = {0, vb.number / vc.number, nullptr};
+                }
+                break;
+            }
+            case OpCode::LT: {
+                int a = GET_A(i);
+                int b = GET_B(i);
+                int c = GET_C(i);
+                Any vb = RK(b);
+                Any vc = RK(c);
+                bool res = false;
+                if (vb.type == 0 && vc.type == 0) res = vb.number < vc.number;
+                if (res != (a != 0)) frame->ip++;
+                break;
+            }
+            case OpCode::EQ: {
+                int a = GET_A(i);
+                int b = GET_B(i);
+                int c = GET_C(i);
+                Any vb = RK(b);
+                Any vc = RK(c);
+                bool res = false;
+                if (vb.type == 0 && vc.type == 0) res = vb.number == vc.number;
+                else if (vb.type == 3 && vc.type == 3) res = std::string((char*)vb.ptr) == std::string((char*)vc.ptr);
+                if (res != (a != 0)) frame->ip++;
+                break;
+            }
+            case OpCode::JMP: {
+                frame->ip += GET_sBx(i);
+                break;
+            }
+            case OpCode::TEST: {
+                int a = GET_A(i);
+                int c = GET_C(i);
+                bool val = (R(a).type != 3 || R(a).ptr != nullptr); // Basic truthiness
+                if (R(a).type == 0) val = R(a).number != 0;
+                if (val != (c != 0)) frame->ip++;
+                break;
             }
             case OpCode::GETGLOBAL: {
                 int a = GET_A(i);
@@ -199,7 +234,10 @@ void VM::run() {
                     CallFrame newFrame;
                     newFrame.chunk = subChunk;
                     newFrame.ip = subChunk->code.data();
-                    newFrame.slots = &R(a); // R(a) becomes R0 of new frame
+                    // Arguments follow the function in the stack.
+                    // R(a) is the function, R(a+1) is Arg 0.
+                    // We want Arg 0 to be R(0) in the new frame.
+                    newFrame.slots = &R(a + 1); 
                     
                     frames.push_back(newFrame);
                     frame = &frames.back(); // Update local frame pointer

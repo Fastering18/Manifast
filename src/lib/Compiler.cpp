@@ -94,7 +94,38 @@ void Compiler::compile(Stmt* stmt) {
         endScope();
     }
     else if (auto* s = dynamic_cast<IfStmt*>(stmt)) {
-         // Should implement jumps here
+        int condReg = compile(s->condition.get());
+        
+        // Skip next if condReg is false
+        // TEST A C: if not (R(A) <=> C) then pc++
+        // We want to skip JMP if condReg is true (C=1)
+        emit(createABC(OpCode::TEST, condReg, 0, 1));
+        
+        int jmpIdx = emit(createAsBx(OpCode::JMP, 0, 0)); // Placeholder
+        int startPos = (int)currentChunk->code.size();
+        
+        compile(s->thenBranch.get());
+        
+        if (s->elseBranch) {
+            // Need to jump over else branch
+            int outJmpIdx = emit(createAsBx(OpCode::JMP, 0, 0));
+            
+            // Patch first jump to else branch
+            int elsePos = (int)currentChunk->code.size();
+            currentChunk->code[jmpIdx] = createAsBx(OpCode::JMP, 0, elsePos - startPos);
+            
+            int elseStart = (int)currentChunk->code.size();
+            compile(s->elseBranch.get());
+            int endPos = (int)currentChunk->code.size();
+            
+            // Patch second jump to end
+            currentChunk->code[outJmpIdx] = createAsBx(OpCode::JMP, 0, endPos - elseStart);
+        } else {
+            int endPos = (int)currentChunk->code.size();
+            currentChunk->code[jmpIdx] = createAsBx(OpCode::JMP, 0, endPos - startPos);
+        }
+        
+        freeReg();
     }
     else if (auto* s = dynamic_cast<FunctionStmt*>(stmt)) {
         // 1. Create sub-chunk for function body
@@ -183,15 +214,34 @@ int Compiler::compile(Expr* expr) {
         // Simple: reuse left, free right.
         
         OpCode op = OpCode::ADD;
+        bool isCompare = false;
         switch (e->op) {
             case TokenType::Plus: op = OpCode::ADD; break;
-            case TokenType::Minus: op = OpCode::SUB; break; // etc
+            case TokenType::Minus: op = OpCode::SUB; break;
             case TokenType::Star: op = OpCode::MUL; break;
             case TokenType::Slash: op = OpCode::DIV; break;
+            case TokenType::Less: op = OpCode::LT; isCompare = true; break;
+            case TokenType::EqualEqual: op = OpCode::EQ; isCompare = true; break;
+            // For now, mapping > and others to basic opcodes or reversing
             default: break;
         }
         
-        emit(createABC(op, left, left, right));
+        if (isCompare) {
+            // Comparisons in Lua VM work differently (inline skip)
+            // LT A B C: if ((RK(B) < RK(C)) ~= A) then pc++
+            // We want to store result in a register.
+            // LT 1 left right
+            // JMP 0 1 (Skip R=1)
+            // LOADBOOL left 0 1 (Skip R=0)
+            // LOADBOOL left 1 0
+            
+            emit(createABC(op, 1, left, right));
+            emit(createAsBx(OpCode::JMP, 0, 1));
+            emit(createABC(OpCode::LOADBOOL, left, 0, 1));
+            emit(createABC(OpCode::LOADBOOL, left, 1, 0));
+        } else {
+            emit(createABC(op, left, left, right));
+        }
         freeReg(); // Free right
         return left;
     }
