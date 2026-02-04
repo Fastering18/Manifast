@@ -242,6 +242,7 @@ print("Done!")
             // Or use ccall helper which handles string passing
             // ccall(name, returnType, argTypes, args)
 
+            const startTime = performance.now();
             try {
                 // Call C++ function: const char* mf_run_script(const char*)
                 const result = Module.ccall(

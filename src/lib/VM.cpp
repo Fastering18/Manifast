@@ -99,6 +99,20 @@ void VM::run() {
                 R(a) = K(bx);
                 break;
             }
+            case OpCode::LOADBOOL: {
+                int a = GET_A(i);
+                int b = GET_B(i);
+                int c = GET_C(i);
+                R(a) = {2, (double)b, nullptr};
+                if (c) frame->ip++;
+                break;
+            }
+            case OpCode::LOADNIL: {
+                int a = GET_A(i);
+                int b = GET_B(i);
+                for (int j = 0; j <= b; j++) R(a + j) = {3, 0.0, nullptr};
+                break;
+            }
             case OpCode::ADD: {
                 int a = GET_A(i);
                 int b = GET_B(i);
@@ -145,6 +159,28 @@ void VM::run() {
                 }
                 break;
             }
+            case OpCode::MOD: {
+                int a = GET_A(i);
+                int b = GET_B(i);
+                int c = GET_C(i);
+                Any vb = RK(b);
+                Any vc = RK(c);
+                if (vb.type == 0 && vc.type == 0) {
+                    R(a) = {0, (double)((long long)vb.number % (long long)vc.number), nullptr};
+                }
+                break;
+            }
+            case OpCode::POW: {
+                 // Simplified
+                 break;
+            }
+            case OpCode::NOT: {
+                int a = GET_A(i);
+                int b = GET_B(i);
+                bool val = (R(b).type == 3 && R(b).ptr == nullptr) || (R(b).type == 0 && R(b).number == 0);
+                R(a) = {2, (double)val, nullptr};
+                break;
+            }
             case OpCode::LT: {
                 int a = GET_A(i);
                 int b = GET_B(i);
@@ -189,6 +225,15 @@ void VM::run() {
                 bool val = (R(a).type != 3 || R(a).ptr != nullptr); // Basic truthiness
                 if (R(a).type == 0) val = R(a).number != 0;
                 if (val != (c != 0)) frame->ip++;
+                break;
+            }
+            case OpCode::TESTSET: {
+                int a = GET_A(i);
+                int b = GET_B(i);
+                int c = GET_C(i);
+                bool val = (R(b).type != 3 || R(b).ptr != nullptr);
+                if (R(b).type == 0) val = R(b).number != 0;
+                if (val == (c != 0)) R(a) = R(b); else frame->ip++;
                 break;
             }
             case OpCode::GETGLOBAL: {
@@ -276,8 +321,12 @@ void VM::run() {
                 R(getA(*(frame->ip - 1))) = result; 
                 break;
             }
-            default:
-                RUNTIME_ERROR("Unknown opcode");
+            case OpCode::COUNT: break;
+            default: {
+                char buf[64];
+                sprintf(buf, "Unknown opcode: %d", (int)GET_OP(i));
+                RUNTIME_ERROR(buf);
+            }
         }
     }
 }
