@@ -19,6 +19,9 @@ struct Chunk {
     // Constants pool
     std::vector<Any> constants;
     
+    // Sub-functions (nested chunks)
+    std::vector<std::unique_ptr<Chunk>> functions;
+    
     void write(Instruction instruction, int line) {
         code.push_back(instruction);
         lines.push_back(line);
@@ -34,6 +37,7 @@ struct Chunk {
         code.clear();
         lines.clear();
         constants.clear();
+        functions.clear();
     }
 };
 

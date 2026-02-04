@@ -12,18 +12,13 @@ bool Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& statements, Chu
     locals.clear();
     scopeDepth = 0;
     
-    try {
-        for (const auto& stmt : statements) {
-            compile(stmt.get());
-        }
-        
-        // Emit return 0 at end
-        emit(createABC(OpCode::RETURN, 0, 1, 0)); 
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "Compilation Error: " << e.what() << "\n";
-        return false;
+    for (const auto& stmt : statements) {
+        compile(stmt.get());
     }
+    
+    // Emit return 0 at end
+    emit(createABC(OpCode::RETURN, 0, 1, 0)); 
+    return true;
 }
 
 // Helpers
@@ -101,7 +96,68 @@ void Compiler::compile(Stmt* stmt) {
     else if (auto* s = dynamic_cast<IfStmt*>(stmt)) {
          // Should implement jumps here
     }
-    // ... loops
+    else if (auto* s = dynamic_cast<FunctionStmt*>(stmt)) {
+        // 1. Create sub-chunk for function body
+        auto subChunk = std::make_unique<Chunk>();
+        
+        // 2. Compile body in a new compiler context (or save/restore state)
+        // For simplicity, we use same nextReg but reset it? No, functions have their own stack frame.
+        int oldReg = nextReg;
+        auto oldLocals = locals;
+        int oldScope = scopeDepth;
+        Chunk* oldChunk = currentChunk;
+        
+        currentChunk = subChunk.get();
+        nextReg = 0;
+        locals.clear();
+        scopeDepth = 0;
+        
+        // Setup parameters as locals
+        for (int i = 0; i < (int)s->params.size(); i++) {
+            locals.push_back({s->params[i], 0, i});
+            nextReg++;
+        }
+        
+        compile(s->body.get());
+        
+        // Emit implicit return if needed
+        emit(createABC(OpCode::RETURN, 0, 1, 0));
+        
+        // 3. Store sub-chunk in parent chunk
+        oldChunk->functions.push_back(std::move(subChunk));
+        int funcIdx = (int)oldChunk->functions.size() - 1;
+        
+        // 4. Restore state
+        currentChunk = oldChunk;
+        nextReg = oldReg;
+        locals = oldLocals;
+        scopeDepth = oldScope;
+        
+        // 5. Define as global or local? 
+        // For now, Manifast functions are global.
+        int kName = makeConstant({3, 0.0, mf_strdup(s->name.c_str())});
+        
+        // Create function object
+        Any funcVal;
+        funcVal.type = 5; // Bytecode Function
+        funcVal.number = (double)funcIdx; // Store index in sub-functions vector
+        funcVal.ptr = nullptr;
+        
+        int kFunc = makeConstant(funcVal);
+        int r = allocReg();
+        emit(createABx(OpCode::LOADK, r, kFunc));
+        emit(createABx(OpCode::SETGLOBAL, r, kName));
+        freeReg();
+    }
+    else if (auto* s = dynamic_cast<ReturnStmt*>(stmt)) {
+        if (s->value) {
+            int r = compile(s->value.get());
+            emit(createABC(OpCode::RETURN, r, 2, 0)); // Return 1 result
+            freeReg();
+        } else {
+            emit(createABC(OpCode::RETURN, 0, 1, 0)); // Return 0 results (nil)
+        }
+    }
 }
 
 int Compiler::compile(Expr* expr) {

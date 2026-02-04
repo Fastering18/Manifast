@@ -14,6 +14,10 @@ public:
     ~VM();
 
     void interpret(Chunk* chunk);
+    
+    // Globals
+    using NativeFn = void (*)(VM* vm, Any* args, int nargs);
+    void defineNative(const std::string& name, NativeFn fn);
 
 private:
     // Registers (Stack)
@@ -35,11 +39,7 @@ private:
     // Helpers
     void resetStack();
     
-    // Globals
-    using NativeFn = void (*)(VM* vm, Any* args, int nargs);
     std::unordered_map<std::string, Any> globals;
-    
-    void defineNative(const std::string& name, NativeFn fn);
 };
 
 } // namespace vm

@@ -13,10 +13,7 @@ set(CORE_SOURCES
     ../../src/lib/Parser.cpp
     ../../src/lib/VM.cpp
     ../../src/lib/Compiler.cpp
-    # Runtime.cpp might not be needed if we override runtime functions in bindings, 
-    # but Runtime types (Any) are used.
-    # Note: Runtime.cpp implementation of standard library functions might conflict if we want custom JS overrides.
-    # But headers are needed.
+    ../../src/lib/Runtime.cpp
 )
 
 add_executable(manifast bindings.cpp ${CORE_SOURCES})

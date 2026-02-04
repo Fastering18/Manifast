@@ -77,11 +77,7 @@ void VM::interpret(Chunk* chunk) {
     
     frames.push_back(frame);
     
-    try {
-        run();
-    } catch (...) {
-        std::cerr << "VM Panic\n";
-    }
+    run();
 }
 
 void VM::run() {
@@ -162,13 +158,22 @@ void VM::run() {
                 
                 // Assuming I fix compiler next:
                 if (key.type == 3 && key.ptr) {
-                    std::string name((char*)key.ptr);
+                    std::string name((uintptr_t)key.ptr < 1000 ? "INVALID" : (char*)key.ptr);
                     if (globals.count(name)) {
                         R(a) = globals[name];
                     } else {
                         R(a) = {3, 0.0, nullptr}; // Nil
-                        // Or error? Lua returns nil.
                     }
+                }
+                break;
+            }
+            case OpCode::SETGLOBAL: {
+                int a = GET_A(i);
+                int bx = GET_Bx(i);
+                Any key = K(bx);
+                if (key.type == 3 && key.ptr) {
+                    std::string name((char*)key.ptr);
+                    globals[name] = R(a);
                 }
                 break;
             }
@@ -184,16 +189,43 @@ void VM::run() {
                 if (func.type == 4) { // Native
                     NativeFn fn = (NativeFn)func.ptr;
                     fn(this, &R(a + 1), nargs);
-                    // Result handling? NativeFn returns void for now.
-                    // Lua moves results.
-                    // For now assume 0 results.
-                } else {
+                    // For now assume 0 results or 1 result moved to R(a)
+                } 
+                else if (func.type == 5) { // Bytecode
+                    int funcIdx = (int)func.number;
+                    Chunk* subChunk = frame->chunk->functions[funcIdx].get();
+                    
+                    // Push new frame
+                    CallFrame newFrame;
+                    newFrame.chunk = subChunk;
+                    newFrame.ip = subChunk->code.data();
+                    newFrame.slots = &R(a); // R(a) becomes R0 of new frame
+                    
+                    frames.push_back(newFrame);
+                    frame = &frames.back(); // Update local frame pointer
+                }
+                else {
                     RUNTIME_ERROR("Call to non-function");
                 }
                 break;
             }
             case OpCode::RETURN: {
-                return;
+                int a = GET_A(i);
+                int b = GET_B(i); // numResults + 1
+                
+                Any result = (b > 1) ? R(a) : Any{3, 0.0, nullptr}; // Default nil
+                
+                frames.pop_back();
+                if (frames.empty()) return; // Exit main interpret
+                
+                frame = &frames.back();
+                // Find where the function was on the previous frame and put result there
+                // The previous frame's 'slots' at the call site was where R(a) was.
+                // Wait, in my CALL implementation: newFrame.slots = &R(a).
+                // So the result just needs to stay at R(0) of the popped frame,
+                // which IS R(a) of the current frame.
+                R(getA(*(frame->ip - 1))) = result; 
+                break;
             }
             default:
                 RUNTIME_ERROR("Unknown opcode");

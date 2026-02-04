@@ -75,12 +75,10 @@ void Parser::synchronize() {
 std::vector<std::unique_ptr<Stmt>> Parser::parse() {
     std::vector<std::unique_ptr<Stmt>> statements;
     while (currentToken.type != TokenType::EndOfFile) {
-        try {
-            auto stmt = parseStatement();
-            if (stmt) statements.push_back(std::move(stmt));
-            else advance(); // Safety advance
-        } catch (...) {
-            synchronize();
+        auto stmt = parseStatement();
+        if (stmt) statements.push_back(std::move(stmt));
+        else {
+             synchronize();
         }
     }
     return statements;

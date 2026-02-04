@@ -18,7 +18,7 @@
 extern "C" {
 
 struct Any {
-    int32_t type;    // 0=Number, 1=Array, 2=Object, 3=String
+    int32_t type;    // 0=Number, 1=Array, 2=Object, 3=String, 4=Native, 5=Bytecode
     double number;
     void* ptr;
 };
