@@ -23,13 +23,12 @@ private:
     // Registers (Stack)
     // Lua uses a stack, where functions operate on a window (CallFrame)
     std::vector<Any> stack;
-    Any* stackTop;
     
     // Call Stack
     struct CallFrame {
         Chunk* chunk;
-        Instruction* ip;
-        Any* slots; // Register window start (R0)
+        int pc; // Program counter (index into code)
+        int baseSlot; // Register window start (index into stack)
         int returnReg; // Target register in caller frame
     };
     

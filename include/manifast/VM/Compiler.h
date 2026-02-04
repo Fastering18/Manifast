@@ -42,7 +42,7 @@ private:
     int allocReg();
     void freeReg(); // Pop last reg
     
-    int compileFunctionBody(const std::vector<std::string>& params, Stmt* body);
+    Chunk* compileFunctionBody(const std::vector<std::string>& params, Stmt* body);
     
     void beginScope();
     void endScope();

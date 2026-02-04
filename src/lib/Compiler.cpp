@@ -186,7 +186,7 @@ void Compiler::compile(Stmt* stmt) {
         endScope();
     }
     else if (auto* s = dynamic_cast<FunctionStmt*>(stmt)) {
-        int funcIdx = compileFunctionBody(s->params, s->body.get());
+        Chunk* funcChunk = compileFunctionBody(s->params, s->body.get());
         
         // Define as global
         int kName = makeConstant({1, 0.0, mf_strdup(s->name.c_str())}); // Type 1: String
@@ -194,8 +194,8 @@ void Compiler::compile(Stmt* stmt) {
         // Create function object
         Any funcVal;
         funcVal.type = 5; // Type 5: Bytecode Function
-        funcVal.number = (double)funcIdx;
-        funcVal.ptr = nullptr;
+        funcVal.number = 0.0;
+        funcVal.ptr = funcChunk; // Store direct pointer
         
         int kFunc = makeConstant(funcVal);
         int r = allocReg();
@@ -214,7 +214,7 @@ void Compiler::compile(Stmt* stmt) {
     }
 }
 
-int Compiler::compileFunctionBody(const std::vector<std::string>& params, Stmt* body) {
+Chunk* Compiler::compileFunctionBody(const std::vector<std::string>& params, Stmt* body) {
     auto subChunk = std::make_unique<Chunk>();
     
     int oldReg = nextReg;
@@ -248,7 +248,7 @@ int Compiler::compileFunctionBody(const std::vector<std::string>& params, Stmt* 
     locals = oldLocals;
     scopeDepth = oldScope;
     
-    return funcIdx;
+    return oldChunk->functions.back().get();
 }
 
 int Compiler::compile(Expr* expr) {
@@ -332,13 +332,13 @@ int Compiler::compile(Expr* expr) {
         return funcReg;
     }
     else if (auto* e = dynamic_cast<FunctionExpr*>(expr)) {
-        int funcIdx = compileFunctionBody(e->params, e->body.get());
+        Chunk* funcChunk = compileFunctionBody(e->params, e->body.get());
         
         // Create function object result
         Any funcVal;
         funcVal.type = 5; // Type 5: Bytecode Function
-        funcVal.number = (double)funcIdx;
-        funcVal.ptr = nullptr;
+        funcVal.number = 0.0;
+        funcVal.ptr = funcChunk;
         
         int kFunc = makeConstant(funcVal);
         int r = allocReg();
