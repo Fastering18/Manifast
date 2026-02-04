@@ -15,8 +15,7 @@ enum class OpCode : uint8_t {
     LOADBOOL,   // R(A) := (Bool)B; if (C) pc++
     LOADNIL,    // R(A)..R(A+B) := nil
     
-    // Arithmetic (R(A) := R(B) op R(C)) or (R(A) := R(B) op K(C))?
-    // Lua 5.1 uses RK(C) - bit 8 of C determines if it's Reg or Const
+    // Arithmetic
     ADD, SUB, MUL, DIV, MOD, POW,
     
     // Logic
@@ -34,7 +33,7 @@ enum class OpCode : uint8_t {
     CALL,       // R(A), ... := R(A)(R(A+1), ... , R(A+B-1))
     RETURN,     // return R(A), ... , R(A+B-1)
     
-    // Globals (Optimization)
+    // Globals
     GETGLOBAL,  // R(A) := Gbl[K(Bx)]
     SETGLOBAL,  // Gbl[K(Bx)] := R(A)
 
