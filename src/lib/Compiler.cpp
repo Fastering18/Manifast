@@ -96,10 +96,8 @@ void Compiler::compile(Stmt* stmt) {
     else if (auto* s = dynamic_cast<IfStmt*>(stmt)) {
         int condReg = compile(s->condition.get());
         
-        // Skip next if condReg is false
-        // TEST A C: if not (R(A) <=> C) then pc++
-        // We want to skip JMP if condReg is true (C=1)
-        emit(createABC(OpCode::TEST, condReg, 0, 1));
+        // We want to skip JMP if condReg is true (C=0)
+        emit(createABC(OpCode::TEST, condReg, 0, 0));
         
         int jmpIdx = emit(createAsBx(OpCode::JMP, 0, 0)); // Placeholder
         int startPos = (int)currentChunk->code.size();
@@ -132,7 +130,7 @@ void Compiler::compile(Stmt* stmt) {
         int condReg = compile(s->condition.get());
         
         // if not condReg skip body
-        emit(createABC(OpCode::TEST, condReg, 0, 1));
+        emit(createABC(OpCode::TEST, condReg, 0, 0));
         int jmpEndIdx = emit(createAsBx(OpCode::JMP, 0, 0));
         int bodyStart = (int)currentChunk->code.size();
         
