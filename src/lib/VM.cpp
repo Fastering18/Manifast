@@ -211,7 +211,7 @@ void VM::run() {
                 Any vc = RK(c);
                 bool res = false;
                 if (vb.type == 0 && vc.type == 0) res = vb.number == vc.number;
-                else if (vb.type == 3 && vc.type == 3) res = std::string((char*)vb.ptr) == std::string((char*)vc.ptr);
+                else if (vb.type == 1 && vc.type == 1) res = std::string((char*)vb.ptr) == std::string((char*)vc.ptr);
                 if (res != (a != 0)) frame->ip++;
                 break;
             }
@@ -222,8 +222,10 @@ void VM::run() {
             case OpCode::TEST: {
                 int a = GET_A(i);
                 int c = GET_C(i);
-                bool val = (R(a).type != 3 || R(a).ptr != nullptr); // Basic truthiness
-                if (R(a).type == 0) val = R(a).number != 0;
+                bool val = true;
+                if (R(a).type == 3) val = false; // Nil
+                else if (R(a).type == 2) val = (R(a).number != 0); // Bool
+                else if (R(a).type == 0) val = (R(a).number != 0); // Num
                 if (val != (c != 0)) frame->ip++;
                 break;
             }
@@ -231,8 +233,10 @@ void VM::run() {
                 int a = GET_A(i);
                 int b = GET_B(i);
                 int c = GET_C(i);
-                bool val = (R(b).type != 3 || R(b).ptr != nullptr);
-                if (R(b).type == 0) val = R(b).number != 0;
+                bool val = true;
+                if (R(b).type == 3) val = false;
+                else if (R(b).type == 2) val = (R(b).number != 0);
+                else if (R(b).type == 0) val = (R(b).number != 0);
                 if (val == (c != 0)) R(a) = R(b); else frame->ip++;
                 break;
             }
@@ -248,7 +252,7 @@ void VM::run() {
                 // I need to fix Compiler to emit GETGLOBAL if it's not a local.
                 
                 // Assuming I fix compiler next:
-                if (key.type == 3 && key.ptr) {
+                if (key.type == 1 && key.ptr) {
                     std::string name((uintptr_t)key.ptr < 1000 ? "INVALID" : (char*)key.ptr);
                     if (globals.count(name)) {
                         R(a) = globals[name];
@@ -262,7 +266,7 @@ void VM::run() {
                 int a = GET_A(i);
                 int bx = GET_Bx(i);
                 Any key = K(bx);
-                if (key.type == 3 && key.ptr) {
+                if (key.type == 1 && key.ptr) {
                     std::string name((char*)key.ptr);
                     globals[name] = R(a);
                 }

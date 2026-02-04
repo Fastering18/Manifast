@@ -224,7 +224,7 @@ void Compiler::compile(Stmt* stmt) {
         
         // 5. Define as global or local? 
         // For now, Manifast functions are global.
-        int kName = makeConstant({3, 0.0, mf_strdup(s->name.c_str())});
+        int kName = makeConstant({1, 0.0, mf_strdup(s->name.c_str())});
         
         // Create function object
         Any funcVal;
@@ -258,10 +258,7 @@ int Compiler::compile(Expr* expr) {
     }
     else if (auto* e = dynamic_cast<StringExpr*>(expr)) {
         int r = allocReg();
-        // Create string constant. Note: we need to own the string memory.
-        // For MVP, relying on Runtime managing it or leaking. 
-        // Ideally Runtime.h has makeString. using mf_strdup for now.
-        int k = makeConstant({3, 0.0, mf_strdup(e->value.c_str())}); 
+        int k = makeConstant({1, 0.0, mf_strdup(e->value.c_str())}); 
         emit(createABx(OpCode::LOADK, r, k));
         return r;
     }
@@ -309,15 +306,7 @@ int Compiler::compile(Expr* expr) {
             emit(createABC(OpCode::MOVE, r, local, 0));
         } else {
             // Global lookup
-            int k = makeConstant({3, 0.0, mf_strdup(e->name.c_str())}); 
-            // Note: Leaking strdup here if we don't manage constants properly.
-            // Using createABx for GETGLOBAL? 
-            // VM has GETGLOBAL as iABx?
-            // OpCode.h says GETGLOBAL is OpCode.
-            // iABx: Op(6) A(8) Bx(18).
-            
-            // Wait, VM: case OpCode::GETGLOBAL: int bx = GET_Bx(i); Any key = K(bx);
-            // Yes, iABx.
+            int k = makeConstant({1, 0.0, mf_strdup(e->name.c_str())}); 
             emit(createABx(OpCode::GETGLOBAL, r, k));
         }
         return r;
