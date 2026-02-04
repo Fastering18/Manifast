@@ -127,6 +127,66 @@ void Compiler::compile(Stmt* stmt) {
         
         freeReg();
     }
+    else if (auto* s = dynamic_cast<WhileStmt*>(stmt)) {
+        int startPos = (int)currentChunk->code.size();
+        int condReg = compile(s->condition.get());
+        
+        // if not condReg skip body
+        emit(createABC(OpCode::TEST, condReg, 0, 1));
+        int jmpEndIdx = emit(createAsBx(OpCode::JMP, 0, 0));
+        int bodyStart = (int)currentChunk->code.size();
+        
+        compile(s->body.get());
+        
+        // Jump back to start
+        int backPos = (int)currentChunk->code.size();
+        emit(createAsBx(OpCode::JMP, 0, startPos - backPos - 1));
+        
+        // Patch exit jump
+        int endPos = (int)currentChunk->code.size();
+        currentChunk->code[jmpEndIdx] = createAsBx(OpCode::JMP, 0, endPos - bodyStart);
+        
+        freeReg();
+    }
+    else if (auto* s = dynamic_cast<ForStmt*>(stmt)) {
+        beginScope();
+        // untuk i = start ke end loop body
+        // 1. Init var
+        int rVar = allocReg();
+        int rStart = compile(s->start.get());
+        emit(createABC(OpCode::MOVE, rVar, rStart, 0));
+        freeReg(); // start temp
+        
+        locals.push_back({s->varName, scopeDepth, rVar});
+        
+        int rEnd = compile(s->end.get()); // Keep end in reg for comparison
+        
+        int loopTop = (int)currentChunk->code.size();
+        
+        // condition: var <= end
+        emit(createABC(OpCode::LE, 1, rVar, rEnd));
+        emit(createAsBx(OpCode::JMP, 0, 1)); // Skip body jump if false
+        int jmpEndIdx = emit(createAsBx(OpCode::JMP, 0, 0));
+        int bodyStart = (int)currentChunk->code.size();
+        
+        compile(s->body.get());
+        
+        // increment: i = i + 1
+        int k1 = makeConstant({0, 1.0, nullptr});
+        int r1 = allocReg();
+        emit(createABx(OpCode::LOADK, r1, k1));
+        emit(createABC(OpCode::ADD, rVar, rVar, r1));
+        freeReg(); 
+        
+        int loopBottom = (int)currentChunk->code.size();
+        emit(createAsBx(OpCode::JMP, 0, loopTop - loopBottom - 1));
+        
+        int endPos = (int)currentChunk->code.size();
+        currentChunk->code[jmpEndIdx] = createAsBx(OpCode::JMP, 0, endPos - bodyStart);
+        
+        freeReg(); // rEnd
+        endScope();
+    }
     else if (auto* s = dynamic_cast<FunctionStmt*>(stmt)) {
         // 1. Create sub-chunk for function body
         auto subChunk = std::make_unique<Chunk>();
@@ -215,27 +275,26 @@ int Compiler::compile(Expr* expr) {
         
         OpCode op = OpCode::ADD;
         bool isCompare = false;
+        bool flip = false;
         switch (e->op) {
             case TokenType::Plus: op = OpCode::ADD; break;
             case TokenType::Minus: op = OpCode::SUB; break;
             case TokenType::Star: op = OpCode::MUL; break;
             case TokenType::Slash: op = OpCode::DIV; break;
             case TokenType::Less: op = OpCode::LT; isCompare = true; break;
+            case TokenType::Greater: op = OpCode::LT; isCompare = true; flip = true; break;
+            case TokenType::LessEqual: op = OpCode::LE; isCompare = true; break;
+            case TokenType::GreaterEqual: op = OpCode::LE; isCompare = true; flip = true; break;
             case TokenType::EqualEqual: op = OpCode::EQ; isCompare = true; break;
-            // For now, mapping > and others to basic opcodes or reversing
+            case TokenType::BangEqual: op = OpCode::EQ; isCompare = true; break; // Handled by TEST inversion logic
             default: break;
         }
         
         if (isCompare) {
-            // Comparisons in Lua VM work differently (inline skip)
-            // LT A B C: if ((RK(B) < RK(C)) ~= A) then pc++
-            // We want to store result in a register.
-            // LT 1 left right
-            // JMP 0 1 (Skip R=1)
-            // LOADBOOL left 0 1 (Skip R=0)
-            // LOADBOOL left 1 0
-            
-            emit(createABC(op, 1, left, right));
+            int aVal = (e->op == TokenType::BangEqual) ? 0 : 1;
+            int rL = flip ? right : left;
+            int rR = flip ? left : right;
+            emit(createABC(op, aVal, rL, rR));
             emit(createAsBx(OpCode::JMP, 0, 1));
             emit(createABC(OpCode::LOADBOOL, left, 0, 1));
             emit(createABC(OpCode::LOADBOOL, left, 1, 0));

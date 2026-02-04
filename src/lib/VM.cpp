@@ -156,6 +156,17 @@ void VM::run() {
                 if (res != (a != 0)) frame->ip++;
                 break;
             }
+            case OpCode::LE: {
+                int a = GET_A(i);
+                int b = GET_B(i);
+                int c = GET_C(i);
+                Any vb = RK(b);
+                Any vc = RK(c);
+                bool res = false;
+                if (vb.type == 0 && vc.type == 0) res = vb.number <= vc.number;
+                if (res != (a != 0)) frame->ip++;
+                break;
+            }
             case OpCode::EQ: {
                 int a = GET_A(i);
                 int b = GET_B(i);
