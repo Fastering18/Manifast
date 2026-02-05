@@ -68,9 +68,11 @@ fungsi fib(n)
   tutup
   kembali fib(n-1) + fib(n-2)
 tutup
+local start = os.waktuNano()
 print("fib(10) =", fib(21))
-print(os.clearOutput())
+local end = os.waktuNano()
 println("\nDone!", 5%2)
+println("Time taken for fib recursive: " + (end - start)/1000 + "ms", start, end)
 `;
 
   console.log("Running Manifast Test...");

@@ -229,7 +229,11 @@ print("Done!")
                 console.log("Manifast Wasm Loaded");
             },
             print: (text) => {
-                // Stdout capture handled by bindings, but this catches debug
+                const outputEl = document.getElementById('output');
+                if (outputEl) {
+                    outputEl.value += text + "\n";
+                    outputEl.scrollTop = outputEl.scrollHeight; // Auto-scroll
+                }
                 console.log(text);
             }
         };
@@ -256,27 +260,24 @@ print("Done!")
             const outputEl = document.getElementById('output');
             const timingEl = document.getElementById('timing');
 
-            outputEl.value = "Running...";
+            outputEl.value = ""; // Clear for new run
             timingEl.innerText = "";
-
-            // Allocate string in Wasm heap ?? 
-            // Or use ccall helper which handles string passing
-            // ccall(name, returnType, argTypes, args)
 
             const startTime = performance.now();
             try {
-                // Call C++ function: const char* mf_run_script(const char*)
                 const result = Module.ccall(
-                    'mf_run_script', // name of C function
-                    'string',        // return type
-                    ['string'],      // argument types
-                    [code]           // arguments
+                    'mf_run_script',
+                    'string',
+                    ['string'],
+                    [code]
                 );
 
                 const endTime = performance.now();
                 const duration = (endTime - startTime).toFixed(2);
 
-                outputEl.value = result;
+                if (result && result !== "") {
+                    outputEl.value += result + "\n";
+                }
                 timingEl.innerText = `(${duration}ms)`;
             } catch (err) {
                 outputEl.value = "RUNTIME ERROR:\n" + err.message + "\n\nStack trace:\n" + err.stack;

@@ -105,55 +105,6 @@
 
         #code {
             background: #0d1117;
-            caret-color: white;
-        }
-
-        .editor-wrapper {
-            position: relative;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .highlight-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            padding: 1rem;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 14px;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            pointer-events: none;
-            overflow: hidden;
-            color: transparent;
-        }
-
-        .highlight-overlay .keyword {
-            color: #ff7b72;
-        }
-
-        .highlight-overlay .string {
-            color: #a5d6ff;
-        }
-
-        .highlight-overlay .number {
-            color: #79c0ff;
-        }
-
-        .highlight-overlay .comment {
-            color: #8b949e;
-            font-style: italic;
-        }
-
-        .highlight-overlay .function {
-            color: #d2a8ff;
-        }
-
-        .highlight-overlay .builtin {
-            color: #ffa657;
         }
 
         #output {
@@ -244,9 +195,7 @@
     <div class="container">
         <div class="editor-pane">
             <div class="pane-header">Code Input</div>
-            <div class="editor-wrapper">
-                <div id="highlightOverlay" class="highlight-overlay"></div>
-                <textarea id="code" spellcheck="false" oninput="updateHighlight()" onscroll="syncScroll()">-- Manifast Wasm Demo
+            <textarea id="code" spellcheck="false">-- Manifast Wasm Demo
 
 fungsi fib(n)
   jika n < 2 maka
@@ -261,7 +210,6 @@ lokal start = 0
 
 print("Fib(10) =", fib(10))
 print("Done!")</textarea>
-            </div>
         </div>
         <div class="output-pane">
             <div class="pane-header">
@@ -279,7 +227,11 @@ print("Done!")</textarea>
                 console.log("Manifast Wasm Loaded");
             },
             print: (text) => {
-                // Stdout capture handled by bindings, but this catches debug
+                const outputEl = document.getElementById('output');
+                if (outputEl) {
+                    outputEl.value += text + "\n";
+                    outputEl.scrollTop = outputEl.scrollHeight; // Auto-scroll
+                }
                 console.log(text);
             }
         };
@@ -294,43 +246,7 @@ print("Done!")</textarea>
                 oop: `-- Object Oriented Example\nkelas Orang\n  fungsi inisiasi(nama, umur)\n    self.nama = nama\n    self.umur = umur\n  tutup\n\n  fungsi perkenalan()\n    println("Halo, nama saya " + self.nama + " dan umur saya " + self.umur)\n  tutup\ntutup\n\nlokal budi = Orang("Budi", 25)\nbudi.perkenalan()`
             };
             codeEl.value = examples[selector.value];
-            updateHighlight();
         }
-
-        function highlightCode(code) {
-            const keywords = /\b(fungsi|jika|kalau|sebaliknya|maka|tutup|kembali|lokal|untuk|ke|lakukan|selama|dan|atau|bukan|kelas|self|impor|benar|salah|nil)\b/g;
-            const builtins = /\b(print|println|tipe|tunggu|input|assert|exit|waktuNano|clearOutput)\b/g;
-            const strings = /("[^"]*")/g;
-            const numbers = /\b(\d+\.?\d*)\b/g;
-            const comments = /(--.*)/g;
-
-            let result = code
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(comments, '<span class="comment">$1</span>')
-                .replace(strings, '<span class="string">$1</span>')
-                .replace(keywords, '<span class="keyword">$1</span>')
-                .replace(builtins, '<span class="builtin">$1</span>')
-                .replace(numbers, '<span class="number">$1</span>');
-            return result;
-        }
-
-        function updateHighlight() {
-            const code = document.getElementById('code').value;
-            document.getElementById('highlightOverlay').innerHTML = highlightCode(code) + '\n';
-        }
-
-        function syncScroll() {
-            const textarea = document.getElementById('code');
-            const overlay = document.getElementById('highlightOverlay');
-            overlay.scrollTop = textarea.scrollTop;
-            overlay.scrollLeft = textarea.scrollLeft;
-        }
-
-        document.getElementById('code').addEventListener('scroll', syncScroll);
-
-        setTimeout(updateHighlight, 100);
 
         function runCode() {
             if (!Module._mf_run_script) {
@@ -342,27 +258,24 @@ print("Done!")</textarea>
             const outputEl = document.getElementById('output');
             const timingEl = document.getElementById('timing');
 
-            outputEl.value = "Running...";
+            outputEl.value = ""; // Clear for new run
             timingEl.innerText = "";
-
-            // Allocate string in Wasm heap ?? 
-            // Or use ccall helper which handles string passing
-            // ccall(name, returnType, argTypes, args)
 
             const startTime = performance.now();
             try {
-                // Call C++ function: const char* mf_run_script(const char*)
                 const result = Module.ccall(
-                    'mf_run_script', // name of C function
-                    'string',        // return type
-                    ['string'],      // argument types
-                    [code]           // arguments
+                    'mf_run_script',
+                    'string',
+                    ['string'],
+                    [code]
                 );
 
                 const endTime = performance.now();
                 const duration = (endTime - startTime).toFixed(2);
 
-                outputEl.value = result;
+                if (result && result !== "") {
+                    outputEl.value += result + "\n";
+                }
                 timingEl.innerText = `(${duration}ms)`;
             } catch (err) {
                 outputEl.value = "RUNTIME ERROR:\n" + err.message + "\n\nStack trace:\n" + err.stack;
