@@ -67,7 +67,7 @@ fungsi recursive(n)
   println(n)
   kembali recursive(n-1)
 tutup
-recursive(300)
+recursive(30000)
 
 println("\nDone!")
 `;
