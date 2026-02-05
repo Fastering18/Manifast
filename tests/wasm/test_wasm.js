@@ -62,13 +62,14 @@ println("sub[2]: " + sub[2])
 println("sub[3]: " + sub[3])
 
 println("\n--- Recursion Testing ---")
-fungsi recursive(n)
-  jika n < 1 maka kembali 0 tutup
-  println(n)
-  kembali recursive(n-1)
+fungsi fib(n)
+  jika n < 2 maka
+    kembali n
+  tutup
+  kembali fib(n-1) + fib(n-2)
 tutup
-recursive(30000)
-
+print("fib(10) =", fib(21))
+print(os.clearOutput())
 println("\nDone!")
 `;
 

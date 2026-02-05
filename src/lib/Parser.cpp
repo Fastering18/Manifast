@@ -14,8 +14,6 @@ Token Parser::advance() {
     previousToken = currentToken;
     currentToken = lexer.nextToken();
     
-    // printf("Parser::advance: type=%d, lexeme='%s'\n", (int)currentToken.type, std::string(currentToken.lexeme).c_str());
-
     if (currentToken.type == TokenType::Error) {
         error(currentToken, std::string(currentToken.lexeme));
     }

@@ -179,6 +179,7 @@
             <select id="exampleSelector" onchange="loadExample()"
                 style="background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; outline: none; cursor: pointer;">
                 <option value="fib">Fibonacci</option>
+                <option value="fizzbuzz">FizzBuzz</option>
                 <option value="mandelbrot">Mandelbrot Draw</option>
                 <option value="oop">Object Oriented</option>
             </select>
@@ -238,7 +239,8 @@ print("Done!")
             const codeEl = document.getElementById('code');
             const examples = {
                 fib: `-- Fibonacci Example\nfungsi fib(n)\n  jika n < 2 maka\n    kembali n\n  tutup\n  kembali fib(n-1) + fib(n-2)\ntutup\n\nprintln("Menghitung Fib(10)...")\nprintln("Hasil:", fib(10))`,
-                mandelbrot: `-- Mandelbrot Set in Manifast\nfungsi mandelbrot()\n  lokal width = 80\n  lokal height = 30\n  lokal max_iter = 30\n\n  untuk y = 0 ke height lakukan\n    lokal cy = (y / height) * 2 - 1\n    lokal line = ""\n    untuk x = 0 ke width lakukan\n      lokal cx = (x / width) * 3 - 2\n      lokal zx = 0\n      lokal zy = 0\n      lokal i = 0\n      selama (zx*zx + zy*zy < 4) dan (i < max_iter) lakukan\n        lokal tmp = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = tmp\n        i = i + 1\n      tutup\n\n      jika i == max_iter maka\n        line = line + "#"\n      kalau i > 20 maka\n        line = line + "*"\n      kalau i > 10 maka\n        line = line + "+"\n      kalau i > 5 maka\n        line = line + "."\n      sebaliknya\n        line = line + " "\n      tutup\n    tutup\n    println(line)\n  tutup\ntutup\n\nprintln("Generating Mandelbrot...")\nmandelbrot()\nprintln("Done!")`,
+                fizzbuzz: `-- FizzBuzz Example\nuntuk i = 1 ke 30 lakukan\n  jika (i % 15) == 0 maka\n    println("FizzBuzz")\n  kalau (i % 3) == 0 maka\n    println("Fizz")\n  kalau (i % 5) == 0 maka\n    println("Buzz")\n  sebaliknya\n    println(i)\n  tutup\ntutup`,
+                mandelbrot: `-- Mandelbrot Set in Manifast\nimpor("os").clearOutput()\n\nfungsi mandelbrot()\n  lokal width = 80\n  lokal height = 30\n  lokal max_iter = 30\n\n  untuk y = 0 ke height lakukan\n    lokal cy = (y / height) * 2 - 1\n    lokal line = ""\n    untuk x = 0 ke width lakukan\n      lokal cx = (x / width) * 3 - 2\n      lokal zx = 0\n      lokal zy = 0\n      lokal i = 0\n      selama (zx*zx + zy*zy < 4) dan (i < max_iter) lakukan\n        lokal tmp = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = tmp\n        i = i + 1\n      tutup\n\n      jika i == max_iter maka\n        line = line + "#"\n      kalau i > 20 maka\n        line = line + "*"\n      kalau i > 10 maka\n        line = line + "+"\n      kalau i > 5 maka\n        line = line + "."\n      sebaliknya\n        line = line + " "\n      tutup\n    tutup\n    println(line)\n  tutup\ntutup\n\nmandelbrot()`,
                 oop: `-- Object Oriented Example\nkelas Orang\n  fungsi inisiasi(nama, umur)\n    self.nama = nama\n    self.umur = umur\n  tutup\n\n  fungsi perkenalan()\n    println("Halo, nama saya " + self.nama + " dan umur saya " + self.umur)\n  tutup\ntutup\n\nlokal budi = Orang("Budi", 25)\nbudi.perkenalan()`
             };
             codeEl.value = examples[selector.value];

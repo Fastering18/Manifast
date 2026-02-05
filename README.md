@@ -52,7 +52,7 @@ Manifast features a **Tier-0 Bytecode VM** designed for ultra-low latency embedd
 - [x] JIT Compiler Pipeline (Tier 1)
 - [x] **Bytecode VM (Tier 0)** - Ultra-fast startup, high-stability
 - [x] Emscripten/WebAssembly Support
-- [x] Embedding Language Support ([Live Playground](https://fastering18.github.io/Manifast/))
+- [x] Embedding Language Support ([Live Playground](https://fastering.thedev.id/Manifast/))
 - [x] Automatic Self-Injection for Method Calls
 - [x] String Module (split, substring)
 - [x] Boolean Logic (bukan, dan, atau)

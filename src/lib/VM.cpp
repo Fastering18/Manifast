@@ -163,10 +163,17 @@ static void nativeImpor(VM* vm, Any* args, int nargs) {
              int code = (nargs >= 1 && args[0].type == 0) ? (int)args[0].number : 0;
              exit(code);
         };
+        auto clearOutput = [](VM* vm, Any* args, int nargs) {
+            printf("\033[2J\033[H");
+            fflush(stdout);
+            args[-1] = {3, 0.0, nullptr};
+        };
         Any fn1 = {4, 0.0, (void*)+waktu};
         Any fn2 = {4, 0.0, (void*)+exitFn};
+        Any fn3 = {4, 0.0, (void*)+clearOutput};
         manifast_object_set(obj, "waktu", &fn1);
-        manifast_object_set(obj, "keluar", &fn2); // 'exit' in Indonesian
+        manifast_object_set(obj, "keluar", &fn2);
+        manifast_object_set(obj, "clearOutput", &fn3);
         args[-1] = *obj;
         return;
     } else if (path == "string") {
@@ -266,7 +273,6 @@ static void nativeImpor(VM* vm, Any* args, int nargs) {
 }
 
 VM::VM() : lastResult({3, 0.0, nullptr}) {
-    stack.assign(16384, {3, 0.0, nullptr}); // Initialize stack with nil
     resetStack();
     
     // Define builtins
@@ -294,6 +300,8 @@ void VM::defineNative(const std::string& name, NativeFn fn) {
 }
 
 void VM::resetStack() {
+    stack.clear();
+    stack.resize(4096, {3, 0.0, nullptr});
     frames.clear();
 }
 
