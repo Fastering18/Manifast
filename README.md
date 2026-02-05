@@ -44,16 +44,18 @@ Manifast features a **Tier-0 Bytecode VM** designed for ultra-low latency embedd
 - [x] LLVM Code Generation (Foundation, IR Extraction)
 - [x] Variables & Scoping
 - [x] Function Codegen
-- [x] Control Flow (jika, kalau, kecuali, selama, untuk)
+- [x] Control Flow (jika, kalau, sebaliknya, selama, untuk)
 - [x] Try-Catch Implementation (coba-tangkap)
 - [x] Tables & Arrays (Object-oriented features)
 - [x] Memory Management (C++ RAII/Ownership)
-- [x] Standard Library (print, println, printfmt, input)
+- [x] Standard Library (print, println, wait, tipe)
 - [x] JIT Compiler Pipeline (Tier 1)
-- [x] **Bytecode VM (Tier 0)** - Ultra-fast startup
+- [x] **Bytecode VM (Tier 0)** - Ultra-fast startup, high-stability
 - [x] Emscripten/WebAssembly Support
 - [x] Embedding Language Support ([Live Playground](https://fastering18.github.io/Manifast/))
-- [ ] System Embedding Language
+- [x] Automatic Self-Injection for Method Calls
+- [x] String Module (split, substring)
+- [x] Boolean Logic (bukan, dan, atau)
 - [ ] Built-in modules
 - [ ] IDE Support (LSP)
 - [ ] Self compilation
