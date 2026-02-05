@@ -135,10 +135,10 @@ std::vector<std::unique_ptr<Stmt>> Parser::parse() {
         }
 
         Token startToken = currentToken;
-        #ifdef DEBUG_VM
-        fprintf(stderr, "[PARSER] Parsing statement at line %d (token: '%s')\n", currentToken.location.line, std::string(currentToken.lexeme).c_str());
-        fflush(stderr);
-        #endif
+        if (debugMode) {
+            fprintf(stderr, "[PARSER] Parsing statement at line %d (token: '%s')\n", currentToken.location.line, std::string(currentToken.lexeme).c_str());
+            fflush(stderr);
+        }
         auto stmt = parseStatement();
         if (stmt) {
             statements.push_back(std::move(stmt));

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -35,9 +36,29 @@
             align-items: center;
         }
 
-        h1 { margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; }
-        .logo { color: var(--accent); font-weight: 800; letter-spacing: -0.5px; }
-        .badge { font-size: 0.7rem; background: #238636; color: white; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; font-weight: bold; }
+        h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo {
+            color: var(--accent);
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            background: #238636;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
 
         .container {
             display: flex;
@@ -45,14 +66,17 @@
             overflow: hidden;
         }
 
-        .editor-pane, .output-pane {
+        .editor-pane,
+        .output-pane {
             flex: 1;
             display: flex;
             flex-direction: column;
             border-right: 1px solid var(--border);
         }
-        
-        .output-pane { border-right: none; }
+
+        .output-pane {
+            border-right: none;
+        }
 
         .pane-header {
             padding: 0.5rem 1rem;
@@ -79,13 +103,19 @@
             outline: none;
         }
 
-        #code { background: #0d1117; }
-        #output { background: #0b0e11; color: #a5d6ff; }
+        #code {
+            background: #0d1117;
+        }
+
+        #output {
+            background: #0b0e11;
+            color: #a5d6ff;
+        }
 
         button {
             background: #238636;
             color: white;
-            border: 1px solid rgba(240,246,252,0.1);
+            border: 1px solid rgba(240, 246, 252, 0.1);
             padding: 5px 16px;
             border-radius: 6px;
             font-weight: 600;
@@ -96,12 +126,20 @@
             gap: 6px;
         }
 
-        button:hover { background: #2ea043; }
-        button:active { transform: translateY(1px); }
+        button:hover {
+            background: #2ea043;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
 
         .loading-overlay {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background: rgba(15, 17, 21, 0.9);
             display: flex;
             justify-content: center;
@@ -111,16 +149,22 @@
         }
 
         .spinner {
-            width: 40px; height: 40px;
-            border: 3px solid rgba(255,255,255,0.1);
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
             border-top: 3px solid var(--accent);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
 
-        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
+
 <body>
 
     <div id="loader" class="loading-overlay">
@@ -129,11 +173,22 @@
     </div>
 
     <header>
-        <h1><span class="logo">MANIFAST</span> <span style="font-weight: 400">Playground</span> <span class="badge">WASM</span></h1>
-        <button onclick="runCode()">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 8l-5.5 4V4l5.5 4z"/></svg>
-            RUN
-        </button>
+        <h1><span class="logo">MANIFAST</span> <span style="font-weight: 400">Playground</span> <span
+                class="badge">WASM</span></h1>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <select id="exampleSelector" onchange="loadExample()"
+                style="background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; outline: none; cursor: pointer;">
+                <option value="fib">Fibonacci</option>
+                <option value="mandelbrot">Mandelbrot Draw</option>
+                <option value="oop">Object Oriented</option>
+            </select>
+            <button onclick="runCode()">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M9.5 8l-5.5 4V4l5.5 4z" />
+                </svg>
+                RUN
+            </button>
+        </div>
     </header>
 
     <div class="container">
@@ -168,7 +223,7 @@ print("Done!")
 
     <script>
         var Module = {
-            onRuntimeInitialized: function() {
+            onRuntimeInitialized: function () {
                 document.getElementById('loader').style.display = 'none';
                 console.log("Manifast Wasm Loaded");
             },
@@ -177,6 +232,17 @@ print("Done!")
                 console.log(text);
             }
         };
+
+        function loadExample() {
+            const selector = document.getElementById('exampleSelector');
+            const codeEl = document.getElementById('code');
+            const examples = {
+                fib: `-- Fibonacci Example\nfungsi fib(n)\n  jika n < 2 maka\n    kembali n\n  tutup\n  kembali fib(n-1) + fib(n-2)\ntutup\n\nprintln("Menghitung Fib(10)...")\nprintln("Hasil:", fib(10))`,
+                mandelbrot: `-- Mandelbrot Set in Manifast\nfungsi mandelbrot()\n  lokal width = 80\n  lokal height = 30\n  lokal max_iter = 30\n\n  untuk y = 0 ke height lakukan\n    lokal cy = (y / height) * 2 - 1\n    lokal line = ""\n    untuk x = 0 ke width lakukan\n      lokal cx = (x / width) * 3 - 2\n      lokal zx = 0\n      lokal zy = 0\n      lokal i = 0\n      selama (zx*zx + zy*zy < 4) dan (i < max_iter) lakukan\n        lokal tmp = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = tmp\n        i = i + 1\n      tutup\n\n      jika i == max_iter maka\n        line = line + "#"\n      kalau i > 20 maka\n        line = line + "*"\n      kalau i > 10 maka\n        line = line + "+"\n      kalau i > 5 maka\n        line = line + "."\n      sebaliknya\n        line = line + " "\n      tutup\n    tutup\n    println(line)\n  tutup\ntutup\n\nprintln("Generating Mandelbrot...")\nmandelbrot()\nprintln("Done!")`,
+                oop: `-- Object Oriented Example\nkelas Orang\n  fungsi inisiasi(nama, umur)\n    self.nama = nama\n    self.umur = umur\n  tutup\n\n  fungsi perkenalan()\n    println("Halo, nama saya " + self.nama + " dan umur saya " + self.umur)\n  tutup\ntutup\n\nlokal budi = Orang("Budi", 25)\nbudi.perkenalan()`
+            };
+            codeEl.value = examples[selector.value];
+        }
 
         function runCode() {
             if (!Module._mf_run_script) {
@@ -190,30 +256,35 @@ print("Done!")
 
             outputEl.value = "Running...";
             timingEl.innerText = "";
-            
+
             // Allocate string in Wasm heap ?? 
             // Or use ccall helper which handles string passing
             // ccall(name, returnType, argTypes, args)
-            
+
             const startTime = performance.now();
-            
-            // Call C++ function: const char* mf_run_script(const char*)
-            const result = Module.ccall(
-                'mf_run_script', // name of C function
-                'string',        // return type
-                ['string'],      // argument types
-                [code]           // arguments
-            );
+            try {
+                // Call C++ function: const char* mf_run_script(const char*)
+                const result = Module.ccall(
+                    'mf_run_script', // name of C function
+                    'string',        // return type
+                    ['string'],      // argument types
+                    [code]           // arguments
+                );
 
-            const endTime = performance.now();
-            const duration = (endTime - startTime).toFixed(2);
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
 
-            outputEl.value = result;
-            timingEl.innerText = `(${duration}ms)`;
+                outputEl.value = result;
+                timingEl.innerText = `(${duration}ms)`;
+            } catch (err) {
+                outputEl.value = "RUNTIME ERROR:\n" + err.message + "\n\nStack trace:\n" + err.stack;
+                timingEl.innerText = "(FAILED)";
+            }
         }
     </script>
-    
+
     <!-- Emscripten generated script will be injected here during build, or loaded externally -->
     <script src="manifast.js"></script>
 </body>
+
 </html>

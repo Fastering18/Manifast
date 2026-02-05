@@ -10,7 +10,7 @@ async function runTest() {
     manifast.onRuntimeInitialized = resolve;
   });
 
-  const code = `
+  const code = `--assert(bukan salah, "bukan salah error "+ bukan salah)
 println("Assertion Testing", println);
 println("Assert passed.");
 
@@ -51,12 +51,12 @@ tutup
 lokal budi = Orang("Budi", 25)
 budi.bicara()
 
-println("Tipe budi: " + tipe(budi))
+println("Tipe budi: " + tipe(budi), budi, Orang)
 
 -- Slicing test
 lokal data = [10, 20, 30, 40, 50]
 lokal sub = data[2:4]
-println("Slice data[2:4]: " + tipe(sub))
+println("Slice data[2:4]: " + tipe(sub), sub)
 println("sub[1]: " + sub[1])
 println("sub[2]: " + sub[2])
 println("sub[3]: " + sub[3])
@@ -67,7 +67,7 @@ fungsi recursive(n)
   println(n)
   kembali recursive(n-1)
 tutup
-recursive(3)
+recursive(30)
 
 println("\nDone!")
 `;

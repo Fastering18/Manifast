@@ -62,6 +62,7 @@ void wasm_print_any(::Any* val, int depth = 0) {
 
 void wasm_print(manifast::vm::VM* vm, ::Any* args, int nargs) {
     for (int i = 0; i < nargs; ++i) {
+        if (i > 0) printf("\t");
         wasm_print_any(&args[i]);
     }
     fflush(stdout);

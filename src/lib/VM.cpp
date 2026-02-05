@@ -37,6 +37,7 @@ namespace vm {
 // Native Print
 static void nativePrint(VM* vm, Any* args, int nargs) {
     for (int i = 0; i < nargs; i++) {
+        if (i > 0) printf("\t");
         manifast_print_any(&args[i]);
     }
     fflush(stdout);
@@ -45,6 +46,7 @@ static void nativePrint(VM* vm, Any* args, int nargs) {
 
 static void nativePrintln(VM* vm, Any* args, int nargs) {
     for (int i = 0; i < nargs; i++) {
+        if (i > 0) printf("\t");
         manifast_print_any(&args[i]);
     }
     printf("\n");
@@ -535,8 +537,11 @@ void VM::run(int entryFrameDepth) {
             case OpCode::POW: break;
             case OpCode::NOT: {
                 Any v = LR(GET_B(i));
-                bool val = (v.type == 3 && v.ptr == nullptr) || (v.type == 0 && v.number == 0);
-                LR(GET_A(i)) = {2, (double)val, nullptr};
+                bool isTruthy = true;
+                if (v.type == 3) isTruthy = false; // nil
+                else if (v.type == 2) isTruthy = (v.number != 0); // bool
+                else if (v.type == 0) isTruthy = (v.number != 0); // number
+                LR(GET_A(i)) = {2, isTruthy ? 0.0 : 1.0, nullptr};
                 break;
             }
             case OpCode::LT: {
