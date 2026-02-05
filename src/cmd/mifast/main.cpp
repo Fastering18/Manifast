@@ -259,12 +259,14 @@ int main(int argc, char* argv[]) {
     
     // Simple argument parsing
     bool useVM = false;
+    bool debugDev = false;
     std::string filePath;
     
     // Check for --vm in any position after command
     for(int i = 2; i < argc; i++) {
         std::string arg = argv[i];
         if(arg == "--vm") useVM = true;
+        else if(arg == "--debugdev") debugDev = true;
         else if (filePath.empty()) filePath = arg;
     }
 
@@ -285,14 +287,17 @@ int main(int argc, char* argv[]) {
         manifast::SyntaxConfig config;
         manifast::Lexer lexer(source, config);
         manifast::Parser parser(lexer);
+        parser.debugMode = debugDev;
         try {
             auto statements = parser.parse();
             
             if (useVM) {
                 manifast::vm::Chunk chunk;
                 manifast::vm::Compiler compiler;
+                compiler.debugMode = debugDev;
                 if (compiler.compile(statements, chunk)) {
                     manifast::vm::VM vm;
+                    vm.debugMode = debugDev;
                     vm.interpret(&chunk);
                     chunk.free();
                 } else {

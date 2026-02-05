@@ -39,32 +39,22 @@ void Lexer::skipWhitespace() {
             case '\n':
                 line++;
                 advance();
-                // Reset column tracking if we were doing it granularly
                 break;
             case '-':
                 if (peekNext() == '-') {
-                    advance(); // Consume 1st '-'
-                    advance(); // Consume 2nd '-'
-                    
-                    // Check for multi-line comment --[[
+                    advance(); // 1st -
+                    advance(); // 2nd -
                     if (peek() == '[' && peekNext() == '[') {
-                        advance(); advance(); // consume [[
-                        // Skip until ]]
+                        advance(); advance(); // [[
                         while (!(peek() == ']' && peekNext() == ']') && peek() != '\0') {
                             if (peek() == '\n') line++;
                             advance();
                         }
-                        if (peek() != '\0') { advance(); advance(); } // Consume ]]
+                        if (peek() == ']') { advance(); advance(); }
                     } else {
-                        // Single line comment until newline
                         while (peek() != '\n' && peek() != '\0') advance();
                     }
                 } else {
-                    return; // Standard minus token handling will occur in nextToken() via switch case usage if we returned here? 
-                    // Wait, skipWhitespace is void. 
-                    // Standard Lexer structure: skipWhitespace() is called first. 
-                    // If it encounters '-', it checks if it's start of comment. 
-                    // If NOT comment, it should RETURN so nextToken can process it as Minus.
                     return;
                 }
                 break;
@@ -78,7 +68,7 @@ Token Lexer::makeToken(TokenType type) {
     Token token;
     token.type = type;
     token.lexeme = source.substr(start, current - start);
-    token.location = {line, 0, current - start}; // Simplified column for now
+    token.location = {line, 0, (int)(current - start), (int)start}; // Store absolute start offset
     return token;
 }
 
@@ -86,7 +76,7 @@ Token Lexer::errorToken(const char* message) {
     Token token;
     token.type = TokenType::Error;
     token.lexeme = std::string_view(message); // Ideally point to error string
-    token.location = {line, 0, 0};
+    token.location = {line, 0, 0, (int)current};
     return token;
 }
 
@@ -163,6 +153,10 @@ Token Lexer::identifier() {
     
     std::string_view text = source.substr(start, current - start);
     TokenType type = config.lookupKeyword(text);
+    
+    #ifdef DEBUG_VM
+    // fprintf(stderr, "[LEXER] Lookup: '%s' -> %d\n", std::string(text).c_str(), (int)type);
+    #endif
     
     return makeToken(type);
 }

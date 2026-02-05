@@ -13,56 +13,100 @@
 
 extern "C" {
 
-// Global output buffer for the web
-std::string outputBuffer;
+// Custom Print functions for Web (Stream to stdout)
+void wasm_print(manifast::vm::VM* vm, ::Any* args, int nargs);
 
-// Custom Print functions for Web (Capture to buffer)
+void wasm_print_any(::Any* val, int depth = 0) {
+    if (depth > 32) { printf("..."); return; }
+
+    if (val->type == 0) {
+        printf("%g", val->number);
+    }
+    else if (val->type == 1 && val->ptr) printf("%s", (char*)val->ptr);
+    else if (val->type == 2) printf("%s", val->number ? "benar" : "salah");
+    else if (val->type == 3) printf("nil");
+    else if (val->type == 6 && val->ptr) { // Array
+        ManifastArray* arr = (ManifastArray*)val->ptr;
+        if (arr->size > 10000) { printf("[Large Array]"); return; }
+        printf("[");
+        for (uint32_t i = 0; i < arr->size; i++) {
+            if (i > 0) printf(", ");
+            wasm_print_any(&arr->elements[i], depth + 1);
+        }
+        printf("]");
+    }
+    else if (val->type == 7 && val->ptr) { // Object
+        ManifastObject* obj = (ManifastObject*)val->ptr;
+        if (obj->size > 10000) { printf("{Large Object}"); return; }
+        printf("{");
+        for (uint32_t i = 0; i < obj->size; i++) {
+            if (i > 0) printf(", ");
+            if (obj->entries[i].key) printf("%s", obj->entries[i].key);
+            printf(": ");
+            wasm_print_any(&obj->entries[i].value, depth + 1);
+        }
+        printf("}");
+    }
+    else if (val->type == 8 && val->ptr) { // Class
+        ManifastClass* klass = (ManifastClass*)val->ptr;
+        printf("[Kelas %s]", klass->name ? klass->name : "?");
+    }
+    else if (val->type == 9 && val->ptr) { // Instance
+        ManifastInstance* inst = (ManifastInstance*)val->ptr;
+        printf("[Instance of %s]", inst->klass->name ? inst->klass->name : "?");
+    }
+    else if (val->type == 4) printf("[Native Function]");
+    else if (val->type == 5) printf("[Function]");
+    else printf("{Object}");
+}
+
 void wasm_print(manifast::vm::VM* vm, ::Any* args, int nargs) {
     for (int i = 0; i < nargs; ++i) {
-        if (args[i].type == 0) {
-            char buf[64];
-            sprintf(buf, "%g", args[i].number);
-            outputBuffer += buf;
-        }
-        else if (args[i].type == 1 && args[i].ptr) outputBuffer += (char*)args[i].ptr;
-        else if (args[i].type == 2) outputBuffer += (args[i].number ? "true" : "false");
-        else if (args[i].type == 3) outputBuffer += "nil";
-        else outputBuffer += "[Object/Function]";
+        wasm_print_any(&args[i]);
     }
+    fflush(stdout);
 }
 
 void wasm_println(manifast::vm::VM* vm, ::Any* args, int nargs) {
     wasm_print(vm, args, nargs);
-    outputBuffer += "\n";
+    printf("\n");
+    fflush(stdout);
 }
 
-const char* mf_run_script(const char* source) {
-    outputBuffer.clear();
-    
+const char* mf_run_script_debug(const char* source, bool debugDev) {
     manifast::SyntaxConfig config;
     manifast::Lexer lexer(source, config);
-    manifast::Parser parser(lexer);
+    manifast::Parser parser(lexer, source);
+    parser.debugMode = debugDev;
     
-    // No try-catch as -fno-exceptions is used
     auto statements = parser.parse();
     
     manifast::vm::Chunk chunk;
     manifast::vm::Compiler compiler;
+    compiler.debugMode = debugDev;
     
     if (compiler.compile(statements, chunk)) {
+        if (debugDev) {
+            fprintf(stderr, "Parsed %zu statements. Compiled %zu instructions.\n", statements.size(), chunk.code.size());
+            fflush(stderr);
+        }
         manifast::vm::VM vm;
+        vm.debugMode = debugDev;
         
-        // Override Native Functions for Web Output
         vm.defineNative("print", wasm_print);
         vm.defineNative("println", wasm_println);
         
-        vm.interpret(&chunk);
+        vm.interpret(&chunk, source);
         chunk.free();
     } else {
-            outputBuffer += "Compilation Failed\n";
+        printf("Compilation Failed\n");
     }
     
-    return outputBuffer.c_str(); 
+    return ""; 
+}
+
+const char* mf_run_script(const char* source) {
+    return mf_run_script_debug(source, false);
 }
 
 }

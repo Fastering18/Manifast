@@ -13,6 +13,8 @@ class Stmt;
 // Base class for all AST nodes
 class ASTNode {
 public:
+    int line = 0;
+    int offset = -1;
     virtual ~ASTNode() = default;
 };
 
@@ -35,10 +37,30 @@ public:
     StringExpr(std::string value) : value(std::move(value)) {}
 };
 
+class BoolExpr : public Expr {
+public:
+    bool value;
+    BoolExpr(bool value) : value(value) {}
+};
+
+class NilExpr : public Expr {
+public:
+    NilExpr() {}
+};
+
 class VariableExpr : public Expr {
 public:
     std::string name;
     VariableExpr(std::string name) : name(std::move(name)) {}
+};
+
+class UnaryExpr : public Expr {
+public:
+    TokenType op;
+    std::unique_ptr<Expr> right;
+
+    UnaryExpr(TokenType op, std::unique_ptr<Expr> right)
+        : op(op), right(std::move(right)) {}
 };
 
 class BinaryExpr : public Expr {
@@ -111,6 +133,15 @@ public:
     
     ObjectExpr(std::vector<std::pair<std::string, std::unique_ptr<Expr>>> entries)
         : entries(std::move(entries)) {}
+};
+
+class SliceExpr : public Expr {
+public:
+    std::unique_ptr<Expr> start;
+    std::unique_ptr<Expr> end;
+    
+    SliceExpr(std::unique_ptr<Expr> start, std::unique_ptr<Expr> end)
+        : start(std::move(start)), end(std::move(end)) {}
 };
 
 // --- Statements ---
@@ -187,6 +218,15 @@ public:
 
     FunctionStmt(std::string name, std::vector<std::string> params, std::unique_ptr<Stmt> body)
         : name(std::move(name)), params(std::move(params)), body(std::move(body)) {}
+};
+
+class ClassStmt : public Stmt {
+public:
+    std::string name;
+    std::vector<std::unique_ptr<FunctionStmt>> methods;
+    
+    ClassStmt(std::string name, std::vector<std::unique_ptr<FunctionStmt>> methods)
+        : name(std::move(name)), methods(std::move(methods)) {}
 };
 
 class TryStmt : public Stmt {

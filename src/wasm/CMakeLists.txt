@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 project(manifast_wasm)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Include directories from root
 include_directories(../../include)

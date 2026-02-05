@@ -11,11 +11,14 @@ namespace vm {
 
 // Represents a block of bytecode (function body, script)
 struct Chunk {
+    std::string name;
+    
     // Instructions
     std::vector<Instruction> code;
     
     // Debug info (line number per instruction)
     std::vector<int> lines;
+    std::vector<int> offsets;
     
     // Constants pool
     std::vector<Any> constants;
@@ -23,9 +26,10 @@ struct Chunk {
     // Sub-functions (nested chunks)
     std::vector<std::unique_ptr<Chunk>> functions;
     
-    void write(Instruction instruction, int line) {
+    void write(Instruction instruction, int line, int offset = -1) {
         code.push_back(instruction);
         lines.push_back(line);
+        offsets.push_back(offset);
     }
     
     int addConstant(Any value) {
@@ -37,6 +41,7 @@ struct Chunk {
     void free() {
         code.clear();
         lines.clear();
+        offsets.clear();
         constants.clear();
         functions.clear();
     }

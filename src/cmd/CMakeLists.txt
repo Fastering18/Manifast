@@ -4,4 +4,5 @@ set_target_properties(mifastc PROPERTIES ENABLE_EXPORTS ON)
 
 add_executable(mifast mifast/main.cpp)
 target_link_libraries(mifast PRIVATE manifast_jit fmt::fmt)
+target_compile_definitions(mifast PRIVATE FMT_HEADER_ONLY)
 set_target_properties(mifast PROPERTIES ENABLE_EXPORTS ON)

@@ -2,38 +2,83 @@ const fs = require('fs');
 const path = require('path');
 
 // Load the Emscripten-generated JS
-const manifast = require('../../docs/manifast.js');
+const manifast = require('../../build-wasm/manifast.js');
 
 async function runTest() {
-    // Wait for the Wasm module to be ready
-    await new Promise(resolve => {
-        manifast.onRuntimeInitialized = resolve;
-    });
+  // Wait for the Wasm module to be ready
+  await new Promise(resolve => {
+    manifast.onRuntimeInitialized = resolve;
+  });
 
-    const code = `
+  const code = `
+println("Assertion Testing", println);
+println("Assert passed.");
+
+println("--- Type Testing (angka) ---")
+println("Type of 123: " + tipe(123))
+
+println("\n--- String Concatenation ---")
+println("Halo " + "Dunia")
+println("Umur: " + 25)
+
+println("\n--- Standard Library Testing ---")
+lokal os = impor("os")
+println("Waktu OS: " + os.waktu())
+
+lokal str = impor("string")
+lokal parts = str.split("Manifast,Luar,Biasa", ",")
+
+println("Split result 1: ", parts)
+println("Split result 2: " + parts[2])
+println("Split result 3: " + parts[3])
+
+print("tipe parts ", tipe(parts))
+
+println("\nSubstring 1-8: " + impor("string").substring("Manifast,Luar,Biasa", 1, 8))
+
+println("\n--- OOP Testing ---")
+kelas Orang maka
+    fungsi inisiasi(nama, umur)
+        self.nama = nama
+        self.umur = umur
+    tutup
+
+    fungsi bicara()
+        println("Halo, nama saya " + self.nama)
+    tutup
+tutup
+
+lokal budi = Orang("Budi", 25)
+budi.bicara()
+
+println("Tipe budi: " + tipe(budi))
+
+-- Slicing test
+lokal data = [10, 20, 30, 40, 50]
+lokal sub = data[2:4]
+println("Slice data[2:4]: " + tipe(sub))
+println("sub[1]: " + sub[1])
+println("sub[2]: " + sub[2])
+println("sub[3]: " + sub[3])
+
+println("\n--- Recursion Testing ---")
 fungsi recursive(n)
-  jika n < 2 maka
-    kembali n
-  tutup
+  jika n < 1 maka kembali 0 tutup
   println(n)
   kembali recursive(n-1)
 tutup
+recursive(3)
 
-print("Start...")
-println(recursive(4))
-print("Done!")
+println("\nDone!")
 `;
 
-    console.log("Running Manifast Test...");
-    // Use ccall to call the C function mf_run_script
-    // const char* mf_run_script(const char* source)
-    const result = manifast.ccall('mf_run_script', 'string', ['string'], [code]);
-
-    console.log("--- Output ---");
-    console.log(result);
-    console.log("--------------");
+  console.log("Running Manifast Test...");
+  // Use ccall to call the C function mf_run_script
+  // Output is now streamed via stdout (captured by Emscripten/Node)
+  manifast.ccall('mf_run_script', 'string', ['string'], [code]);
+  console.log("--------------");
 }
 
 runTest().catch(err => {
-    console.error("Test Failed:", err);
+  console.error("Test Failed:", err);
 });

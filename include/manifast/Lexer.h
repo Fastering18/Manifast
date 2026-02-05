@@ -11,6 +11,7 @@ public:
     Lexer(std::string_view source, const SyntaxConfig& config = SyntaxConfig());
 
     Token nextToken();
+    std::string_view getSource() const { return source; }
 
 private:
     char advance();

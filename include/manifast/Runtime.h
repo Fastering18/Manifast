@@ -18,7 +18,7 @@
 extern "C" {
 
 struct Any {
-    int32_t type;    // 0=Number, 1=Array, 2=Object, 3=String, 4=Native, 5=Bytecode
+    int32_t type;    // 0=Number, 1=String, 2=Boolean, 3=Nil, 4=Native, 5=Bytecode, 6=Array, 7=Object, 8=Class, 9=Instance
     double number;
     void* ptr;
 };
@@ -40,13 +40,27 @@ struct ManifastObject {
     ManifastObjectEntry* entries;
 };
 
+struct ManifastClass {
+    char* name;
+    ManifastObject* methods; // Methods are stored in an object-like structure
+};
+
+struct ManifastInstance {
+    ManifastClass* klass;
+    ManifastObject* fields;
+};
+
 // Runtime functions called by LLVM IR
 MF_API Any* manifast_create_number(double val);
 MF_API Any* manifast_create_string(const char* str);
 MF_API Any* manifast_create_array(uint32_t initial_size);
 MF_API Any* manifast_create_object();
+MF_API Any* manifast_create_class(const char* name);
+MF_API Any* manifast_create_instance(Any* class_any);
 MF_API void manifast_object_set(Any* obj_any, const char* key, Any* val_any);
 MF_API Any* manifast_object_get(Any* obj_any, const char* key);
+MF_API void manifast_object_set_raw(ManifastObject* obj, const char* key, Any* val_any);
+MF_API Any* manifast_object_get_raw(ManifastObject* obj, const char* key);
 MF_API void manifast_array_set(Any* arr_any, double index, Any* val_any);
 MF_API Any* manifast_array_get(Any* arr_any, double index);
 MF_API void manifast_print_any(Any* any);

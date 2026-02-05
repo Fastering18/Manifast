@@ -13,11 +13,15 @@ public:
     VM();
     ~VM();
 
-    void interpret(Chunk* chunk);
+    void interpret(Chunk* chunk, std::string_view source = "");
+    void runtimeError(const std::string& message);
     
     // Globals
     using NativeFn = void (*)(VM* vm, Any* args, int nargs);
     void defineNative(const std::string& name, NativeFn fn);
+    Any getLastResult() const { return lastResult; }
+    std::vector<Chunk*> managedChunks; // Chunks owned by the VM (e.g. from impor)
+    bool debugMode = false;
 
 private:
     // Registers (Stack)
@@ -34,11 +38,14 @@ private:
     
     std::vector<CallFrame> frames;
     
-    void run();
+    void run(int entryFrameDepth);
     
     // Helpers
     void resetStack();
     
+private:
+    Any lastResult;
+    std::string source;
     std::unordered_map<std::string, Any> globals;
 };
 

@@ -30,6 +30,8 @@ enum class TokenType {
     K_True,         // benar
     K_False,        // salah
     K_Null,         // nihil
+    K_Class,        // kelas
+    K_Self,         // self
     
     // New Keywords (Loop/Try)
     K_To,           // ke
@@ -75,6 +77,7 @@ struct SourceLocation {
     int line;
     int column;
     int length;
+    int offset; // Byte offset from start of source
 };
 
 struct Token {

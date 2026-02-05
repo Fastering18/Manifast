@@ -53,9 +53,10 @@ Manifast features a **Tier-0 Bytecode VM** designed for ultra-low latency embedd
 - [x] **Bytecode VM (Tier 0)** - Ultra-fast startup
 - [x] Emscripten/WebAssembly Support
 - [x] Embedding Language Support ([Live Playground](https://fastering18.github.io/Manifast/))
+- [ ] System Embedding Language
+- [ ] Built-in modules
 - [ ] IDE Support (LSP)
 - [ ] Self compilation
-- [x] System Embedding Language (Game engine ready)
 
 ## How to compile & run?
 ### Requirements

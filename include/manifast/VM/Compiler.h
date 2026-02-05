@@ -12,10 +12,10 @@ namespace vm {
 class Compiler {
 public:
     Compiler();
+    bool debugMode = false;
     
-    // Compile AST into a Chunk
-    // Returns true on success
-    bool compile(const std::vector<std::unique_ptr<Stmt>>& statements, Chunk& chunk);
+    // Entry point: compile AST into a chunk
+    bool compile(const std::vector<std::unique_ptr<Stmt>>& statements, Chunk& chunk, const std::string& name = "<script>");
 
 private:
     Chunk* currentChunk;
@@ -36,13 +36,14 @@ private:
     int compile(Expr* expr); // Returns register index containing result
     
     // Helpers
-    int emit(Instruction i, int line = 0);
+    int emit(Instruction i, int line = 0, int offset = -1);
     int makeConstant(Any value);
     int resolveLocal(const std::string& name);
     int allocReg();
     void freeReg(); // Pop last reg
     
-    Chunk* compileFunctionBody(const std::vector<std::string>& params, Stmt* body);
+    Chunk* compileFunctionBody(const std::vector<std::string>& params, Stmt* body, const std::string& name = "<lambda>");
+    int compileClass(ClassStmt* stmt);
     
     void beginScope();
     void endScope();

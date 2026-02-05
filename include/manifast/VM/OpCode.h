@@ -37,6 +37,15 @@ enum class OpCode : uint8_t {
     GETGLOBAL,  // R(A) := Gbl[K(Bx)]
     SETGLOBAL,  // Gbl[K(Bx)] := R(A)
 
+    // Arrays & Tables
+    NEWARRAY,   // R(A) := {} with size B
+    NEWTABLE,   // R(A) := {}
+    NEWCLASS,   // R(A) := class(name=K(B))
+    SETLIST,    // R(A)[(C-1)*FPF + i] := R(A+i), 1 <= i <= B
+    SETTABLE,   // R(A)[RK(B)] := RK(C)
+    GETTABLE,   // R(A) := R(B)[RK(C)]
+    GETSLICE,   // R(A) := R(B)[RK(C):RK(D)]
+    
     COUNT
 };
 

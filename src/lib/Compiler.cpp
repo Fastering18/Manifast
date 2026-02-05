@@ -1,12 +1,16 @@
 #include "manifast/VM/Compiler.h"
 #include <iostream>
+#include <cstring>
 
 namespace manifast {
 namespace vm {
 
+#define GET_OP(i) ((OpCode)((i) & 0x3F))
+
 Compiler::Compiler() : nextReg(0), scopeDepth(0), currentChunk(nullptr) {}
 
-bool Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& statements, Chunk& chunk) {
+bool Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& statements, Chunk& chunk, const std::string& name) {
+    chunk.name = name;
     currentChunk = &chunk;
     nextReg = 0;
     locals.clear();
@@ -22,8 +26,8 @@ bool Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& statements, Chu
 }
 
 // Helpers
-int Compiler::emit(Instruction i, int line) {
-    currentChunk->write(i, line);
+int Compiler::emit(Instruction i, int line, int offset) {
+    currentChunk->write(i, line, offset);
     return (int)currentChunk->code.size() - 1;
 }
 
@@ -77,10 +81,10 @@ void Compiler::compile(Stmt* stmt) {
         if (s->initializer) {
             int initReg = compile(s->initializer.get());
             // Move initReg to reg
-            emit(createABC(OpCode::MOVE, reg, initReg, 0));
+            emit(createABC(OpCode::MOVE, reg, initReg, 0), s->line, s->offset);
             freeReg(); // Free temp reg
         } else {
-             emit(createABC(OpCode::LOADNIL, reg, 1, 0));
+             emit(createABC(OpCode::LOADNIL, reg, 1, 0), s->line, s->offset);
         }
         
         locals.push_back({s->name, scopeDepth, reg});
@@ -97,9 +101,9 @@ void Compiler::compile(Stmt* stmt) {
         int condReg = compile(s->condition.get());
         
         // We want to skip JMP if condReg is true (C=0)
-        emit(createABC(OpCode::TEST, condReg, 0, 0));
+        emit(createABC(OpCode::TEST, condReg, 0, 0), s->line, s->offset);
         
-        int jmpIdx = emit(createAsBx(OpCode::JMP, 0, 0)); // Placeholder
+        int jmpIdx = emit(createAsBx(OpCode::JMP, 0, 0), s->line, s->offset); // Placeholder
         int startPos = (int)currentChunk->code.size();
         
         compile(s->thenBranch.get());
@@ -130,15 +134,15 @@ void Compiler::compile(Stmt* stmt) {
         int condReg = compile(s->condition.get());
         
         // if not condReg skip body
-        emit(createABC(OpCode::TEST, condReg, 0, 0));
-        int jmpEndIdx = emit(createAsBx(OpCode::JMP, 0, 0));
+        emit(createABC(OpCode::TEST, condReg, 0, 0), s->line, s->offset);
+        int jmpEndIdx = emit(createAsBx(OpCode::JMP, 0, 0), s->line, s->offset);
         int bodyStart = (int)currentChunk->code.size();
         
         compile(s->body.get());
         
         // Jump back to start
         int backPos = (int)currentChunk->code.size();
-        emit(createAsBx(OpCode::JMP, 0, startPos - backPos - 1));
+        emit(createAsBx(OpCode::JMP, 0, startPos - backPos - 1), s->line, s->offset);
         
         // Patch exit jump
         int endPos = (int)currentChunk->code.size();
@@ -186,7 +190,7 @@ void Compiler::compile(Stmt* stmt) {
         endScope();
     }
     else if (auto* s = dynamic_cast<FunctionStmt*>(stmt)) {
-        Chunk* funcChunk = compileFunctionBody(s->params, s->body.get());
+        Chunk* funcChunk = compileFunctionBody(s->params, s->body.get(), s->name);
         
         // Define as global
         int kName = makeConstant({1, 0.0, mf_strdup(s->name.c_str())}); // Type 1: String
@@ -203,66 +207,130 @@ void Compiler::compile(Stmt* stmt) {
         emit(createABx(OpCode::SETGLOBAL, r, kName));
         freeReg();
     }
+    else if (auto* s = dynamic_cast<ClassStmt*>(stmt)) {
+        int r = compileClass(s);
+        freeReg(); // free the class object if it's just a statement?
+        // Actually, classes are usually stored in a variable by the identifier name.
+    }
     else if (auto* s = dynamic_cast<ReturnStmt*>(stmt)) {
         if (s->value) {
             int r = compile(s->value.get());
-            emit(createABC(OpCode::RETURN, r, 2, 0)); // Return 1 result
+            emit(createABC(OpCode::RETURN, r, 2, 0), s->line, s->offset); // Return 1 result
             freeReg();
         } else {
-            emit(createABC(OpCode::RETURN, 0, 1, 0)); // Return 0 results (nil)
+            emit(createABC(OpCode::RETURN, 0, 1, 0), s->line, s->offset); // Return 0 results (nil)
         }
     }
 }
 
-Chunk* Compiler::compileFunctionBody(const std::vector<std::string>& params, Stmt* body) {
-    auto subChunk = std::make_unique<Chunk>();
+Chunk* Compiler::compileFunctionBody(const std::vector<std::string>& params, Stmt* body, const std::string& name) {
+    Chunk* chunk = new Chunk();
+    chunk->name = name; 
     
-    int oldReg = nextReg;
-    auto oldLocals = locals;
-    int oldScope = scopeDepth;
-    Chunk* oldChunk = currentChunk;
+    Compiler sub;
+    sub.currentChunk = chunk;
+    sub.beginScope(); // Parameters at depth 1
     
-    currentChunk = subChunk.get();
-    nextReg = 0;
-    locals.clear();
-    scopeDepth = 0;
-    
-    // Setup parameters as locals
-    for (int i = 0; i < (int)params.size(); i++) {
-        locals.push_back({params[i], 0, i});
-        nextReg++;
+    for (const auto& p : params) {
+        int r = sub.allocReg();
+        sub.locals.push_back({p, sub.scopeDepth, r});
     }
     
-    compile(body);
+    if (auto* b = dynamic_cast<BlockStmt*>(body)) {
+        for (const auto& s : b->statements) {
+            sub.compile(s.get());
+        }
+    } else {
+        sub.compile(body);
+    }
+    sub.endScope();
     
-    // Emit implicit return if needed
-    emit(createABC(OpCode::RETURN, 0, 1, 0));
+    // Ensure return if not present
+    if (chunk->code.empty() || GET_OP(chunk->code.back()) != OpCode::RETURN) {
+        chunk->write(createABC(OpCode::RETURN, 0, 1, 0), 0, -1);
+    }
     
-    // Store sub-chunk in parent chunk
-    oldChunk->functions.push_back(std::move(subChunk));
-    int funcIdx = (int)oldChunk->functions.size() - 1;
+    return chunk;
+}
+
+int Compiler::compileClass(ClassStmt* stmt) {
+    int r = allocReg();
+    int kName = makeConstant({1, 0.0, mf_strdup(stmt->name.c_str())});
+    emit(createABx(OpCode::NEWCLASS, r, kName));
     
-    // Restore state
-    currentChunk = oldChunk;
-    nextReg = oldReg;
-    locals = oldLocals;
-    scopeDepth = oldScope;
+    for (auto& method : stmt->methods) {
+        Chunk* mChunk = compileFunctionBody(method->params, method->body.get(), method->name); // Pass method name
+        int kMethod = makeConstant({5, 0.0, mChunk}); // 5=Bytecode/Function
+        int kMethodName = makeConstant({1, 0.0, mf_strdup(method->name.c_str())});
+        
+        // Use SETTABLE R(A)[K(B)] = RK(C)
+        emit(createABC(OpCode::SETTABLE, r, kMethodName + 256, kMethod + 256));
+    }
     
-    return oldChunk->functions.back().get();
+    // Store class in global variable
+    int kClassName = makeConstant({1, 0.0, mf_strdup(stmt->name.c_str())});
+    emit(createABx(OpCode::SETGLOBAL, r, kClassName));
+    
+    return r;
 }
 
 int Compiler::compile(Expr* expr) {
     if (auto* e = dynamic_cast<NumberExpr*>(expr)) {
         int r = allocReg();
         int k = makeConstant({0, e->value, nullptr});
-        emit(createABx(OpCode::LOADK, r, k));
+        emit(createABx(OpCode::LOADK, r, k), e->line, e->offset);
         return r;
     }
     else if (auto* e = dynamic_cast<StringExpr*>(expr)) {
         int r = allocReg();
-        int k = makeConstant({1, 0.0, mf_strdup(e->value.c_str())}); 
-        emit(createABx(OpCode::LOADK, r, k));
+        std::string val = e->value;
+        std::string processed;
+        for (size_t i = 0; i < val.length(); i++) {
+            if (val[i] == '\\' && i + 1 < val.length()) {
+                i++;
+                switch (val[i]) {
+                    case 'n': processed += '\n'; break;
+                    case 't': processed += '\t'; break;
+                    case 'r': processed += '\r'; break;
+                    case '\\': processed += '\\'; break;
+                    case '"': processed += '\"'; break;
+                    default: processed += '\\'; processed += val[i]; break;
+                }
+            } else {
+                processed += val[i];
+            }
+        }
+        int k = makeConstant({1, 0.0, mf_strdup(processed.c_str())}); 
+        emit(createABx(OpCode::LOADK, r, k), e->line, e->offset);
         return r;
+    }
+    else if (auto* e = dynamic_cast<BoolExpr*>(expr)) {
+        int r = allocReg();
+        emit(createABC(OpCode::LOADBOOL, r, e->value ? 1 : 0, 0), e->line, e->offset);
+        return r;
+    }
+    else if (dynamic_cast<NilExpr*>(expr)) {
+        int r = allocReg();
+        emit(createABC(OpCode::LOADNIL, r, 0, 0), expr->line, expr->offset);
+        return r;
+    }
+    else if (auto* e = dynamic_cast<UnaryExpr*>(expr)) {
+        int right = compile(e->right.get());
+        OpCode op = OpCode::NOT;
+        if (e->op == TokenType::Minus) {
+             // We don't have UNM opcode yet, let's use 0 - x or add UNM
+             // For now LOADK 0 then SUB
+             int rZero = allocReg();
+             int kZero = makeConstant({0, 0.0, nullptr});
+             emit(createABx(OpCode::LOADK, rZero, kZero));
+             emit(createABC(OpCode::SUB, rZero, rZero, right));
+             freeReg(); // free right
+             return rZero;
+        } else if (e->op == TokenType::Tilde) {
+             // Bitwise NOT, assume we have it or use XOR with -1
+        }
+        emit(createABC(op, right, right, 0));
+        return right;
     }
     else if (auto* e = dynamic_cast<BinaryExpr*>(expr)) {
         int left = compile(e->left.get());
@@ -291,48 +359,158 @@ int Compiler::compile(Expr* expr) {
             int aVal = (e->op == TokenType::BangEqual) ? 0 : 1;
             int rL = flip ? right : left;
             int rR = flip ? left : right;
-            emit(createABC(op, aVal, rL, rR));
-            emit(createAsBx(OpCode::JMP, 0, 1));
-            emit(createABC(OpCode::LOADBOOL, left, 0, 1));
-            emit(createABC(OpCode::LOADBOOL, left, 1, 0));
+            emit(createABC(op, aVal, rL, rR), e->line, e->offset);
+            emit(createAsBx(OpCode::JMP, 0, 1), e->line, e->offset);
+            emit(createABC(OpCode::LOADBOOL, left, 0, 1), e->line, e->offset);
+            emit(createABC(OpCode::LOADBOOL, left, 1, 0), e->line, e->offset);
         } else {
-            emit(createABC(op, left, left, right));
+            emit(createABC(op, left, left, right), e->line, e->offset);
         }
         freeReg(); // Free right
         return left;
+    }
+    else if (auto* e = dynamic_cast<AssignExpr*>(expr)) {
+        if (auto* v = dynamic_cast<VariableExpr*>(e->target.get())) {
+            int valReg = compile(e->value.get());
+            int local = resolveLocal(v->name);
+            if (local != -1) {
+                emit(createABC(OpCode::MOVE, local, valReg, 0));
+                freeReg();
+                return local;
+            } else {
+                int k = makeConstant({1, 0.0, mf_strdup(v->name.c_str())});
+                emit(createABx(OpCode::SETGLOBAL, valReg, k));
+                return valReg;
+            }
+        } else if (auto* idx = dynamic_cast<IndexExpr*>(e->target.get())) {
+            int objReg = compile(idx->object.get());
+            int keyReg = compile(idx->index.get());
+            int valReg = compile(e->value.get());
+            emit(createABC(OpCode::SETTABLE, objReg, keyReg, valReg));
+            nextReg -= 2; // free key and value (keep obj as result?)
+            return valReg; // Return the assigned value
+        } else if (auto* get = dynamic_cast<GetExpr*>(e->target.get())) {
+            int objReg = compile(get->object.get());
+            int kKey = makeConstant({1, 0.0, mf_strdup(get->name.c_str())});
+            int valReg = compile(e->value.get());
+            emit(createABC(OpCode::SETTABLE, objReg, kKey + 256, valReg));
+            freeReg(); // free value
+            return valReg;
+        }
+        return allocReg();
+    }
+    else if (auto* e = dynamic_cast<GetExpr*>(expr)) {
+        int objReg = compile(e->object.get());
+        int kKey = makeConstant({1, 0.0, mf_strdup(e->name.c_str())});
+        // Result goes into objReg (reuse it)
+        emit(createABC(OpCode::GETTABLE, objReg, objReg, kKey + 256));
+        return objReg;
+    }
+    else if (auto* e = dynamic_cast<IndexExpr*>(expr)) {
+        int objReg = compile(e->object.get());
+        if (auto* slice = dynamic_cast<SliceExpr*>(e->index.get())) {
+            int startReg = slice->start ? compile(slice->start.get()) : -1;
+            int endReg = slice->end ? compile(slice->end.get()) : -1;
+            
+            // We use specialized GETSLICE R(A), R(B), RK(C), RK(D)
+            // But my GETSLICE only has A, B, C, D? 
+            // My OpCode.h says: GETSLICE,   // R(A) := R(B)[RK(C):RK(D)]
+            // If start/end is null, we can use a special constant (nil or -1).
+            
+            int sVal = (startReg == -1) ? makeConstant({3, 0.0, nullptr}) + 256 : startReg;
+            int eVal = (endReg == -1) ? makeConstant({3, 0.0, nullptr}) + 256 : endReg;
+            
+            emit(createABC(OpCode::GETSLICE, objReg, objReg, sVal));
+            // Wait, GETSLICE needs 4 operands? A, B, C, D.
+            // OpCode definition only has ABC. I should probably change GETSLICE format or use another.
+            // Let's use 2 instructions or change the opcode.
+            // For now, let's use a 4th operand in D if I have space? No, Instruction is 32bit.
+            // ABC: Op=8, A=8, B=9, C=9.
+            // I'll emitEnd(eVal) as the next instruction?
+            emit(eVal); 
+            
+            if (endReg != -1) freeReg();
+            if (startReg != -1) freeReg();
+            return objReg;
+        } else {
+            int keyReg = compile(e->index.get());
+            // Result goes into objReg (reuse it)
+            emit(createABC(OpCode::GETTABLE, objReg, objReg, keyReg));
+            freeReg(); // free keyReg
+            return objReg;
+        }
+    }
+    else if (auto* e = dynamic_cast<ArrayExpr*>(expr)) {
+        int r = allocReg();
+        emit(createABC(OpCode::NEWARRAY, r, (int)e->elements.size(), 0));
+        for (int i = 0; i < (int)e->elements.size(); i++) {
+            compile(e->elements[i].get()); // evaluates into nextReg
+        }
+        if (!e->elements.empty()) {
+            emit(createABC(OpCode::SETLIST, r, (int)e->elements.size(), 1));
+            nextReg -= (int)e->elements.size();
+        }
+        return r;
+    }
+    else if (auto* e = dynamic_cast<ObjectExpr*>(expr)) {
+        int r = allocReg();
+        emit(createABC(OpCode::NEWTABLE, r, 0, 0));
+        for (auto& entry : e->entries) {
+            int kKey = makeConstant({1, 0.0, mf_strdup(entry.first.c_str())});
+            int valReg = compile(entry.second.get());
+            emit(createABC(OpCode::SETTABLE, r, kKey + 256, valReg));
+            freeReg();
+        }
+        return r;
     }
     else if (auto* e = dynamic_cast<VariableExpr*>(expr)) {
         int local = resolveLocal(e->name);
         int r = allocReg();
         if (local != -1) {
-            emit(createABC(OpCode::MOVE, r, local, 0));
+            emit(createABC(OpCode::MOVE, r, local, 0), e->line, e->offset);
         } else {
             // Global lookup
             int k = makeConstant({1, 0.0, mf_strdup(e->name.c_str())}); 
-            emit(createABx(OpCode::GETGLOBAL, r, k));
+            emit(createABx(OpCode::GETGLOBAL, r, k), e->line, e->offset);
         }
         return r;
     }
     else if (auto* e = dynamic_cast<CallExpr*>(expr)) {
-        // Evaluate callee
-        int funcReg = compile(e->callee.get());
-        // Evaluate args 
-        
-        for (auto& arg : e->args) {
-            compile(arg.get()); 
-            // Result is in newly alloc'd reg
+        if (auto* get = dynamic_cast<GetExpr*>(e->callee.get())) {
+            // Method call budi.bicara()
+            int objReg = compile(get->object.get());
+            int kProp = makeConstant({1, 0.0, mf_strdup(get->name.c_str())});
+            int funcReg = allocReg();
+            emit(createABC(OpCode::GETTABLE, funcReg, objReg, kProp + 256));
+            
+            // Pass obj as first argument (self)
+            int selfReg = allocReg();
+            emit(createABC(OpCode::MOVE, selfReg, objReg, 0));
+            
+            for (auto& arg : e->args) {
+                compile(arg.get()); 
+            }
+            
+            emit(createABC(OpCode::CALL, funcReg, (int)e->args.size() + 2, 1), e->line, e->offset);
+            
+            // Result replaces budi, cleanup stack
+            nextReg -= (int)e->args.size() + 1; // free args and self
+            emit(createABC(OpCode::MOVE, objReg, funcReg, 0));
+            freeReg(); // free funcReg
+            return objReg;
+        } else {
+            // Normal Call
+            int funcReg = compile(e->callee.get());
+            for (auto& arg : e->args) {
+                compile(arg.get()); 
+            }
+            emit(createABC(OpCode::CALL, funcReg, (int)e->args.size() + 1, 1), e->line, e->offset);
+            nextReg -= (int)e->args.size();
+            return funcReg;
         }
-        
-        // Emit CALL funcReg, numArgs+1, 1 (0 results? or 1?)
-        emit(createABC(OpCode::CALL, funcReg, (int)e->args.size() + 1, 1));
-        
-        // Reset stack top to funcReg (function result replaces function)
-        // Free args registers
-        nextReg -= (int)e->args.size();
-        return funcReg;
     }
     else if (auto* e = dynamic_cast<FunctionExpr*>(expr)) {
-        Chunk* funcChunk = compileFunctionBody(e->params, e->body.get());
+        Chunk* funcChunk = compileFunctionBody(e->params, e->body.get(), "<lambda>");
         
         // Create function object result
         Any funcVal;

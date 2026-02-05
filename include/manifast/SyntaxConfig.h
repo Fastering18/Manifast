@@ -23,6 +23,7 @@ public:
         keywords["fungsi"] = TokenType::K_Function;
         keywords["kembali"] = TokenType::K_Return;
         keywords["lokal"] = TokenType::K_Var;
+        keywords["local"] = TokenType::K_Var; // Alias for English users
         keywords["tetap"] = TokenType::K_Const;
         keywords["selama"] = TokenType::K_While; // changed from selagi
         keywords["untuk"] = TokenType::K_For;
@@ -38,11 +39,15 @@ public:
         keywords["lakukan"] = TokenType::K_Do;
         keywords["coba"] = TokenType::K_Try;
         keywords["tangkap"] = TokenType::K_Catch;
+        keywords["kelas"] = TokenType::K_Class;
+        keywords["self"] = TokenType::K_Self;
         
         // Types
         keywords["string"] = TokenType::K_String;
         keywords["boolean"] = TokenType::K_Boolean;
         keywords["int32"] = TokenType::K_Int32;
+        
+        keywords["bukan"] = TokenType::Bang; // Logic NOT
     }
 
     TokenType lookupKeyword(std::string_view text) const {
