@@ -346,6 +346,7 @@ int Compiler::compile(Expr* expr) {
             case TokenType::Minus: op = OpCode::SUB; break;
             case TokenType::Star: op = OpCode::MUL; break;
             case TokenType::Slash: op = OpCode::DIV; break;
+            case TokenType::Percent: op = OpCode::MOD; break;
             case TokenType::Less: op = OpCode::LT; isCompare = true; break;
             case TokenType::Greater: op = OpCode::LT; isCompare = true; flip = true; break;
             case TokenType::LessEqual: op = OpCode::LE; isCompare = true; break;

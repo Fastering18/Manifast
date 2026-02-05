@@ -23,7 +23,7 @@ println("Umur: " + 25)
 
 println("\n--- Standard Library Testing ---")
 lokal os = impor("os")
-println("Waktu OS: " + os.waktu())
+println("Waktu OS: " + os.waktuNano())
 
 lokal str = impor("string")
 lokal parts = str.split("Manifast,Luar,Biasa", ",")
@@ -70,7 +70,7 @@ fungsi fib(n)
 tutup
 print("fib(10) =", fib(21))
 print(os.clearOutput())
-println("\nDone!")
+println("\nDone!", 5%2)
 `;
 
   console.log("Running Manifast Test...");

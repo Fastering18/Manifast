@@ -154,10 +154,10 @@ static void nativeImpor(VM* vm, Any* args, int nargs) {
     // Internal Modules
     if (path == "os") {
         Any* obj = manifast_create_object();
-        auto waktu = [](VM* vm, Any* args, int nargs) {
-            auto now = std::chrono::system_clock::now();
-            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-            args[-1] = {0, (double)seconds, nullptr};
+        auto waktuNano = [](VM* vm, Any* args, int nargs) {
+            auto now = std::chrono::steady_clock::now();
+            auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+            args[-1] = {0, (double)ns, nullptr};
         };
         auto exitFn = [](VM* vm, Any* args, int nargs) {
              int code = (nargs >= 1 && args[0].type == 0) ? (int)args[0].number : 0;
@@ -168,10 +168,10 @@ static void nativeImpor(VM* vm, Any* args, int nargs) {
             fflush(stdout);
             args[-1] = {3, 0.0, nullptr};
         };
-        Any fn1 = {4, 0.0, (void*)+waktu};
+        Any fn1 = {4, 0.0, (void*)+waktuNano};
         Any fn2 = {4, 0.0, (void*)+exitFn};
         Any fn3 = {4, 0.0, (void*)+clearOutput};
-        manifast_object_set(obj, "waktu", &fn1);
+        manifast_object_set(obj, "waktuNano", &fn1);
         manifast_object_set(obj, "keluar", &fn2);
         manifast_object_set(obj, "clearOutput", &fn3);
         args[-1] = *obj;
@@ -470,7 +470,8 @@ void VM::run(int entryFrameDepth) {
             case OpCode::ADD: 
             case OpCode::SUB: 
             case OpCode::MUL: 
-            case OpCode::DIV: {
+            case OpCode::DIV:
+            case OpCode::MOD: {
                 Any vb = LRK(GET_B(i));
                 Any vc = LRK(GET_C(i));
                 OpCode op = GET_OP(i);
@@ -480,6 +481,7 @@ void VM::run(int entryFrameDepth) {
                     else if (op == OpCode::SUB) res = vb.number - vc.number;
                     else if (op == OpCode::MUL) res = vb.number * vc.number;
                     else if (op == OpCode::DIV) res = vb.number / vc.number;
+                    else if (op == OpCode::MOD) res = fmod(vb.number, vc.number);
                     LR(GET_A(i)) = {0, res, nullptr};
                 } else if (op == OpCode::ADD && (vb.type == 1 || vc.type == 1)) {
                     // String concatenation
@@ -531,14 +533,6 @@ void VM::run(int entryFrameDepth) {
                         frames.push_back(frame);
                         sync();
                     }
-                }
-                break;
-            }
-            case OpCode::MOD: {
-                Any vb = LRK(GET_B(i));
-                Any vc = LRK(GET_C(i));
-                if (vb.type == 0 && vc.type == 0) {
-                    LR(GET_A(i)) = {0, (double)((long long)vb.number % (long long)vc.number), nullptr};
                 }
                 break;
             }
