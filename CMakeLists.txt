@@ -24,23 +24,32 @@ find_package(LLVM REQUIRED CONFIG COMPONENTS
 message(STATUS "Found LLVM ${LLVM_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-# System libs needed for static LLVM/LLD linking
-set(LLVM_SYSTEM_LIBS psapi shell32 ole32 uuid advapi32 ws2_32 ntdll z zstd)
-
 # Map LLVM includes and libs
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
-# Workaround for faulty libxml2 path in some MSYS2 LLVM packages
-# Force set correct absolute paths to avoid "non-existent path" errors
-if(TARGET LLVMWindowsManifest)
-  set_target_properties(LLVMWindowsManifest PROPERTIES INTERFACE_INCLUDE_DIRECTORIES 
-    "D:/Program/msys64/ucrt64/include/libxml2;D:/Program/msys64/ucrt64/include")
-endif()
+if(WIN32)
+  # System libs needed for static LLVM/LLD linking on Windows
+  set(LLVM_SYSTEM_LIBS psapi shell32 ole32 uuid advapi32 ws2_32 ntdll z zstd)
 
-if(TARGET LibXml2::LibXml2)
-  set_target_properties(LibXml2::LibXml2 PROPERTIES INTERFACE_INCLUDE_DIRECTORIES 
-    "D:/Program/msys64/ucrt64/include/libxml2;D:/Program/msys64/ucrt64/include")
+  # Workaround for faulty libxml2 path in some MSYS2 LLVM packages
+  if(TARGET LLVMWindowsManifest)
+    set_target_properties(LLVMWindowsManifest PROPERTIES INTERFACE_INCLUDE_DIRECTORIES 
+      "D:/Program/msys64/ucrt64/include/libxml2;D:/Program/msys64/ucrt64/include")
+  endif()
+
+  if(TARGET LibXml2::LibXml2)
+    set_target_properties(LibXml2::LibXml2 PROPERTIES INTERFACE_INCLUDE_DIRECTORIES 
+      "D:/Program/msys64/ucrt64/include/libxml2;D:/Program/msys64/ucrt64/include")
+  endif()
+else()
+  # On Linux CI, LLVM may reference optional targets that aren't installed
+  if(NOT TARGET CURL::libcurl)
+    add_library(CURL::libcurl INTERFACE IMPORTED)
+  endif()
+  if(NOT TARGET LibEdit::LibEdit)
+    add_library(LibEdit::LibEdit INTERFACE IMPORTED)
+  endif()
 endif()
 
 
