@@ -20,7 +20,7 @@ jobs:
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
         sudo ./llvm.sh 18
-        sudo apt-get install -y ninja-build cmake g++-12 llvm-18-dev libfmt-dev libgtest-dev
+        sudo apt-get install -y ninja-build cmake g++-12 llvm-18-dev libfmt-dev libgtest-dev libcurl4-openssl-dev libedit-dev
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
         
         # Install argparse manually (header-only)

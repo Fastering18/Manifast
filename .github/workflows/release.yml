@@ -18,7 +18,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y llvm-18-dev libfmt-dev libgtest-dev ninja-build
+          sudo apt-get install -y llvm-18-dev libfmt-dev libgtest-dev ninja-build libcurl4-openssl-dev libedit-dev
 
       - name: Configure & Build
         run: |

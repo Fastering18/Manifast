@@ -1,8 +1,15 @@
 add_executable(mifastc mifastc/main.cpp)
 
+llvm_map_components_to_libnames(mifastc_llvm_libs
+    core orcjit support target executionengine analysis native
+    passes mc object option ipo instrumentation
+    bitreader bitwriter
+    x86codegen x86asmparser x86desc x86info
+)
+
 target_link_libraries(mifastc PRIVATE 
     manifast_jit 
-    ${LLVM_AVAILABLE_LIBS}
+    ${mifastc_llvm_libs}
     ${LLVM_SYSTEM_LIBS}
 )
 
