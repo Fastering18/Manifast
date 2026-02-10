@@ -77,18 +77,33 @@ void Compiler::compile(Stmt* stmt) {
         freeReg(); // Statement expression result discarded
     }
     else if (auto* s = dynamic_cast<VarDeclStmt*>(stmt)) {
-        int reg = allocReg(); // Allocate register for this variable
-        if (s->initializer) {
-            int initReg = compile(s->initializer.get());
-            // Move initReg to reg
-            emit(createABC(OpCode::MOVE, reg, initReg, 0), s->line, s->offset);
-            freeReg(); // Free temp reg
+        // Top-level variables in main script (where name is empty) should be globals 
+        // if they are at scope 0, so functions can see them.
+        // This matches JIT behavior.
+        if (scopeDepth == 0) {
+            int valReg = allocReg();
+            if (s->initializer) {
+                int initReg = compile(s->initializer.get());
+                emit(createABC(OpCode::MOVE, valReg, initReg, 0));
+                freeReg();
+            } else {
+                emit(createABC(OpCode::LOADNIL, valReg, 0, 0));
+            }
+
+            int kName = makeConstant({1, 0.0, mf_strdup(s->name.c_str())});
+            emit(createABx(OpCode::SETGLOBAL, valReg, kName));
+            freeReg();
         } else {
-             emit(createABC(OpCode::LOADNIL, reg, 1, 0), s->line, s->offset);
+            int reg = allocReg(); 
+            if (s->initializer) {
+                int initReg = compile(s->initializer.get());
+                emit(createABC(OpCode::MOVE, reg, initReg, 0), s->line, s->offset);
+                freeReg();
+            } else {
+                 emit(createABC(OpCode::LOADNIL, reg, 1, 0), s->line, s->offset);
+            }
+            locals.push_back({s->name, scopeDepth, reg});
         }
-        
-        locals.push_back({s->name, scopeDepth, reg});
-        // Do NOT freeReg(), keeping it for the variable
     }
     else if (auto* s = dynamic_cast<BlockStmt*>(stmt)) {
         beginScope();
@@ -333,10 +348,29 @@ int Compiler::compile(Expr* expr) {
         return right;
     }
     else if (auto* e = dynamic_cast<BinaryExpr*>(expr)) {
+        if (e->op == TokenType::K_And || e->op == TokenType::K_Or) {
+            int left = compile(e->left.get());
+            
+            // Short-circuit: 
+            // AND: if not (left) then jump to end
+            // OR:  if (left) then jump to end
+            bool isAnd = (e->op == TokenType::K_And);
+            emit(createABC(OpCode::TEST, left, 0, isAnd ? 0 : 1), e->line, e->offset);
+            int jmpIdx = emit(createAsBx(OpCode::JMP, 0, 0), e->line, e->offset);
+            
+            int bodyStart = (int)currentChunk->code.size();
+            int right = compile(e->right.get());
+            emit(createABC(OpCode::MOVE, left, right, 0), e->line, e->offset);
+            freeReg(); // right
+            
+            int endPos = (int)currentChunk->code.size();
+            currentChunk->code[jmpIdx] = createAsBx(OpCode::JMP, 0, endPos - bodyStart);
+            
+            return left;
+        }
+
         int left = compile(e->left.get());
         int right = compile(e->right.get());
-        // Result reuses left register? Or new one?
-        // Simple: reuse left, free right.
         
         OpCode op = OpCode::ADD;
         bool isCompare = false;
@@ -352,7 +386,7 @@ int Compiler::compile(Expr* expr) {
             case TokenType::LessEqual: op = OpCode::LE; isCompare = true; break;
             case TokenType::GreaterEqual: op = OpCode::LE; isCompare = true; flip = true; break;
             case TokenType::EqualEqual: op = OpCode::EQ; isCompare = true; break;
-            case TokenType::BangEqual: op = OpCode::EQ; isCompare = true; break; // Handled by TEST inversion logic
+            case TokenType::BangEqual: op = OpCode::EQ; isCompare = true; break; 
             default: break;
         }
         

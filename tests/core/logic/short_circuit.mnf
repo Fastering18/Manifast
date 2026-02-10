@@ -1,0 +1,18 @@
+-- Test Short-Circuiting
+lokal count = 0
+fungsi increment()
+    count = count + 1
+    kembali 1
+tutup
+
+-- OR: skip right if left is true
+lokal a = 1 atau increment()
+assert(count == 0, "OR short-circuit gagal")
+
+-- AND: skip right if left is false
+lokal b = 0 dan increment()
+assert(count == 0, "AND short-circuit gagal")
+
+-- Verify execution if needed
+lokal c = 0 atau increment()
+assert(count == 1, "OR execution gagal")

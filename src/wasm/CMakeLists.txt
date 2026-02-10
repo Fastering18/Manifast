@@ -27,7 +27,7 @@ target_link_options(manifast PRIVATE
     -sWASM=1
     -sALLOW_MEMORY_GROWTH=1
     -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap","UTF8ToString"]
-    -sEXPORTED_FUNCTIONS=["_mf_run_script","_malloc","_free"]
+    -sEXPORTED_FUNCTIONS=["_mf_run_script","_mf_run_script_tier","_malloc","_free"]
     -sNO_EXIT_RUNTIME=1
     --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/index.html
 )

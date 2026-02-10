@@ -29,7 +29,7 @@
 
         header {
             background: var(--bg-panel);
-            padding: 1rem 2rem;
+            padding: 0.8rem 2rem;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
@@ -38,7 +38,7 @@
 
         h1 {
             margin: 0;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             display: flex;
             align-items: center;
             gap: 0.5rem;
@@ -51,13 +51,46 @@
         }
 
         .badge {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             background: #238636;
             color: white;
             padding: 2px 6px;
             border-radius: 4px;
             text-transform: uppercase;
             font-weight: bold;
+        }
+
+        .tier-status {
+            display: flex;
+            gap: 12px;
+            margin-right: 20px;
+            font-size: 0.75rem;
+            align-items: center;
+        }
+
+        .tier-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            opacity: 0.6;
+            transition: 0.3s;
+        }
+
+        .tier-item.active {
+            opacity: 1;
+            color: var(--accent);
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #444;
+        }
+
+        .active .dot {
+            background: #238636;
+            box-shadow: 0 0 5px #238636;
         }
 
         .container {
@@ -90,10 +123,22 @@
             align-items: center;
         }
 
-        textarea {
+        #code-editor {
             flex: 1;
-            background: transparent;
-            color: var(--text-main);
+            overflow: hidden;
+            background: #0d1117;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+        }
+
+        .cm-editor {
+            height: 100% !important;
+        }
+
+        #output {
+            flex: 1;
+            background: #0b0e11;
+            color: #a5d6ff;
             border: none;
             resize: none;
             padding: 1rem;
@@ -101,15 +146,6 @@
             font-size: 14px;
             line-height: 1.5;
             outline: none;
-        }
-
-        #code {
-            background: #0d1117;
-        }
-
-        #output {
-            background: #0b0e11;
-            color: #a5d6ff;
         }
 
         button {
@@ -144,7 +180,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 100;
+            z-index: 1000;
             flex-direction: column;
         }
 
@@ -163,6 +199,19 @@
             }
         }
     </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "codemirror": "https://cdn.jsdelivr.net/npm/codemirror@6.0.1/+esm",
+        "@codemirror/view": "https://cdn.jsdelivr.net/npm/@codemirror/view@6.0.0/+esm",
+        "@codemirror/state": "https://cdn.jsdelivr.net/npm/@codemirror/state@6.0.0/+esm",
+        "@codemirror/language": "https://cdn.jsdelivr.net/npm/@codemirror/language@6.0.0/+esm",
+        "@codemirror/commands": "https://cdn.jsdelivr.net/npm/@codemirror/commands@6.0.0/+esm",
+        "@codemirror/theme-one-dark": "https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.0.0/+esm",
+        "@codemirror/autocomplete": "https://cdn.jsdelivr.net/npm/@codemirror/autocomplete@6.0.0/+esm"
+      }
+    }
+    </script>
 </head>
 
 <body>
@@ -175,6 +224,22 @@
     <header>
         <h1><span class="logo">MANIFAST</span> <span style="font-weight: 400">Playground</span> <span
                 class="badge">WASM</span></h1>
+
+        <div class="tier-status">
+            <div class="tier-item active" onclick="setTier(0)" id="tier-0">
+                <div class="dot"></div>
+                T0: Interpreter (Cloud WASM)
+            </div>
+            <div class="tier-item" onclick="setTier(1)" id="tier-1">
+                <div class="dot"></div>
+                T1: JIT
+            </div>
+            <div class="tier-item" onclick="setTier(2)" id="tier-2">
+                <div class="dot"></div>
+                T2: AOT
+            </div>
+        </div>
+
         <div style="display: flex; gap: 10px; align-items: center;">
             <select id="exampleSelector" onchange="loadExample()"
                 style="background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; outline: none; cursor: pointer;">
@@ -195,21 +260,7 @@
     <div class="container">
         <div class="editor-pane">
             <div class="pane-header">Code Input</div>
-            <textarea id="code" spellcheck="false">-- Manifast Wasm Demo
-
-fungsi fib(n)
-  jika n < 2 maka
-    kembali n
-  tutup
-  kembali fib(n-1) + fib(n-2)
-tutup
-
-print("Start...")
-lokal start = 0
--- (Time function not exposed yet)
-
-print("Fib(10) =", fib(10))
-print("Done!")</textarea>
+            <div id="code-editor"></div>
         </div>
         <div class="output-pane">
             <div class="pane-header">
@@ -220,8 +271,41 @@ print("Done!")</textarea>
         </div>
     </div>
 
-    <script>
-        var Module = {
+    <script type="module">
+        import { EditorView, basicSetup } from "codemirror";
+        import { EditorState } from "@codemirror/state";
+        import { oneDark } from "@codemirror/theme-one-dark";
+        import { StreamLanguage } from "@codemirror/language";
+
+        // Manifast Language Definition (Enhanced)
+        const manifastLanguage = {
+            token: (stream) => {
+                if (stream.match(/--.*/)) return "comment";
+                if (stream.match(/"([^"\\]|\\.)*"/)) return "string";
+                if (stream.match(/\b(fungsi|jika|kalau|sebaliknya|maka|tutup|kembali|lokal|untuk|ke|lakukan|selama|selagi|dan|atau|bukan|kelas|self|impor|benar|salah|nil|tetap|coba|tangkap)\b/)) return "keyword";
+                if (stream.match(/\b(print|println|tipe|tunggu|input|assert|exit|waktuNano|clearOutput|sin|cos|tan|asin|acos|atan|atan2|sqrt|abs|floor|ceil|pow|log|exp|pi|e)\b/)) return "builtin";
+                if (stream.match(/\b\d+\.?\d*\b/)) return "number";
+                if (stream.match(/[+\-*/%<>=!&|^]/)) return "operator";
+                stream.next();
+                return null;
+            }
+        };
+
+        const startState = EditorState.create({
+            doc: `-- Manifast Wasm Demo\n\nfungsi fib(n)\n  jika n < 2 maka\n    kembali n\n  tutup\n  kembali fib(n-1) + fib(n-2)\ntutup\n\nprint("Start...")\nlokal start = 0\n-- (Time function not exposed yet)\n\nprint("Fib(10) =", fib(10))\nprint("Done!")`,
+            extensions: [
+                basicSetup,
+                oneDark,
+                StreamLanguage.define(manifastLanguage)
+            ]
+        });
+
+        window.editor = new EditorView({
+            state: startState,
+            parent: document.getElementById("code-editor")
+        });
+
+        window.Module = {
             onRuntimeInitialized: function () {
                 document.getElementById('loader').style.display = 'none';
                 console.log("Manifast Wasm Loaded");
@@ -239,23 +323,37 @@ print("Done!")</textarea>
 
         function loadExample() {
             const selector = document.getElementById('exampleSelector');
-            const codeEl = document.getElementById('code');
             const examples = {
                 fib: `-- Fibonacci Example (limit n=22)\nlokal os = impor("os")\n\nfungsi fib(n)\n  jika n < 2 maka\n    kembali n\n  tutup\n  kembali fib(n-1) + fib(n-2)\ntutup\n\nprintln("Menghitung Fib(21)...")\nlokal t0 = os.waktuNano()\nlokal hasil = fib(21)\nlokal t1 = os.waktuNano()\n\nprintln("Hasil:", hasil)\nprintln("Waktu:", (t1 - t0) / 1000000, "ms")`,
                 fizzbuzz: `-- FizzBuzz Example\nuntuk i = 1 ke 30 lakukan\n  jika (i % 15) == 0 maka\n    println("FizzBuzz")\n  kalau (i % 3) == 0 maka\n    println("Fizz")\n  kalau (i % 5) == 0 maka\n    println("Buzz")\n  sebaliknya\n    println(i)\n  tutup\ntutup`,
-                mandelbrot: `-- Mandelbrot Set in Manifast (not work currently)\nimpor("os").clearOutput()\n\nfungsi mandelbrot()\n  lokal width = 80\n  lokal height = 30\n  lokal max_iter = 30\n\n  untuk y = 0 ke height lakukan\n    lokal cy = (y / height) * 2 - 1\n    lokal line = ""\n    untuk x = 0 ke width lakukan\n      lokal cx = (x / width) * 3 - 2\n      lokal zx = 0\n      lokal zy = 0\n      lokal i = 0\n      selama (zx*zx + zy*zy < 4) dan (i < max_iter) lakukan\n        lokal tmp = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = tmp\n        i = i + 1\n      tutup\n\n      jika i == max_iter maka\n        line = line + "#"\n      kalau i > 20 maka\n        line = line + "*"\n      kalau i > 10 maka\n        line = line + "+"\n      kalau i > 5 maka\n        line = line + "."\n      sebaliknya\n        line = line + " "\n      tutup\n    tutup\n    println(line)\n  tutup\ntutup\n\nmandelbrot()`,
+                mandelbrot: `-- Mandelbrot Set in Manifast\nimpor("os").clearOutput()\n\nfungsi mandelbrot()\n  lokal width = 80\n  lokal height = 30\n  lokal max_iter = 30\n\n  untuk y = 0 ke height lakukan\n    lokal cy = (y / height) * 2 - 1\n    untuk x = 0 ke width lakukan\n      lokal cx = (x / width) * 3 - 2\n      lokal zx = 0\n      lokal zy = 0\n      lokal i = 0\n      -- Fixed conditional with logical AND\n      selama (zx*zx + zy*zy < 4) dan (i < max_iter) lakukan\n        lokal tmp = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = tmp\n        i = i + 1\n      tutup\n\n      jika i == max_iter maka\n        print("#")\n      kalau i > 20 maka\n        print("*")\n      kalau i > 10 maka\n        print("+")\n      kalau i > 5 maka\n        print(".")\n      sebaliknya\n        print(" ")\n      tutup\n    tutup\n    println("")\n  tutup\ntutup\n\nmandelbrot()`,
                 oop: `-- Object Oriented Example\nkelas Orang maka\n  fungsi inisiasi(nama, umur)\n    self.nama = nama\n    self.umur = umur\n  tutup\n\n  fungsi perkenalan()\n    println("Halo, nama saya " + self.nama + " dan umur saya " + self.umur)\n  tutup\ntutup\n\nlokal budi = Orang("Budi", 18)\nbudi.perkenalan()`
             };
-            codeEl.value = examples[selector.value];
+
+            const newDoc = examples[selector.value] || "";
+            window.editor.dispatch({
+                changes: { from: 0, to: window.editor.state.doc.length, insert: newDoc }
+            });
+        }
+
+        let currentTier = 0;
+
+        function setTier(t) {
+            currentTier = t;
+            document.querySelectorAll('.tier-item').forEach((item, idx) => {
+                if (idx === t) item.classList.add('active');
+                else item.classList.remove('active');
+            });
+            console.log("Tier switched to T" + t);
         }
 
         function runCode() {
-            if (!Module._mf_run_script) {
+            if (!window.Module._mf_run_script_tier) {
                 alert("Wasm not loaded yet!");
                 return;
             }
 
-            const code = document.getElementById('code').value;
+            const code = window.editor.state.doc.toString();
             const outputEl = document.getElementById('output');
             const timingEl = document.getElementById('timing');
 
@@ -264,11 +362,11 @@ print("Done!")</textarea>
 
             const startTime = performance.now();
             try {
-                const result = Module.ccall(
-                    'mf_run_script',
+                const result = window.Module.ccall(
+                    'mf_run_script_tier',
                     'string',
-                    ['string'],
-                    [code]
+                    ['string', 'number'],
+                    [code, currentTier]
                 );
 
                 const endTime = performance.now();
@@ -283,6 +381,11 @@ print("Done!")</textarea>
                 timingEl.innerText = "(FAILED)";
             }
         }
+
+        // Expose to window for inline onchange/onclick
+        window.loadExample = loadExample;
+        window.runCode = runCode;
+        window.setTier = setTier;
     </script>
 
     <!-- Emscripten generated script will be injected here during build, or loaded externally -->

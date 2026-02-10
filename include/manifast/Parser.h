@@ -13,6 +13,7 @@ class Parser {
 public:
     Parser(Lexer& lexer, std::string_view source = "");
     bool debugMode = false;
+    bool hadError() const { return hasError; }
 
     // Entry point
     std::vector<std::unique_ptr<Stmt>> parse();

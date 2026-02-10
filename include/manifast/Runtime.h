@@ -53,6 +53,8 @@ struct ManifastInstance {
 // Runtime functions called by LLVM IR
 MF_API Any* manifast_create_number(double val);
 MF_API Any* manifast_create_string(const char* str);
+MF_API Any* manifast_create_boolean(bool val);
+MF_API Any* manifast_create_nil();
 MF_API Any* manifast_create_array(uint32_t initial_size);
 MF_API Any* manifast_create_object();
 MF_API Any* manifast_create_class(const char* name);
@@ -67,11 +69,22 @@ MF_API void manifast_print_any(Any* any);
 MF_API void manifast_println_any(Any* any);
 MF_API void manifast_printfmt(Any* fmt, Any* any); // Simple version for now
 MF_API Any* manifast_input();
+MF_API void manifast_assert(Any* cond, Any* msg);
 
 // Internal Memory Management (exported for tests if needed)
 MF_API void* mf_malloc(size_t size);
 MF_API char* mf_strdup(const char* s);
 
 } // extern "C"
+
+#ifdef __cplusplus
+#include <stdexcept>
+namespace manifast {
+    class RuntimeError : public std::runtime_error {
+    public:
+        RuntimeError(const std::string& message) : std::runtime_error(message) {}
+    };
+}
+#endif
 
 #endif // MANIFAST_RUNTIME_H

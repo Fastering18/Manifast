@@ -8,10 +8,15 @@
 namespace manifast {
 namespace vm {
 
+    enum class Tier { T0, T1, T2 };
+    
 class VM {
 public:
     VM();
     ~VM();
+
+    void setTier(Tier t) { currentTier = t; }
+    Tier getTier() const { return currentTier; }
 
     void interpret(Chunk* chunk, std::string_view source = "");
     void runtimeError(const std::string& message);
@@ -47,6 +52,7 @@ private:
     Any lastResult;
     std::string source;
     std::unordered_map<std::string, Any> globals;
+    Tier currentTier = Tier::T0;
 };
 
 } // namespace vm

@@ -1,0 +1,15 @@
+-- Test Class features
+kelas Orang maka
+    fungsi inisiasi(nama)
+        self.nama = nama
+    tutup
+    
+    fungsi salam()
+        print("Halo, saya ")
+        println(self.nama)
+    tutup
+tutup
+
+lokal p = Orang("Budi")
+assert(p.nama == "Budi", "Constructor nama gagal")
+p.salam()

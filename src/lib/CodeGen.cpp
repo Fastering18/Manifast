@@ -7,6 +7,12 @@
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/ExecutionEngine/Orc/Core.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
+#include <llvm/MC/TargetRegistry.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/TargetParser/Host.h>
 
 namespace manifast {
 
@@ -34,6 +40,10 @@ CodeGen::CodeGen() {
     // input() -> Any*
     llvm::FunctionType* inputFT = llvm::FunctionType::get(anyPtrTy, {}, false);
     llvm::Function::Create(inputFT, llvm::Function::ExternalLinkage, "manifast_input", module.get());
+
+    // assert(Any*, Any*) -> void
+    llvm::FunctionType* assertFT = llvm::FunctionType::get(builder->getVoidTy(), {anyPtrTy, anyPtrTy}, false);
+    llvm::Function::Create(assertFT, llvm::Function::ExternalLinkage, "manifast_assert", module.get());
 }
 
 void CodeGen::pushScope() {
@@ -194,8 +204,110 @@ void CodeGen::compile(const std::vector<std::unique_ptr<Stmt>>& statements) {
     }
 }
 
+void CodeGen::addMainEntry() {
+    llvm::Function* mainFunc = module->getFunction("manifast_main");
+    if (!mainFunc) return;
+
+    // Add standard 'main' entry point for AOT (calls manifast_main)
+    llvm::FunctionType* stdMainFT = llvm::FunctionType::get(llvm::Type::getInt32Ty(*context), {}, false);
+    llvm::Function* stdMainFunc = llvm::Function::Create(stdMainFT, llvm::Function::ExternalLinkage, "main", module.get());
+    llvm::BasicBlock* stdMainEntry = llvm::BasicBlock::Create(*context, "entry", stdMainFunc);
+    
+    llvm::IRBuilder<> mainBuilder(stdMainEntry);
+    mainBuilder.CreateCall(mainFunc, {});
+    mainBuilder.CreateRet(mainBuilder.getInt32(0));
+}
+
 void CodeGen::printIR() {
     module->print(llvm::errs(), nullptr);
+}
+
+void CodeGen::emitIR(const std::string& path) {
+    std::error_code ec;
+    llvm::raw_fd_ostream dest(path, ec, llvm::sys::fs::OF_None);
+    if (ec) {
+        std::cerr << "Could not open file: " << ec.message() << std::endl;
+        return;
+    }
+    module->print(dest, nullptr);
+}
+
+void CodeGen::emitAssembly(const std::string& path) {
+    auto targetTriple = llvm::sys::getDefaultTargetTriple();
+    std::string error;
+    auto target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
+
+    if (!target) {
+        std::cerr << error << std::endl;
+        return;
+    }
+
+    auto cpu = "generic";
+    auto features = "";
+
+    llvm::TargetOptions opt;
+    auto targetMachine = target->createTargetMachine(targetTriple, cpu, features, opt, llvm::Reloc::PIC_);
+
+    module->setDataLayout(targetMachine->createDataLayout());
+    module->setTargetTriple(targetTriple);
+
+    std::error_code ec;
+    llvm::raw_fd_ostream dest(path, ec, llvm::sys::fs::OF_None);
+
+    if (ec) {
+        std::cerr << "Could not open file: " << ec.message() << std::endl;
+        return;
+    }
+
+    llvm::legacy::PassManager pass;
+    auto fileType = llvm::CodeGenFileType::AssemblyFile;
+
+    if (targetMachine->addPassesToEmitFile(pass, dest, nullptr, fileType)) {
+        std::cerr << "TargetMachine can't emit a file of this type" << std::endl;
+        return;
+    }
+
+    pass.run(*module);
+    dest.flush();
+}
+
+void CodeGen::emitObject(const std::string& path) {
+    auto targetTriple = llvm::sys::getDefaultTargetTriple();
+    std::string error;
+    auto target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
+
+    if (!target) {
+        std::cerr << error << std::endl;
+        return;
+    }
+
+    auto cpu = "generic";
+    auto features = "";
+
+    llvm::TargetOptions opt;
+    auto targetMachine = target->createTargetMachine(targetTriple, cpu, features, opt, llvm::Reloc::PIC_);
+
+    module->setDataLayout(targetMachine->createDataLayout());
+    module->setTargetTriple(targetTriple);
+
+    std::error_code ec;
+    llvm::raw_fd_ostream dest(path, ec, llvm::sys::fs::OF_None);
+
+    if (ec) {
+        std::cerr << "Could not open file: " << ec.message() << std::endl;
+        return;
+    }
+
+    llvm::legacy::PassManager pass;
+    auto fileType = llvm::CodeGenFileType::ObjectFile;
+
+    if (targetMachine->addPassesToEmitFile(pass, dest, nullptr, fileType)) {
+        std::cerr << "TargetMachine can't emit a file of this type" << std::endl;
+        return;
+    }
+
+    pass.run(*module);
+    dest.flush();
 }
 
 // Static initialization - runs once per process
@@ -203,6 +315,7 @@ static struct LLVMInit {
     LLVMInit() {
         llvm::InitializeNativeTarget();
         llvm::InitializeNativeTargetAsmPrinter();
+        llvm::InitializeNativeTargetAsmParser();
     }
 } llvmInit;
 
@@ -226,6 +339,8 @@ bool CodeGen::run() {
 
     REGISTER_SYM(manifast_create_number);
     REGISTER_SYM(manifast_create_string);
+    REGISTER_SYM(manifast_create_boolean);
+    REGISTER_SYM(manifast_create_nil);
     REGISTER_SYM(manifast_create_array);
     REGISTER_SYM(manifast_create_object);
     REGISTER_SYM(manifast_object_set);
@@ -236,6 +351,9 @@ bool CodeGen::run() {
     REGISTER_SYM(manifast_println_any);
     REGISTER_SYM(manifast_printfmt);
     REGISTER_SYM(manifast_input);
+    REGISTER_SYM(manifast_assert);
+    REGISTER_SYM(manifast_create_class);
+    REGISTER_SYM(manifast_create_instance);
 
     if (auto Err = JD.define(llvm::orc::absoluteSymbols(std::move(RuntimeSymbols)))) {
         std::cerr << "Error defining runtime symbols: " << llvm::toString(std::move(Err)) << "\n";
@@ -283,6 +401,9 @@ llvm::Value* CodeGen::generateExpr(const Expr* expr) {
     if (auto* num = dynamic_cast<const NumberExpr*>(expr)) return visitNumberExpr(num);
     if (auto* bin = dynamic_cast<const BinaryExpr*>(expr)) return visitBinaryExpr(bin);
     if (auto* var = dynamic_cast<const VariableExpr*>(expr)) return visitVariableExpr(var);
+    if (auto* bl = dynamic_cast<const BoolExpr*>(expr)) return visitBoolExpr(bl);
+    if (auto* nl = dynamic_cast<const NilExpr*>(expr)) return visitNilExpr(nl);
+    if (auto* un = dynamic_cast<const UnaryExpr*>(expr)) return visitUnaryExpr(un);
     if (auto* assign = dynamic_cast<const AssignExpr*>(expr)) return visitAssignExpr(assign);
     if (auto* call = dynamic_cast<const CallExpr*>(expr)) return visitCallExpr(call);
     if (auto* arr = dynamic_cast<const ArrayExpr*>(expr)) return visitArrayExpr(arr);
@@ -312,6 +433,8 @@ void CodeGen::generateStmt(const Stmt* stmt) {
         visitTryStmt(tryStmt);
     } else if (auto* funcStmt = dynamic_cast<const FunctionStmt*>(stmt)) {
         visitFunctionStmt(funcStmt);
+    } else if (auto* classStmt = dynamic_cast<const ClassStmt*>(stmt)) {
+        visitClassStmt(classStmt);
     }
 }
 
@@ -468,6 +591,36 @@ llvm::Value* CodeGen::visitNumberExpr(const NumberExpr* expr) {
 }
 
 llvm::Value* CodeGen::visitBinaryExpr(const BinaryExpr* expr) {
+    if (expr->op == TokenType::K_And || expr->op == TokenType::K_Or) {
+        bool isAnd = (expr->op == TokenType::K_And);
+        llvm::Function* func = builder->GetInsertBlock()->getParent();
+        
+        llvm::Value* L = generateExpr(expr->left.get());
+        llvm::BasicBlock* originBB = builder->GetInsertBlock();
+        llvm::Value* LVal = unboxNumber(L);
+        llvm::Value* LCond = builder->CreateFCmpONE(LVal, llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), "logical_cond");
+        
+        llvm::BasicBlock* rightBB = llvm::BasicBlock::Create(*context, "logical_right", func);
+        llvm::BasicBlock* mergeBB = llvm::BasicBlock::Create(*context, "logical_merge", func);
+        
+        if (isAnd) builder->CreateCondBr(LCond, rightBB, mergeBB);
+        else builder->CreateCondBr(LCond, mergeBB, rightBB);
+        
+        // Eval Right
+        builder->SetInsertPoint(rightBB);
+        llvm::Value* R = generateExpr(expr->right.get());
+        builder->CreateBr(mergeBB);
+        rightBB = builder->GetInsertBlock();
+        
+        // Merge
+        builder->SetInsertPoint(mergeBB);
+        llvm::PHINode* phi = builder->CreatePHI(builder->getPtrTy(), 2, "logical_result");
+        phi->addIncoming(L, originBB); // Origin of skip
+        phi->addIncoming(R, rightBB);
+        
+        return phi;
+    }
+
     llvm::Value* L = generateExpr(expr->left.get());
     llvm::Value* R = generateExpr(expr->right.get());
     if (!L || !R) return nullptr;
@@ -483,6 +636,7 @@ llvm::Value* CodeGen::visitBinaryExpr(const BinaryExpr* expr) {
         case TokenType::Minus: res = builder->CreateFSub(LVal, RVal, "subtmp"); break;
         case TokenType::Star:  res = builder->CreateFMul(LVal, RVal, "multmp"); break;
         case TokenType::Slash: res = builder->CreateFDiv(LVal, RVal, "divtmp"); break;
+        case TokenType::Percent: res = builder->CreateFRem(LVal, RVal, "remtmp"); break;
         
         // Comparisons
         case TokenType::EqualEqual: {
@@ -562,6 +716,48 @@ llvm::Value* CodeGen::visitBinaryExpr(const BinaryExpr* expr) {
     return boxDouble(res);
 }
 
+llvm::Value* CodeGen::visitBoolExpr(const BoolExpr* expr) {
+    llvm::Function* func = module->getFunction("manifast_create_boolean");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getInt1Ty()}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_boolean", module.get());
+    }
+    return builder->CreateCall(func, {builder->getInt1(expr->value)});
+}
+
+llvm::Value* CodeGen::visitNilExpr(const NilExpr* expr) {
+    llvm::Function* func = module->getFunction("manifast_create_nil");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_nil", module.get());
+    }
+    return builder->CreateCall(func, {});
+}
+
+llvm::Value* CodeGen::visitUnaryExpr(const UnaryExpr* expr) {
+    llvm::Value* v = generateExpr(expr->right.get());
+    if (!v) return nullptr;
+    
+    llvm::Value* val = unboxNumber(v);
+    
+    if (expr->op == TokenType::Minus) {
+        llvm::Value* res = builder->CreateFNeg(val, "negtmp");
+        return boxDouble(res);
+    } else if (expr->op == TokenType::Bang) {
+        // Truthiness: 0 is false, others are true.
+        // !v => (v == 0) ? 1 : 0
+        llvm::Value* cond = builder->CreateFCmpOEQ(val, llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), "nottmp");
+        
+        llvm::Function* func = module->getFunction("manifast_create_boolean");
+        if (!func) {
+            llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getInt1Ty()}, false);
+            func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_boolean", module.get());
+        }
+        return builder->CreateCall(func, {cond});
+    }
+    return v;
+}
+
 llvm::Value* CodeGen::visitVariableExpr(const VariableExpr* expr) {
     llvm::Value* V = lookupVariable(expr->name);
     if (!V) {
@@ -582,46 +778,60 @@ llvm::Value* CodeGen::visitVariableExpr(const VariableExpr* expr) {
 }
 
 llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
-    auto* var = dynamic_cast<VariableExpr*>(expr->target.get());
-    if (!var) {
-        std::cerr << "Invalid assignment target\n";
-        return nullptr;
-    }
-
     llvm::Value* val = generateExpr(expr->value.get()); // Returns Any* (temp)
     if (!val) return nullptr;
 
-    llvm::Value* V = lookupVariable(var->name);
-    if (!V) {
-        std::cerr << "Unknown variable name: " << var->name << "\n";
-        return nullptr;
+    if (auto* var = dynamic_cast<VariableExpr*>(expr->target.get())) {
+        llvm::Value* V = lookupVariable(var->name);
+        if (!V) {
+            std::cerr << "Unknown variable name: " << var->name << "\n";
+            return nullptr;
+        }
+
+        if (expr->op != TokenType::Equal) {
+            llvm::Value* LVal = unboxNumber(V);
+            llvm::Value* RVal = unboxNumber(val);
+            llvm::Value* res = nullptr;
+            switch (expr->op) {
+                case TokenType::PlusEqual:    res = builder->CreateFAdd(LVal, RVal, "addtmp"); break;
+                case TokenType::MinusEqual:   res = builder->CreateFSub(LVal, RVal, "subtmp"); break;
+                case TokenType::StarEqual:    res = builder->CreateFMul(LVal, RVal, "multmp"); break;
+                case TokenType::SlashEqual:   res = builder->CreateFDiv(LVal, RVal, "divtmp"); break;
+                case TokenType::PercentEqual: res = builder->CreateFRem(LVal, RVal, "remtmp"); break;
+                default: break;
+            }
+            if (res) val = boxDouble(res);
+        }
+
+        llvm::Value* loadedVal = builder->CreateLoad(anyType, val);
+        builder->CreateStore(loadedVal, V);
+        return val;
+    } else if (auto* get = dynamic_cast<GetExpr*>(expr->target.get())) {
+        llvm::Value* obj = generateExpr(get->object.get());
+        llvm::Value* keyStr = builder->CreateGlobalString(get->name);
+        
+        llvm::Function* func = module->getFunction("manifast_object_set");
+        if (!func) {
+             llvm::FunctionType* ft = llvm::FunctionType::get(builder->getVoidTy(), {builder->getPtrTy(), builder->getPtrTy(), builder->getPtrTy()}, false);
+             func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_object_set", module.get());
+        }
+        builder->CreateCall(func, {obj, keyStr, val});
+        return val;
+    } else if (auto* idx = dynamic_cast<IndexExpr*>(expr->target.get())) {
+        llvm::Value* obj = generateExpr(idx->object.get());
+        llvm::Value* indexVal = unboxNumber(generateExpr(idx->index.get()));
+        
+        llvm::Function* func = module->getFunction("manifast_array_set");
+        if (!func) {
+             llvm::FunctionType* ft = llvm::FunctionType::get(builder->getVoidTy(), {builder->getPtrTy(), builder->getDoubleTy(), builder->getPtrTy()}, false);
+             func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_array_set", module.get());
+        }
+        builder->CreateCall(func, {obj, indexVal, val});
+        return val;
     }
 
-    if (expr->op != TokenType::Equal) {
-        // Shorthand assignment: i += 5
-        llvm::Value* LVal = unboxNumber(V);
-        llvm::Value* RVal = unboxNumber(val);
-        llvm::Value* res = nullptr;
-        
-        switch (expr->op) {
-            case TokenType::PlusEqual:    res = builder->CreateFAdd(LVal, RVal, "addtmp"); break;
-            case TokenType::MinusEqual:   res = builder->CreateFSub(LVal, RVal, "subtmp"); break;
-            case TokenType::StarEqual:    res = builder->CreateFMul(LVal, RVal, "multmp"); break;
-            case TokenType::SlashEqual:   res = builder->CreateFDiv(LVal, RVal, "divtmp"); break;
-            case TokenType::PercentEqual: res = builder->CreateFRem(LVal, RVal, "remtmp"); break;
-            default: break;
-        }
-        
-        if (res) {
-            val = boxDouble(res);
-        }
-    }
-
-    // Copy content from val (temp) to V (var storage)
-    llvm::Value* loadedVal = builder->CreateLoad(anyType, val);
-    builder->CreateStore(loadedVal, V);
-    
-    return val;
+    std::cerr << "Invalid assignment target\n";
+    return nullptr;
 }
 
 llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
@@ -642,6 +852,8 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
         func = module->getFunction("manifast_printfmt");
     } else if (funcName == "input") {
         func = module->getFunction("manifast_input");
+    } else if (funcName == "assert") {
+        func = module->getFunction("manifast_assert");
     } else {
         func = module->getFunction(funcName);
     }
@@ -651,9 +863,39 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
         return nullptr;
     }
 
-    if (func->arg_size() != expr->args.size()) {
+    bool isPrint = (funcName == "print" || funcName == "println");
+
+    if (!isPrint && func->arg_size() != expr->args.size()) {
         std::cerr << "Incorrect number of arguments for " << var->name << "\n";
         return nullptr;
+    }
+
+    if (isPrint) {
+        llvm::Value* res = nullptr;
+        for (size_t i = 0; i < expr->args.size(); ++i) {
+            if (i > 0) {
+                // Print tab
+                llvm::Value* tab = createString("\t");
+                builder->CreateCall(module->getFunction("manifast_print_any"), {tab});
+            }
+            
+            llvm::Value* argVal = generateExpr(expr->args[i].get());
+            if (!argVal) return nullptr;
+            
+            if (i == expr->args.size() - 1 && funcName == "println") {
+                builder->CreateCall(module->getFunction("manifast_println_any"), {argVal});
+            } else {
+                builder->CreateCall(module->getFunction("manifast_print_any"), {argVal});
+            }
+        }
+
+        if (expr->args.empty() && funcName == "println") {
+             // Print just newline
+             llvm::Value* empty = createString("");
+             builder->CreateCall(module->getFunction("manifast_println_any"), {empty});
+        }
+
+        return boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
     }
 
     std::vector<llvm::Value*> argsV;
@@ -673,20 +915,31 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
 }
 
 void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
-    llvm::Function* func = builder->GetInsertBlock()->getParent();
-    
-    llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
-    // Allocate Any struct
-    llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->name);
-    
-    scopes.back()[stmt->name] = alloca;
-    
-    if (stmt->initializer) {
-        llvm::Value* initVal = generateExpr(stmt->initializer.get()); // Any*
-        if (initVal) {
-            // Copy initVal to alloca
-            llvm::Value* loaded = builder->CreateLoad(anyType, initVal);
-            builder->CreateStore(loaded, alloca);
+    if (scopes.size() == 1) { // Module-level Global
+        auto* gVar = new llvm::GlobalVariable(*module, anyType, false,
+                                             llvm::GlobalValue::InternalLinkage,
+                                             llvm::ConstantAggregateZero::get(anyType),
+                                             stmt->name);
+        scopes.back()[stmt->name] = gVar;
+        
+        if (stmt->initializer) {
+            llvm::Value* initVal = generateExpr(stmt->initializer.get());
+            if (initVal) {
+                builder->CreateStore(builder->CreateLoad(anyType, initVal), gVar);
+            }
+        }
+    } else {
+        llvm::Function* func = builder->GetInsertBlock()->getParent();
+        llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
+        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->name);
+        
+        scopes.back()[stmt->name] = alloca;
+        
+        if (stmt->initializer) {
+            llvm::Value* initVal = generateExpr(stmt->initializer.get());
+            if (initVal) {
+                builder->CreateStore(builder->CreateLoad(anyType, initVal), alloca);
+            }
         }
     }
 }
@@ -711,6 +964,14 @@ void CodeGen::visitBlockStmt(const BlockStmt* stmt) {
         generateStmt(s.get());
     }
     popScope();
+}
+
+void CodeGen::visitTryStmt(const TryStmt* stmt) {
+    // Basic try/catch stub: just execute the try body for now.
+    // Full LLVM Exception Handling (Personality, LandingPads) is TBD.
+    if (stmt->tryBody) {
+        generateStmt(stmt->tryBody.get());
+    }
 }
 
 void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
@@ -821,10 +1082,46 @@ llvm::Value* CodeGen::visitGetExpr(const GetExpr* expr) {
     return builder->CreateCall(func, {obj, keyStr}, "get_res");
 }
 
-void CodeGen::visitTryStmt(const TryStmt* stmt) {
-    // Simple implementation: just generate the try body.
-    if (stmt->tryBody) {
-        generateStmt(stmt->tryBody.get());
+void CodeGen::visitClassStmt(const ClassStmt* stmt) {
+    llvm::Function* createClassFunc = module->getFunction("manifast_create_class");
+    if (!createClassFunc) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getPtrTy()}, false);
+        createClassFunc = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_class", module.get());
+    }
+    
+    llvm::Value* classNameStr = builder->CreateGlobalString(stmt->name);
+    llvm::Value* klassAny = builder->CreateCall(createClassFunc, {classNameStr});
+    
+    // Define class in scope
+    llvm::Function* currentFunc = builder->GetInsertBlock()->getParent();
+    llvm::IRBuilder<> tmpBuilder(&currentFunc->getEntryBlock(), currentFunc->getEntryBlock().begin());
+    llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->name);
+    scopes.back()[stmt->name] = alloca;
+    
+    llvm::Value* loadedKlass = builder->CreateLoad(anyType, klassAny);
+    builder->CreateStore(loadedKlass, alloca);
+
+    // Compile methods
+    for (const auto& method : stmt->methods) {
+        std::string mangledName = stmt->name + "." + method->name;
+        
+        // Temporarily change name to compile
+        std::string originalName = method->name;
+        // In reality, visitFunctionStmt uses method->name.
+        // I should probably have a move-based or argument-based visitFunctionStmt.
+        // For now, let's just use the current visitFunctionStmt and Rename the function after creation.
+        
+        visitFunctionStmt(method.get());
+        llvm::Function* methodFunc = module->getFunction(method->name);
+        if (methodFunc) {
+            methodFunc->setName(mangledName);
+            
+            // Register method in class.methods object
+            // Need to wrap the function in an Any (type 5 for bytecode? No, maybe 4 for native-like or 5)
+            // Actually, Runtime.h doesn't have a manifast_create_function for LLVM functions.
+            // For now, let's just skip registering in methods object if we don't have the wrapper.
+            // The interpreter uses a pointer to Closure/Function.
+        }
     }
 }
 

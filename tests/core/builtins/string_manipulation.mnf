@@ -1,0 +1,3 @@
+lokal strings = impor("string")
+lokal a = "amoguso"
+assert(strings.substring(a, 2, 3) == "mog", "substring gagal")

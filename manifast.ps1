@@ -155,6 +155,6 @@ if ($Command -eq "test") {
     }
     
     Write-Host "Running Modern Test Suite..." -ForegroundColor Cyan
-    & $TestBin test
+    & $TestBin test $RemainingArgs
     exit $LASTEXITCODE
 }

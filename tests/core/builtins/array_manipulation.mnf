@@ -1,0 +1,11 @@
+-- Test array basic functions
+lokal a = [1, 2, 3]
+assert(len(a) == 3, "len(a) harus 3")
+
+a.push(4)
+assert(len(a) == 4, "len(a) harus 4")
+assert(a[3] == 4, "a[3] harus 4")
+
+lokal b = a.pop()
+assert(b == 4, "pop() harus 4")
+assert(len(a) == 3, "len(a) harus 3 kembali")

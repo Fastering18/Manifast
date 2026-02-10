@@ -78,57 +78,70 @@ public:
             CLOSE(old_stderr);
         }
     }
+
+    std::string getLog() {
+        if (logPath == NULL_DEVICE) return "";
+        std::ifstream f(logPath);
+        if (!f) return "";
+        return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    }
 };
 
 bool runTestInProcess(const std::string& source, std::string& outputLog, bool useVM, manifast::vm::Compiler* reusableCompiler = nullptr, manifast::vm::VM* reusableVM = nullptr) {
-    OutputSilencer silencer(NULL_DEVICE);
+    const std::string tempLog = "test_run.tmp";
+    OutputSilencer silencer(tempLog);
 
     manifast::SyntaxConfig config;
     manifast::Lexer lexer(source, config);
     manifast::Parser parser(lexer);
 
+    bool finalSuccess = false;
     try {
         auto statements = parser.parse();
-        if (statements.empty()) return true; 
-
-        if (useVM) {
-            manifast::vm::Chunk chunk;
-            
-            // Use reusable compiler or local one
-            bool compilationSuccess = false;
-            
-            if (reusableCompiler) {
-                compilationSuccess = reusableCompiler->compile(statements, chunk);
-            } else {
-                manifast::vm::Compiler compiler;
-                compilationSuccess = compiler.compile(statements, chunk);
-            }
-
-            if (compilationSuccess) {
-                if (reusableVM) {
-                    reusableVM->interpret(&chunk);
-                } else {
-                    manifast::vm::VM vm;
-                    vm.interpret(&chunk);
-                }
-                chunk.free();
-                return true;
-            } else {
-                return false; 
-            }
+        if (parser.hadError()) {
+            finalSuccess = false;
+        } else if (statements.empty()) {
+            finalSuccess = true;
         } else {
-            manifast::CodeGen codegen;
-            codegen.compile(statements);
-            return codegen.run();
+            if (useVM) {
+                manifast::vm::Chunk chunk;
+                bool compilationSuccess = false;
+                if (reusableCompiler) compilationSuccess = reusableCompiler->compile(statements, chunk);
+                else {
+                    manifast::vm::Compiler compiler;
+                    compilationSuccess = compiler.compile(statements, chunk);
+                }
+
+                if (compilationSuccess) {
+                    if (reusableVM) reusableVM->interpret(&chunk);
+                    else {
+                        manifast::vm::VM vm;
+                        vm.interpret(&chunk);
+                    }
+                    chunk.free();
+                    finalSuccess = true;
+                } else finalSuccess = false;
+            } else {
+                manifast::CodeGen codegen;
+                codegen.compile(statements);
+                finalSuccess = codegen.run();
+            }
         }
+    } catch (const manifast::RuntimeError& e) {
+        finalSuccess = false;
+    } catch (const std::exception& e) {
+        finalSuccess = false;
     } catch (...) {
-        return false;
+        finalSuccess = false;
     }
+
+    outputLog = silencer.getLog();
+    return finalSuccess;
 }
 
 
 void printUsage() {
-    fmt::print(fmt::emphasis::bold, "Manifast Management Tool (mifast) v0.3\n");
+    fmt::print(fmt::emphasis::bold, "Manifast Management Tool (mifast) v0.0.12\n");
     fmt::print("Usage: mifast <command> [args]\n\n");
     fmt::print("Commands:\n");
     fmt::print("  run <file> [--vm]    Compile and run a Manifast file\n");
@@ -183,7 +196,7 @@ void runTestRunner(bool useVM) {
                 else if (i == pos) fmt::print(fg(fmt::color::green), "╾");
                 else fmt::print(" ");
             }
-            fmt::print("] {:3.0f}% | Testing: {}", progress * 100.0, file.filename().string());
+            fmt::print("] {:3.0f}% | Testing: {}\033[K", progress * 100.0, file.filename().string());
             std::fflush(stdout);
         }
 

@@ -67,6 +67,22 @@ MF_API Any* manifast_create_string(const char* str) {
     return a;
 }
 
+MF_API Any* manifast_create_boolean(bool val) {
+    Any* a = (Any*)mf_malloc(sizeof(Any));
+    a->type = 2; // Boolean
+    a->number = val ? 1.0 : 0.0;
+    a->ptr = nullptr;
+    return a;
+}
+
+MF_API Any* manifast_create_nil() {
+    Any* a = (Any*)mf_malloc(sizeof(Any));
+    a->type = 3; // Nil
+    a->number = 0;
+    a->ptr = nullptr;
+    return a;
+}
+
 MF_API Any* manifast_create_array(uint32_t initial_size) {
     Any* a = (Any*)mf_malloc(sizeof(Any));
     a->type = 6; // Array
@@ -292,6 +308,26 @@ MF_API Any* manifast_input() {
         return manifast_create_string(buf);
     }
     return manifast_create_string("");
+}
+
+MF_API void manifast_assert(Any* cond, Any* msg) {
+    bool truth = false;
+    if (cond->type == 0) truth = (cond->number != 0);
+    else if (cond->type == 1) truth = (cond->ptr != nullptr);
+    else if (cond->type == 2) truth = (cond->number != 0);
+    else if (cond->type == 3) truth = false;
+    else truth = true;
+
+    if (!truth) {
+        if (msg && msg->type == 1) {
+            std::string errMsg = "Assertion Failed: " + std::string((char*)msg->ptr);
+            fprintf(stderr, "%s\n", errMsg.c_str());
+            throw manifast::RuntimeError(errMsg);
+        } else {
+            fprintf(stderr, "Assertion Failed\n");
+            throw manifast::RuntimeError("Assertion Failed");
+        }
+    }
 }
 
 

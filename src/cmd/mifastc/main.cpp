@@ -160,9 +160,91 @@ void runREPL() {
     }
 }
 
+void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
+    std::ifstream file(inputPath);
+    if (!file) {
+        std::cerr << "Could not open file: " << inputPath << "\n";
+        return;
+    }
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    
+    manifast::SyntaxConfig config;
+    manifast::Lexer lexer(content, config);
+    manifast::Parser parser(lexer);
+    
+    try {
+        auto statements = parser.parse();
+        manifast::CodeGen codegen;
+        codegen.compile(statements);
+        
+        fs::path out(outputPath);
+        std::string ext = out.extension().string();
+        
+        if (ext == ".ll") {
+            codegen.emitIR(outputPath);
+            std::cout << "Emitted IR: " << outputPath << "\n";
+        } else if (ext == ".s") {
+            codegen.emitAssembly(outputPath);
+            std::cout << "Emitted Assembly: " << outputPath << "\n";
+        } else if (ext == ".o" || ext == ".obj") {
+            codegen.emitObject(outputPath);
+            std::cout << "Emitted Object: " << outputPath << "\n";
+        } else if (ext == ".exe" || ext == "") {
+            // Default to exe on Windows or no extension
+            std::string actualOut = outputPath;
+            if (ext == "") actualOut += ".exe";
+            
+            codegen.addMainEntry(); // Add main() only for executable
+            
+            std::string objPath = actualOut + ".obj";
+            codegen.emitObject(objPath);
+            
+            // Invoke GCC for linking (fallback/legacy)
+            // Assumes libmanifast_core.a is in library path or current directory
+            // and fmt is available.
+            std::string cmd = "g++ " + objPath + " -o " + actualOut + " -L. -lmanifast_core -lfmt -static";
+            std::cout << "Linking executable (External g++): " << cmd << "\n";
+            int ret = std::system(cmd.c_str());
+            
+            if (ret == 0) {
+                std::cout << "Created Executable: " << actualOut << "\n";
+                fs::remove(objPath); // Clean up temp obj
+            } else {
+                std::cerr << "Linking failed. Ensure g++ is in PATH and libraries are available.\n";
+            }
+        } else {
+            std::cerr << "Unknown output format: " << ext << "\n";
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+    }
+}
+
 int main(int argc, char *argv[]) {
     if (argc > 1) {
         std::string arg = argv[1];
+        
+        // Check for -o
+        std::string outputPath;
+        std::string inputPath;
+        for (int i = 1; i < argc; ++i) {
+            std::string a = argv[i];
+            if (a == "-o" && i + 1 < argc) {
+                outputPath = argv[++i];
+            } else if (inputPath.empty() && a[0] != '-') {
+                inputPath = a;
+            }
+        }
+        
+        if (!outputPath.empty()) {
+            if (inputPath.empty()) {
+                std::cerr << "No input file specified for -o output.\n";
+                return 1;
+            }
+            compileToAOT(inputPath, outputPath);
+            return 0;
+        }
+
         if (arg == "--test" && argc > 2) {
             runTests(argv[2]);
         } else if (fs::is_directory(arg)) {

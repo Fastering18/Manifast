@@ -18,6 +18,12 @@ public:
     void printIR(); 
     bool run(); // JIT Execution entry
 
+    // AOT Emission
+    void emitIR(const std::string& path);
+    void emitAssembly(const std::string& path);
+    void emitObject(const std::string& path);
+    void addMainEntry();
+
 private:
     std::unique_ptr<llvm::LLVMContext> context;
     std::unique_ptr<llvm::Module> module;
@@ -36,6 +42,9 @@ private:
     llvm::Value* visitNumberExpr(const NumberExpr* expr);
     llvm::Value* visitBinaryExpr(const BinaryExpr* expr);
     llvm::Value* visitVariableExpr(const VariableExpr* expr);
+    llvm::Value* visitBoolExpr(const BoolExpr* expr);
+    llvm::Value* visitNilExpr(const NilExpr* expr);
+    llvm::Value* visitUnaryExpr(const UnaryExpr* expr);
     llvm::Value* visitAssignExpr(const AssignExpr* expr);
     llvm::Value* visitCallExpr(const CallExpr* expr);
     llvm::Value* visitArrayExpr(const ArrayExpr* expr);
@@ -52,6 +61,7 @@ private:
     void visitWhileStmt(const WhileStmt* stmt);
     void visitForStmt(const ForStmt* stmt);
     void visitFunctionStmt(const FunctionStmt* stmt);
+    void visitClassStmt(const ClassStmt* stmt);
     void visitTryStmt(const TryStmt* stmt);
 
 private:

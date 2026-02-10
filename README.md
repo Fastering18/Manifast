@@ -2,6 +2,7 @@
 [![Build and Test](https://github.com/Fastering18/Manifast/actions/workflows/ci.yml/badge.svg)](https://github.com/Fastering18/Manifast/actions/workflows/ci.yml)
 https://github.com/Fastering18/Manifast  
 Fast, scriptable programming language with Indonesian-based syntax, powered by LLVM.
+**Current Version: 0.0.12**
 
 ## Syntax Samples
 ```manifast
@@ -54,9 +55,7 @@ Manifast features a **Tier-0 Bytecode VM** designed for ultra-low latency embedd
 - [x] Emscripten/WebAssembly Support
 - [x] Embedding Language Support ([Live Playground](https://fastering.thedev.id/Manifast/))
 - [x] Automatic Self-Injection for Method Calls
-- [x] String Module (split, substring)
-- [x] Boolean Logic (bukan, dan, atau)
-- [ ] Built-in modules
+- [ ] Built-in modules: os, string, math
 - [ ] IDE Support (LSP)
 - [ ] Self compilation
 

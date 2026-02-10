@@ -147,10 +147,44 @@ static void nativeExit(VM* vm, Any* args, int nargs) {
     exit(code);
 }
 
+// Math Native Functions
+// Math Native Functions helper to handle self injection
+#define MATH_BEGIN() \
+    int idx = 0; \
+    if (nargs >= 1 && args[0].type != 0) idx++; \
+    if (nargs - idx < 1) { args[-1] = {3, 0.0, nullptr}; return; }
+
+static void m_sin(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, sin(args[idx].number), nullptr}; }
+static void m_cos(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, cos(args[idx].number), nullptr}; }
+static void m_tan(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, tan(args[idx].number), nullptr}; }
+static void m_asin(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, asin(args[idx].number), nullptr}; }
+static void m_acos(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, acos(args[idx].number), nullptr}; }
+static void m_atan(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, atan(args[idx].number), nullptr}; }
+static void m_atan2(VM* vm, Any* args, int nargs) { 
+    int idx = 0; if (nargs >= 1 && args[0].type != 0) idx++;
+    if (nargs - idx >= 2 && args[idx].type == 0 && args[idx+1].type == 0) args[-1] = {0, atan2(args[idx].number, args[idx+1].number), nullptr}; 
+    else args[-1] = {3, 0.0, nullptr}; 
+}
+static void m_sqrt(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, sqrt(args[idx].number), nullptr}; }
+static void m_abs(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, fabs(args[idx].number), nullptr}; }
+static void m_floor(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, floor(args[idx].number), nullptr}; }
+static void m_ceil(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, ceil(args[idx].number), nullptr}; }
+static void m_pow(VM* vm, Any* args, int nargs) { 
+    int idx = 0; if (nargs >= 1 && args[0].type != 0) idx++;
+    if (nargs - idx >= 2 && args[idx].type == 0 && args[idx+1].type == 0) args[-1] = {0, pow(args[idx].number, args[idx+1].number), nullptr}; 
+    else args[-1] = {3, 0.0, nullptr}; 
+}
+static void m_log(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, log(args[idx].number), nullptr}; }
+static void m_exp(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, exp(args[idx].number), nullptr}; }
+
 static void nativeImpor(VM* vm, Any* args, int nargs) {
+    args[-1] = {3, 0.0, nullptr}; // Default to nil
     if (nargs < 1 || args[0].type != 1) return;
     std::string path = (char*)args[0].ptr;
     
+    // Trim any trailing whitespace (including \r from Windows files)
+    while(!path.empty() && isspace(path.back())) path.pop_back();
+
     // Internal Modules
     if (path == "os") {
         Any* obj = manifast_create_object();
@@ -160,7 +194,8 @@ static void nativeImpor(VM* vm, Any* args, int nargs) {
             args[-1] = {0, (double)ns, nullptr};
         };
         auto exitFn = [](VM* vm, Any* args, int nargs) {
-             int code = (nargs >= 1 && args[0].type == 0) ? (int)args[0].number : 0;
+             int idx = 0; if (nargs >= 1 && args[0].type != 0) idx++;
+             int code = (nargs - idx >= 1 && args[idx].type == 0) ? (int)args[idx].number : 0;
              exit(code);
         };
         auto clearOutput = [](VM* vm, Any* args, int nargs) {
@@ -174,6 +209,31 @@ static void nativeImpor(VM* vm, Any* args, int nargs) {
         manifast_object_set(obj, "waktuNano", &fn1);
         manifast_object_set(obj, "keluar", &fn2);
         manifast_object_set(obj, "clearOutput", &fn3);
+        args[-1] = *obj;
+        return;
+    } else if (path == "math") {
+        Any* obj = manifast_create_object();
+
+        struct MathNative { const char* name; VM::NativeFn fn; };
+        MathNative math_funcs[] = {
+            {"sin", m_sin}, {"cos", m_cos}, {"tan", m_tan},
+            {"asin", m_asin}, {"acos", m_acos}, {"atan", m_atan},
+            {"atan2", m_atan2}, {"sqrt", m_sqrt}, {"abs", m_abs},
+            {"floor", m_floor}, {"ceil", m_ceil}, {"pow", m_pow},
+            {"log", m_log}, {"exp", m_exp}
+        };
+
+        for (int i = 0; i < 14; i++) {
+            Any val = {4, 0.0, (void*)math_funcs[i].fn};
+            manifast_object_set(obj, math_funcs[i].name, &val);
+        }
+
+        // Constants
+        Any pi = {0, 3.141592653589793, nullptr};
+        Any e = {0, 2.718281828459045, nullptr};
+        manifast_object_set(obj, "pi", &pi);
+        manifast_object_set(obj, "e", &e);
+
         args[-1] = *obj;
         return;
     } else if (path == "string") {
@@ -272,7 +332,7 @@ static void nativeImpor(VM* vm, Any* args, int nargs) {
     }
 }
 
-VM::VM() : lastResult({3, 0.0, nullptr}) {
+VM::VM() : lastResult{3, 0.0, nullptr} {
     resetStack();
     
     // Define builtins
