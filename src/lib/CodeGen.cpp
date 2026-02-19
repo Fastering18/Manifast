@@ -44,6 +44,26 @@ CodeGen::CodeGen() {
     // assert(Any*, Any*) -> void
     llvm::FunctionType* assertFT = llvm::FunctionType::get(builder->getVoidTy(), {anyPtrTy, anyPtrTy}, false);
     llvm::Function::Create(assertFT, llvm::Function::ExternalLinkage, "manifast_assert", module.get());
+
+    // manifast_array_len(Any*) -> double
+    llvm::FunctionType* lenFT = llvm::FunctionType::get(builder->getDoubleTy(), {anyPtrTy}, false);
+    llvm::Function::Create(lenFT, llvm::Function::ExternalLinkage, "manifast_array_len", module.get());
+
+    // manifast_array_push(Any*, Any*) -> void
+    llvm::FunctionType* pushFT = llvm::FunctionType::get(builder->getVoidTy(), {anyPtrTy, anyPtrTy}, false);
+    llvm::Function::Create(pushFT, llvm::Function::ExternalLinkage, "manifast_array_push", module.get());
+
+    // manifast_array_pop(Any*) -> Any*
+    llvm::FunctionType* popFT = llvm::FunctionType::get(anyPtrTy, {anyPtrTy}, false);
+    llvm::Function::Create(popFT, llvm::Function::ExternalLinkage, "manifast_array_pop", module.get());
+
+    // manifast_impor(const char*) -> Any*
+    llvm::FunctionType* imporFT = llvm::FunctionType::get(anyPtrTy, {builder->getPtrTy()}, false);
+    llvm::Function::Create(imporFT, llvm::Function::ExternalLinkage, "manifast_impor", module.get());
+
+    // manifast_call_dynamic(Any*, Any*, int) -> Any*
+    llvm::FunctionType* callDynFT = llvm::FunctionType::get(anyPtrTy, {anyPtrTy, anyPtrTy, builder->getInt32Ty()}, false);
+    llvm::Function::Create(callDynFT, llvm::Function::ExternalLinkage, "manifast_call_dynamic", module.get());
 }
 
 void CodeGen::pushScope() {
@@ -103,6 +123,11 @@ llvm::Value* CodeGen::createString(const std::string& value) {
     return builder->CreateCall(func, {globalStr}, "str");
 }
 
+llvm::Value* CodeGen::unboxString(llvm::Value* anyPtr) {
+    llvm::Value* ptrPtr = builder->CreateStructGEP(anyType, anyPtr, 2);
+    return builder->CreateLoad(builder->getPtrTy(), ptrPtr, "unbox_str");
+}
+
 llvm::Value* CodeGen::unboxNumber(llvm::Value* anyPtr) {
     // Assume it's a number for now (skip type check for MVP speed)
     // anyPtr is Any*
@@ -132,7 +157,7 @@ llvm::Value* CodeGen::createArray(const std::vector<llvm::Value*>& elements) {
         // We need to pass Any* to manifast_array_set
         llvm::Value* elemPtr = builder->CreateAlloca(anyType);
         builder->CreateStore(elements[i], elemPtr);
-        builder->CreateCall(setFunc, {arrVal, llvm::ConstantFP::get(*context, llvm::APFloat((double)i)), elemPtr});
+        builder->CreateCall(setFunc, {arrVal, llvm::ConstantFP::get(*context, llvm::APFloat((double)(i + 1))), elemPtr});
     }
     
     return arrVal;
@@ -390,10 +415,7 @@ bool CodeGen::run() {
     typedef Any* (*MainFuncPtr)();
     MainFuncPtr MainPtr = (MainFuncPtr)rawAddr;
     
-    Any* result = MainPtr();
-    if (result) {
-        manifast_print_any(result);
-    }
+    MainPtr();
     return true;
 }
 
@@ -837,8 +859,52 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
 llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
     auto* var = dynamic_cast<VariableExpr*>(expr->callee.get());
     if (!var) {
-        std::cerr << "Dynamic function calls not yet supported\n";
-        return nullptr;
+        auto* get = dynamic_cast<GetExpr*>(expr->callee.get());
+        if (get) {
+            llvm::Value* obj = generateExpr(get->object.get()); // Any*
+            std::string methodName = get->name;
+
+            if (methodName == "push") {
+                if (expr->args.size() != 1) {
+                    std::cerr << "push() requires 1 argument\n";
+                    return nullptr;
+                }
+                llvm::Value* arg = generateExpr(expr->args[0].get()); // Any*
+                builder->CreateCall(module->getFunction("manifast_array_push"), {obj, arg});
+                return boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+            } else if (methodName == "pop") {
+                return builder->CreateCall(module->getFunction("manifast_array_pop"), {obj});
+            } else {
+                // Potential dynamic method call e.g. math.sin(0.5)
+                llvm::Value* calleeVal = generateExpr(get); // Evaluates to Any*
+                llvm::Value* argsArr = builder->CreateAlloca(anyType, builder->getInt32(expr->args.size() + 1));
+                
+                // Pack self (obj) as first argument
+                llvm::Value* objVal = builder->CreateLoad(anyType, obj);
+                builder->CreateStore(objVal, argsArr);
+                
+                for (size_t i = 0; i < expr->args.size(); ++i) {
+                    llvm::Value* argVal = generateExpr(expr->args[i].get()); 
+                    llvm::Value* argObj = builder->CreateLoad(anyType, argVal);
+                    llvm::Value* slot = builder->CreateGEP(anyType, argsArr, {builder->getInt32(i + 1)});
+                    builder->CreateStore(argObj, slot);
+                }
+                return builder->CreateCall(module->getFunction("manifast_call_dynamic"), 
+                    {calleeVal, argsArr, builder->getInt32(expr->args.size() + 1)});
+            }
+        }
+
+        // General dynamic call
+        llvm::Value* calleeVal = generateExpr(expr->callee.get());
+        llvm::Value* argsArr = builder->CreateAlloca(anyType, builder->getInt32(expr->args.size()));
+        for (size_t i = 0; i < expr->args.size(); ++i) {
+            llvm::Value* argVal = generateExpr(expr->args[i].get()); 
+            llvm::Value* argObj = builder->CreateLoad(anyType, argVal);
+            llvm::Value* slot = builder->CreateGEP(anyType, argsArr, {builder->getInt32(i)});
+            builder->CreateStore(argObj, slot);
+        }
+        return builder->CreateCall(module->getFunction("manifast_call_dynamic"), 
+            {calleeVal, argsArr, builder->getInt32(expr->args.size())});
     }
 
     std::string funcName = var->name;
@@ -854,6 +920,22 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
         func = module->getFunction("manifast_input");
     } else if (funcName == "assert") {
         func = module->getFunction("manifast_assert");
+    } else if (funcName == "impor") {
+        if (expr->args.size() != 1) {
+            std::cerr << "impor() requires 1 argument\n";
+            return nullptr;
+        }
+        llvm::Value* argVal = generateExpr(expr->args[0].get());
+        llvm::Value* strPtr = unboxString(argVal);
+        return builder->CreateCall(module->getFunction("manifast_impor"), {strPtr}, "impor_res");
+    } else if (funcName == "len") {
+        if (expr->args.size() != 1) {
+            std::cerr << "len() requires 1 argument\n";
+            return nullptr;
+        }
+        llvm::Value* arg = generateExpr(expr->args[0].get());
+        llvm::Value* lenVal = builder->CreateCall(module->getFunction("manifast_array_len"), {arg});
+        return boxDouble(lenVal);
     } else {
         func = module->getFunction(funcName);
     }

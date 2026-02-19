@@ -139,6 +139,37 @@ static void nativeAssert(VM* vm, Any* args, int nargs) {
     }
 }
 
+static void nativeLen(VM* vm, Any* args, int nargs) {
+    if (nargs < 1) {
+        args[-1] = {0, 0, nullptr};
+        return;
+    }
+    args[-1] = {0, manifast_array_len(&args[0]), nullptr};
+}
+
+static void nativeArrayPush(VM* vm, Any* args, int nargs) {
+    if (nargs < 2) return;
+    manifast_array_push(&args[0], &args[1]);
+}
+
+static void nativeArrayPop(VM* vm, Any* args, int nargs) {
+    if (nargs < 1) {
+        args[-1] = {3, 0.0, nullptr};
+        return;
+    }
+    Any* res = manifast_array_pop(&args[0]);
+    args[-1] = *res;
+    free(res);
+}
+
+static void nativeArrayLen(VM* vm, Any* args, int nargs) {
+    if (nargs < 1) {
+        args[-1] = {0, 0, nullptr};
+        return;
+    }
+    args[-1] = {0, manifast_array_len(&args[0]), nullptr};
+}
+
 static void nativeExit(VM* vm, Any* args, int nargs) {
     int code = 0;
     if (nargs >= 1 && args[0].type == 0) {
@@ -146,36 +177,6 @@ static void nativeExit(VM* vm, Any* args, int nargs) {
     }
     exit(code);
 }
-
-// Math Native Functions
-// Math Native Functions helper to handle self injection
-#define MATH_BEGIN() \
-    int idx = 0; \
-    if (nargs >= 1 && args[0].type != 0) idx++; \
-    if (nargs - idx < 1) { args[-1] = {3, 0.0, nullptr}; return; }
-
-static void m_sin(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, sin(args[idx].number), nullptr}; }
-static void m_cos(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, cos(args[idx].number), nullptr}; }
-static void m_tan(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, tan(args[idx].number), nullptr}; }
-static void m_asin(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, asin(args[idx].number), nullptr}; }
-static void m_acos(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, acos(args[idx].number), nullptr}; }
-static void m_atan(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, atan(args[idx].number), nullptr}; }
-static void m_atan2(VM* vm, Any* args, int nargs) { 
-    int idx = 0; if (nargs >= 1 && args[0].type != 0) idx++;
-    if (nargs - idx >= 2 && args[idx].type == 0 && args[idx+1].type == 0) args[-1] = {0, atan2(args[idx].number, args[idx+1].number), nullptr}; 
-    else args[-1] = {3, 0.0, nullptr}; 
-}
-static void m_sqrt(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, sqrt(args[idx].number), nullptr}; }
-static void m_abs(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, fabs(args[idx].number), nullptr}; }
-static void m_floor(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, floor(args[idx].number), nullptr}; }
-static void m_ceil(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, ceil(args[idx].number), nullptr}; }
-static void m_pow(VM* vm, Any* args, int nargs) { 
-    int idx = 0; if (nargs >= 1 && args[0].type != 0) idx++;
-    if (nargs - idx >= 2 && args[idx].type == 0 && args[idx+1].type == 0) args[-1] = {0, pow(args[idx].number, args[idx+1].number), nullptr}; 
-    else args[-1] = {3, 0.0, nullptr}; 
-}
-static void m_log(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, log(args[idx].number), nullptr}; }
-static void m_exp(VM* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, exp(args[idx].number), nullptr}; }
 
 static void nativeImpor(VM* vm, Any* args, int nargs) {
     args[-1] = {3, 0.0, nullptr}; // Default to nil
@@ -185,123 +186,9 @@ static void nativeImpor(VM* vm, Any* args, int nargs) {
     // Trim any trailing whitespace (including \r from Windows files)
     while(!path.empty() && isspace(path.back())) path.pop_back();
 
-    // Internal Modules
-    if (path == "os") {
-        Any* obj = manifast_create_object();
-        auto waktuNano = [](VM* vm, Any* args, int nargs) {
-            auto now = std::chrono::steady_clock::now();
-            auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-            args[-1] = {0, (double)ns, nullptr};
-        };
-        auto exitFn = [](VM* vm, Any* args, int nargs) {
-             int idx = 0; if (nargs >= 1 && args[0].type != 0) idx++;
-             int code = (nargs - idx >= 1 && args[idx].type == 0) ? (int)args[idx].number : 0;
-             exit(code);
-        };
-        auto clearOutput = [](VM* vm, Any* args, int nargs) {
-            printf("\033[2J\033[H");
-            fflush(stdout);
-            args[-1] = {3, 0.0, nullptr};
-        };
-        Any fn1 = {4, 0.0, (void*)+waktuNano};
-        Any fn2 = {4, 0.0, (void*)+exitFn};
-        Any fn3 = {4, 0.0, (void*)+clearOutput};
-        manifast_object_set(obj, "waktuNano", &fn1);
-        manifast_object_set(obj, "keluar", &fn2);
-        manifast_object_set(obj, "clearOutput", &fn3);
-        args[-1] = *obj;
-        return;
-    } else if (path == "math") {
-        Any* obj = manifast_create_object();
-
-        struct MathNative { const char* name; VM::NativeFn fn; };
-        MathNative math_funcs[] = {
-            {"sin", m_sin}, {"cos", m_cos}, {"tan", m_tan},
-            {"asin", m_asin}, {"acos", m_acos}, {"atan", m_atan},
-            {"atan2", m_atan2}, {"sqrt", m_sqrt}, {"abs", m_abs},
-            {"floor", m_floor}, {"ceil", m_ceil}, {"pow", m_pow},
-            {"log", m_log}, {"exp", m_exp}
-        };
-
-        for (int i = 0; i < 14; i++) {
-            Any val = {4, 0.0, (void*)math_funcs[i].fn};
-            manifast_object_set(obj, math_funcs[i].name, &val);
-        }
-
-        // Constants
-        Any pi = {0, 3.141592653589793, nullptr};
-        Any e = {0, 2.718281828459045, nullptr};
-        manifast_object_set(obj, "pi", &pi);
-        manifast_object_set(obj, "e", &e);
-
-        args[-1] = *obj;
-        return;
-    } else if (path == "string") {
-        Any* obj = manifast_create_object();
-        auto split = [](VM* vm, Any* args, int nargs) {
-            args[-1] = {3, 0.0, nullptr}; // Default
-            
-            // Handle self-injection from method call
-            int argIdx = 0;
-            if (nargs >= 1 && args[argIdx].type != 1) argIdx++;
-            
-            int remaining = nargs - argIdx;
-
-            if (remaining < 2 || args[argIdx].type != 1 || args[argIdx+1].type != 1 || !args[argIdx].ptr || !args[argIdx+1].ptr) {
-                 Any* arr = manifast_create_array(0);
-                 args[-1] = *arr;
-                 return;
-            }
-            std::string str = (char*)args[argIdx].ptr;
-            std::string delim = (char*)args[argIdx+1].ptr;
-            if (delim.empty()) {
-                Any* arr = manifast_create_array(1);
-                Any val = {1, 0.0, (void*)mf_strdup(str.c_str())};
-                manifast_array_set(arr, 1, &val);
-                args[-1] = *arr;
-                return;
-            }
-            std::vector<std::string> parts;
-            size_t start = 0, end;
-            while ((end = str.find(delim, start)) != std::string::npos) {
-                parts.push_back(str.substr(start, end - start));
-                start = end + delim.length();
-            }
-            parts.push_back(str.substr(start));
-            Any* arr = manifast_create_array((int)parts.size());
-            for (int i = 0; i < (int)parts.size(); i++) {
-                Any val = {1, 0.0, (void*)mf_strdup(parts[i].c_str())};
-                manifast_array_set(arr, i + 1, &val);
-            }
-            args[-1] = *arr;
-        };
-        auto substring = [](VM* vm, Any* args, int nargs) {
-            args[-1] = {3, 0.0, nullptr}; // Default
-            
-            int argIdx = 0;
-            if (nargs >= 1 && args[argIdx].type != 1) argIdx++;
-            
-            int remaining = nargs - argIdx;
-            
-            if (remaining < 3 || args[argIdx].type != 1) return;
-            if (!args[argIdx].ptr) return;
-            std::string str = (char*)args[argIdx].ptr;
-            int start = (int)args[argIdx+1].number;
-            int len = (int)args[argIdx+2].number;
-            if (start < 1) start = 1; // Standardize to 1-based start
-            if (start > (int)str.length() || len <= 0) { 
-                args[-1] = {1, 0.0, (void*)mf_strdup("")}; 
-                return; 
-            }
-            if (start + len - 1 > (int)str.length()) len = (int)str.length() - start + 1;
-            std::string res = str.substr(start - 1, len);
-            args[-1] = {1, 0.0, (void*)mf_strdup(res.c_str())};
-        };
-        Any fn1 = {4, 0.0, (void*)+split};
-        Any fn2 = {4, 0.0, (void*)+substring};
-        manifast_object_set(obj, "split", &fn1);
-        manifast_object_set(obj, "substring", &fn2);
-        args[-1] = *obj;
+    Any* res = manifast_impor(path.c_str());
+    if (res && res->type != 3) {
+        args[-1] = *res;
         return;
     }
 
@@ -343,6 +230,7 @@ VM::VM() : lastResult{3, 0.0, nullptr} {
     defineNative("input", nativeInput);
     defineNative("impor", nativeImpor);
     defineNative("assert", nativeAssert);
+    defineNative("len", nativeLen);
     defineNative("exit", nativeExit);
 }
 
@@ -774,9 +662,22 @@ void VM::run(int entryFrameDepth) {
                     ManifastClass* klass = (ManifastClass*)obj.ptr;
                     LR(GET_A(i)) = *manifast_object_get_raw(klass->methods, (char*)key.ptr);
                 } else if (obj.type == 6) { // Array
-                    int idx = (int)key.number;
-                    if (idx == 0) RUNTIME_ERROR("Indeks array harus dimulai dari 1 (Manifast menggunakan 1-based indexing)");
-                    LR(GET_A(i)) = *manifast_array_get(&obj, key.number);
+                    if (key.type == 1) { // String (Method)
+                        char* name = (char*)key.ptr;
+                        if (strcmp(name, "push") == 0) {
+                            LR(GET_A(i)) = {4, 0.0, (void*)nativeArrayPush};
+                        } else if (strcmp(name, "pop") == 0) {
+                            LR(GET_A(i)) = {4, 0.0, (void*)nativeArrayPop};
+                        } else if (strcmp(name, "len") == 0) {
+                            LR(GET_A(i)) = {4, 0.0, (void*)nativeArrayLen};
+                        } else {
+                            RUNTIME_ERROR("Array tidak memiliki metode '" + std::string(name) + "'");
+                        }
+                    } else {
+                        int idx = (int)key.number;
+                        if (idx == 0) RUNTIME_ERROR("Indeks array harus dimulai dari 1 (Manifast menggunakan 1-based indexing)");
+                        LR(GET_A(i)) = *manifast_array_get(&obj, key.number);
+                    }
                 } else if (obj.type == 1) { // String
                      char* s = (char*)obj.ptr;
                      int idx = (int)key.number;

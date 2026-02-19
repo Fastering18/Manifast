@@ -77,11 +77,27 @@ void wasm_print(manifast::vm::VM* vm, ::Any* args, int nargs) {
     fflush(stdout);
 }
 
-void wasm_println(manifast::vm::VM* vm, ::Any* args, int nargs) {
-    wasm_print(vm, args, nargs);
-    g_wasm_output += "\n";
-    printf("\n");
-    fflush(stdout);
+void wasm_assert(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    if (nargs < 1) {
+        g_wasm_output += "\n[ERROR] assert() membutuhkan minimal 1 argumen\n";
+        return;
+    }
+    
+    bool truth = false;
+    if (args[0].type == 2) truth = (args[0].number != 0);
+    else if (args[0].type == 3) truth = false;
+    else if (args[0].type == 0) truth = (args[0].number != 0);
+    else truth = true;
+
+    if (!truth) {
+        std::string msg = "Assertion Failed";
+        if (nargs >= 2 && args[1].type == 1) {
+            msg = (char*)args[1].ptr;
+        }
+        g_wasm_output += "\n[ASSERT FAILED] " + msg + "\n";
+        // In VM, we usually throw or set error state. 
+        // For WASM we can just mark it in output for now or throw if we want it to stop.
+    }
 }
 
 // Overrides for CodeGen/JIT
@@ -92,6 +108,60 @@ void manifast_print_any(::Any* val) {
 void manifast_println_any(::Any* val) {
     wasm_print_any(val);
     g_wasm_output += "\n";
+}
+
+void manifast_assert(::Any* cond, ::Any* msg) {
+    bool truth = false;
+    if (cond->type == 2) truth = (cond->number != 0);
+    else if (cond->type == 3) truth = false;
+    else if (cond->type == 0) truth = (cond->number != 0);
+    else truth = true;
+
+    if (!truth) {
+        std::string errMsg = "Assertion Failed";
+        if (msg && msg->type == 1) {
+            errMsg = (char*)msg->ptr;
+        }
+        g_wasm_output += "\n[ASSERT FAILED] " + errMsg + "\n";
+    }
+}
+
+double manifast_array_len(::Any* arr_any) {
+    if (arr_any->type != 6) return 0;
+    ManifastArray* arr = (ManifastArray*)arr_any->ptr;
+    return (double)arr->size;
+}
+
+void manifast_array_push(::Any* arr_any, ::Any* val_any) {
+    if (arr_any->type != 6) return;
+    ManifastArray* arr = (ManifastArray*)arr_any->ptr;
+    if (arr->size == arr->capacity) {
+        uint32_t new_cap = arr->capacity * 2;
+        if (new_cap == 0) new_cap = 4;
+        arr->elements = (::Any*)realloc(arr->elements, sizeof(::Any) * new_cap);
+        arr->capacity = new_cap;
+    }
+    arr->elements[arr->size] = *val_any;
+    arr->size++;
+}
+
+::Any* manifast_array_pop(::Any* arr_any) {
+    if (arr_any->type != 6) return manifast_create_nil();
+    ManifastArray* arr = (ManifastArray*)arr_any->ptr;
+    if (arr->size == 0) return manifast_create_nil();
+    ::Any val = arr->elements[arr->size - 1];
+    arr->size--;
+    ::Any* res = (::Any*)malloc(sizeof(::Any));
+    *res = val;
+    return res;
+}
+
+void wasm_len(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    if (nargs < 1) {
+        args[-1] = {0, 0, nullptr};
+        return;
+    }
+    args[-1] = {0, manifast_array_len(&args[0]), nullptr};
 }
 
 const char* mf_run_script_tier(const char* source, int tier) {
@@ -107,6 +177,8 @@ const char* mf_run_script_tier(const char* source, int tier) {
     
     vm.defineNative("print", wasm_print);
     vm.defineNative("println", wasm_println);
+    vm.defineNative("assert", wasm_assert);
+    vm.defineNative("len", wasm_len);
     
     // For Tier 1/2, use the LLVM JIT backend (Native only)
 #ifndef __EMSCRIPTEN__

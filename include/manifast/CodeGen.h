@@ -78,6 +78,7 @@ private:
     llvm::Value* createArray(const std::vector<llvm::Value*>& elements);
     llvm::Value* createObject(const std::vector<std::pair<std::string, llvm::Value*>>& pairs);
     llvm::Value* unboxNumber(llvm::Value* anyVal);
+    llvm::Value* unboxString(llvm::Value* anyVal);
     void printAny(llvm::Value* anyVal); // Runtime helper stub
 };
 

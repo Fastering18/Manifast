@@ -11,10 +11,11 @@ show_help() {
     echo "Usage: ./manifast.sh <command> [options]"
     echo ""
     echo "Commands:"
-    echo "  build      Configure and build the project"
-    echo "  test       Run the test suite"
-    echo "  clean      Remove the build directory"
-    echo "  help       Show this help message"
+    echo "  build       Configure and build the project"
+    echo "  run         Run manifast code"
+    echo "  test        Run the test suite"
+    echo "  clean       Remove the build directory"
+    echo "  help        Show this help message"
     echo ""
     echo "Options:"
     echo "  --fast     Disable vcpkg LLVM download (uses system LLVM)"
@@ -42,6 +43,18 @@ fi
 if [ "$COMMAND" == "help" ]; then
     show_help
     exit 0
+fi
+
+if [ "$COMMAND" == "run" ]; then
+    MNF_BIN="$BUILD_DIR/bin/manifast"
+    if [ ! -f "$MNF_BIN" ]; then
+        echo "Error: Binary not found. Run 'build' first."
+        exit 1
+    fi
+    
+    echo "Running Tests..."
+    "$MNF_BIN" $2
+    exit $?
 fi
 
 if [ "$COMMAND" == "build" ]; then

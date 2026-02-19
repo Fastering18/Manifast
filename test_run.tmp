@@ -1,0 +1,6 @@
+
+[ERROR SINTAKS] Baris 3:76
+  print(impor("os")f)
+                   ^
+-> Diharapkan ')', ditemukan identitas
+

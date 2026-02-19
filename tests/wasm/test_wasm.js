@@ -27,7 +27,6 @@ println("Waktu OS: " + os.waktuNano())
 
 lokal str = impor("string")
 lokal parts = str.split("Manifast,Luar,Biasa", ",")
-
 println("Split result 1: ", parts)
 println("Split result 2: " + parts[2])
 println("Split result 3: " + parts[3])

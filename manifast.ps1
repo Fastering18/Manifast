@@ -1,6 +1,6 @@
 param (
     [Parameter(Mandatory=$true, Position=0)]
-    [ValidateSet("build", "test", "clean", "help")]
+    [ValidateSet("build", "run", "run-vm", "test", "clean", "help")]
     [string]$Command,
 
     [switch]$Fast,
@@ -17,10 +17,12 @@ function Show-Help {
     Write-Host "Usage: .\manifast.ps1 <command> [options]"
     Write-Host ""
     Write-Host "Commands:"
-    Write-Host "  build      Configure and build the project"
-    Write-Host "  test       Run the test suite"
-    Write-Host "  clean      Remove the build directory"
-    Write-Host "  help       Show this help message"
+    Write-Host "  build         Configure and build the project"
+    Write-Host "  run           Run manifast file in jit tier"
+    Write-Host "  run-vm        Run manifast file in vm tier"
+    Write-Host "  test          Run the test suite"
+    Write-Host "  clean         Remove the build directory"
+    Write-Host "  help          Show this help message"
     Write-Host ""
     Write-Host "Options:"
     Write-Host "  --fast     Disable vcpkg LLVM download (uses system LLVM)"
@@ -36,6 +38,28 @@ foreach ($arg in $RemainingArgs) {
 if ($Command -eq "help") {
     Show-Help
     exit
+}
+
+if ($Command -eq "run") {
+    $TestBin = "$BuildDir\bin\mifast.exe"
+    if (-not (Test-Path $TestBin)) {
+        Write-Host "Error: Binary not found. Run 'build' first." -ForegroundColor Red
+        exit 1
+    }
+    
+    & $TestBin run $RemainingArgs
+    exit $LASTEXITCODE
+}
+
+if ($Command -eq "run-vm") {
+    $TestBin = "$BuildDir\bin\mifast.exe"
+    if (-not (Test-Path $TestBin)) {
+        Write-Host "Error: Binary not found. Run 'build' first." -ForegroundColor Red
+        exit 1
+    }
+    
+    & $TestBin run $RemainingArgs --vm
+    exit $LASTEXITCODE
 }
 
 if ($Command -eq "clean") {

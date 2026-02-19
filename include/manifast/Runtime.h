@@ -23,6 +23,8 @@ struct Any {
     void* ptr;
 };
 
+typedef void (*ManifastNativeFn)(void* vm, Any* args, int nargs);
+
 struct ManifastArray {
     uint32_t size;
     uint32_t capacity;
@@ -65,11 +67,16 @@ MF_API void manifast_object_set_raw(ManifastObject* obj, const char* key, Any* v
 MF_API Any* manifast_object_get_raw(ManifastObject* obj, const char* key);
 MF_API void manifast_array_set(Any* arr_any, double index, Any* val_any);
 MF_API Any* manifast_array_get(Any* arr_any, double index);
+MF_API double manifast_array_len(Any* arr_any);
+MF_API void manifast_array_push(Any* arr_any, Any* val_any);
+MF_API Any* manifast_array_pop(Any* arr_any);
 MF_API void manifast_print_any(Any* any);
 MF_API void manifast_println_any(Any* any);
 MF_API void manifast_printfmt(Any* fmt, Any* any); // Simple version for now
 MF_API Any* manifast_input();
 MF_API void manifast_assert(Any* cond, Any* msg);
+MF_API Any* manifast_impor(const char* name);
+MF_API Any* manifast_call_dynamic(Any* callee, Any* args, int nargs);
 
 // Internal Memory Management (exported for tests if needed)
 MF_API void* mf_malloc(size_t size);

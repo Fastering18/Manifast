@@ -2,6 +2,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
+#include <chrono>
+#include <vector>
+#include <string>
+#include <cmath>
 
 extern "C" {
 
@@ -243,6 +247,189 @@ MF_API Any* manifast_array_get(Any* arr_any, double index_d) {
     return &arr->elements[index - 1];
 }
 
+MF_API double manifast_array_len(Any* arr_any) {
+    if (arr_any->type != 6) return 0;
+    ManifastArray* arr = (ManifastArray*)arr_any->ptr;
+    return (double)arr->size;
+}
+
+MF_API void manifast_array_push(Any* arr_any, Any* val_any) {
+    if (arr_any->type != 6) return;
+    ManifastArray* arr = (ManifastArray*)arr_any->ptr;
+    
+    if (arr->size == arr->capacity) {
+        uint32_t new_cap = arr->capacity * 2;
+        if (new_cap == 0) new_cap = 4;
+        arr->elements = (Any*)realloc(arr->elements, sizeof(Any) * new_cap);
+        arr->capacity = new_cap;
+    }
+    
+    arr->elements[arr->size] = *val_any;
+    arr->size++;
+}
+
+MF_API Any* manifast_array_pop(Any* arr_any) {
+    if (arr_any->type != 6) return manifast_create_nil();
+    ManifastArray* arr = (ManifastArray*)arr_any->ptr;
+    if (arr->size == 0) return manifast_create_nil();
+    
+    Any val = arr->elements[arr->size - 1];
+    arr->size--;
+    
+    Any* res = (Any*)mf_malloc(sizeof(Any));
+    *res = val;
+    return res;
+}
+
+// --- Native Math Functions ---
+#define MATH_BEGIN() \
+    int idx = 0; \
+    if (nargs >= 1 && args[0].type != 0) idx++; \
+    if (nargs - idx < 1) { args[-1] = {3, 0.0, nullptr}; return; }
+
+static void m_sin(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, sin(args[idx].number), nullptr}; }
+static void m_cos(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, cos(args[idx].number), nullptr}; }
+static void m_tan(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, tan(args[idx].number), nullptr}; }
+static void m_asin(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, asin(args[idx].number), nullptr}; }
+static void m_acos(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, acos(args[idx].number), nullptr}; }
+static void m_atan(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, atan(args[idx].number), nullptr}; }
+static void m_atan2(void* vm, Any* args, int nargs) { 
+    int idx = 0; if (nargs >= 1 && args[0].type != 0) idx++;
+    if (nargs - idx >= 2 && args[idx].type == 0 && args[idx+1].type == 0) args[-1] = {0, atan2(args[idx].number, args[idx+1].number), nullptr}; 
+    else args[-1] = {3, 0.0, nullptr}; 
+}
+static void m_sqrt(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, sqrt(args[idx].number), nullptr}; }
+static void m_abs(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, fabs(args[idx].number), nullptr}; }
+static void m_floor(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, floor(args[idx].number), nullptr}; }
+static void m_ceil(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, ceil(args[idx].number), nullptr}; }
+static void m_pow(void* vm, Any* args, int nargs) { 
+    int idx = 0; if (nargs >= 1 && args[0].type != 0) idx++;
+    if (nargs - idx >= 2 && args[idx].type == 0 && args[idx+1].type == 0) args[-1] = {0, pow(args[idx].number, args[idx+1].number), nullptr}; 
+    else args[-1] = {3, 0.0, nullptr}; 
+}
+static void m_log(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, log(args[idx].number), nullptr}; }
+static void m_exp(void* vm, Any* args, int nargs) { MATH_BEGIN(); args[-1] = {0, exp(args[idx].number), nullptr}; }
+
+MF_API Any* manifast_impor(const char* name) {
+    if (strcmp(name, "math") == 0) {
+        Any* obj = manifast_create_object();
+        struct { const char* n; ManifastNativeFn f; } math_funcs[] = {
+            {"sin", m_sin}, {"cos", m_cos}, {"tan", m_tan},
+            {"asin", m_asin}, {"acos", m_acos}, {"atan", m_atan},
+            {"atan2", m_atan2}, {"sqrt", m_sqrt}, {"abs", m_abs},
+            {"floor", m_floor}, {"ceil", m_ceil}, {"pow", m_pow},
+            {"log", m_log}, {"exp", m_exp}
+        };
+        for (int i = 0; i < 14; i++) {
+            Any val = {4, 0.0, (void*)math_funcs[i].f};
+            manifast_object_set(obj, math_funcs[i].n, &val);
+        }
+        Any pi = {0, 3.141592653589793, nullptr};
+        Any e = {0, 2.718281828459045, nullptr};
+        manifast_object_set(obj, "pi", &pi);
+        manifast_object_set(obj, "e", &e);
+        return obj;
+    } else if (strcmp(name, "os") == 0) {
+        Any* obj = manifast_create_object();
+        auto waktuNano = [](void* vm, Any* args, int nargs) {
+            auto now = std::chrono::steady_clock::now();
+            auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+            args[-1] = {0, (double)ns, nullptr};
+        };
+        auto exitFn = [](void* vm, Any* args, int nargs) {
+             int idx = 0; if (nargs >= 1 && args[0].type != 0) idx++;
+             int code = (nargs - idx >= 1 && args[idx].type == 0) ? (int)args[idx].number : 0;
+             exit(code);
+        };
+        auto clearOutput = [](void* vm, Any* args, int nargs) {
+            printf("\033[2J\033[H");
+            fflush(stdout);
+            args[-1] = {3, 0.0, nullptr};
+        };
+        Any fn1 = {4, 0.0, (void*)+waktuNano};
+        Any fn2 = {4, 0.0, (void*)+exitFn};
+        Any fn3 = {4, 0.0, (void*)+clearOutput};
+        manifast_object_set(obj, "waktuNano", &fn1);
+        manifast_object_set(obj, "keluar", &fn2);
+        manifast_object_set(obj, "clearOutput", &fn3);
+        return obj;
+    } else if (strcmp(name, "string") == 0) {
+        Any* obj = manifast_create_object();
+        auto split = [](void* vm, Any* args, int nargs) {
+            args[-1] = {3, 0.0, nullptr}; 
+            int argIdx = 0;
+            if (nargs >= 1 && args[argIdx].type != 1) argIdx++;
+            int remaining = nargs - argIdx;
+            if (remaining < 2 || args[argIdx].type != 1 || args[argIdx+1].type != 1) {
+                 args[-1] = *manifast_create_array(0);
+                 return;
+            }
+            std::string str = (char*)args[argIdx].ptr;
+            std::string delim = (char*)args[argIdx+1].ptr;
+            Any* arr = manifast_create_array(0);
+            if (delim.empty()) {
+                Any val = {1, 0.0, (void*)mf_strdup(str.c_str())};
+                manifast_array_push(arr, &val);
+                args[-1] = *arr;
+                return;
+            }
+            size_t start = 0, end;
+            while ((end = str.find(delim, start)) != std::string::npos) {
+                std::string p = str.substr(start, end - start);
+                Any val = {1, 0.0, (void*)mf_strdup(p.c_str())};
+                manifast_array_push(arr, &val);
+                start = end + delim.length();
+            }
+            std::string last = str.substr(start);
+            Any lVal = {1, 0.0, (void*)mf_strdup(last.c_str())};
+            manifast_array_push(arr, &lVal);
+            args[-1] = *arr;
+        };
+        auto substring = [](void* vm, Any* args, int nargs) {
+            args[-1] = {3, 0.0, nullptr}; 
+            int argIdx = 0;
+            if (nargs >= 1 && args[argIdx].type != 1) argIdx++;
+            int remaining = nargs - argIdx;
+            if (remaining < 3 || args[argIdx].type != 1) return;
+            if (!args[argIdx].ptr) return;
+            std::string str = (char*)args[argIdx].ptr;
+            int start = (int)args[argIdx+1].number;
+            int len = (int)args[argIdx+2].number;
+            if (start < 1) start = 1;
+            if (start > (int)str.length() || len <= 0) { 
+                args[-1] = {1, 0.0, (void*)mf_strdup("")}; 
+                return; 
+            }
+            if (start + len - 1 > (int)str.length()) len = (int)str.length() - start + 1;
+            std::string res = str.substr(start - 1, len);
+            args[-1] = {1, 0.0, (void*)mf_strdup(res.c_str())};
+        };
+        Any fn1 = {4, 0.0, (void*)+split};
+        Any fn2 = {4, 0.0, (void*)+substring};
+        manifast_object_set(obj, "split", &fn1);
+        manifast_object_set(obj, "substring", &fn2);
+        return obj;
+    }
+    return manifast_create_nil();
+}
+
+MF_API Any* manifast_call_dynamic(Any* callee, Any* args, int nargs) {
+    if (callee->type == 4) { // Native
+        ManifastNativeFn fn = (ManifastNativeFn)callee->ptr;
+        // Native functions expect result in args[-1].
+        // We provide a stack-based temporary array.
+        std::vector<Any> call_args(nargs + 1);
+        for(int i = 0; i < nargs; ++i) call_args[i+1] = args[i];
+        
+        fn(nullptr, &call_args[1], nargs);
+        
+        Any* res = (Any*)mf_malloc(sizeof(Any));
+        *res = call_args[0];
+        return res;
+    }
+    return manifast_create_nil();
+}
+
 MF_API void manifast_print_any(Any* any) {
     if (!any) {
         printf("null");
@@ -259,16 +446,16 @@ MF_API void manifast_print_any(Any* any) {
             printf("%s", (char*)any->ptr);
             break;
         case 2: // Boolean
-            printf("%s", any->number ? "true" : "false");
+            printf("%s", any->number ? "benar" : "salah");
             break;
         case 3: // Nil
             printf("nil");
             break;
         case 4: // Native
-            printf("[Native Function]");
+            printf("[Fungsi Native]");
             break;
         case 5: // Bytecode
-            printf("[Function]");
+            printf("[Fungsi Bytecode]");
             break;
         case 6: // Array
             printf("[");
@@ -282,10 +469,10 @@ MF_API void manifast_print_any(Any* any) {
             printf("]");
             break;
         case 7: // Object
-            printf("{Object}");
+            printf("{Objek}");
             break;
         default:
-            printf("unknown type %d", any->type);
+            printf("tipe tidak dikenal %d", any->type);
     }
 }
 
@@ -320,12 +507,12 @@ MF_API void manifast_assert(Any* cond, Any* msg) {
 
     if (!truth) {
         if (msg && msg->type == 1) {
-            std::string errMsg = "Assertion Failed: " + std::string((char*)msg->ptr);
+            std::string errMsg = "Assertion Gagal: " + std::string((char*)msg->ptr);
             fprintf(stderr, "%s\n", errMsg.c_str());
             throw manifast::RuntimeError(errMsg);
         } else {
-            fprintf(stderr, "Assertion Failed\n");
-            throw manifast::RuntimeError("Assertion Failed");
+            fprintf(stderr, "Assertion Gagal\n");
+            throw manifast::RuntimeError("Assertion Gagal");
         }
     }
 }

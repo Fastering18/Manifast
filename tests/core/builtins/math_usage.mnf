@@ -10,3 +10,6 @@ assert(math.sqrt(16) == 4, "sqrt gagal")
 lokal s = math.sin(math.pi / 2)
 -- Note: pi is a constant in math module
 assert(s > 0.99 dan s < 1.01, "sin pi/2 harus ~1")
+println("s", s)
+println("math.pi", math.pi)
+println("math.e", math.e)
