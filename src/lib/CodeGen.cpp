@@ -379,6 +379,7 @@ bool CodeGen::run() {
     REGISTER_SYM(manifast_assert);
     REGISTER_SYM(manifast_create_class);
     REGISTER_SYM(manifast_create_instance);
+    REGISTER_SYM(manifast_class_add_method);
 
     if (auto Err = JD.define(llvm::orc::absoluteSymbols(std::move(RuntimeSymbols)))) {
         std::cerr << "Error defining runtime symbols: " << llvm::toString(std::move(Err)) << "\n";
@@ -1224,25 +1225,25 @@ void CodeGen::visitClassStmt(const ClassStmt* stmt) {
     builder->CreateStore(loadedKlass, alloca);
 
     // Compile methods
+    llvm::Function* addMethodFunc = module->getFunction("manifast_class_add_method");
+    if (!addMethodFunc) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(builder->getVoidTy(), {builder->getPtrTy(), builder->getPtrTy(), builder->getPtrTy()}, false);
+        addMethodFunc = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_class_add_method", module.get());
+    }
+
     for (const auto& method : stmt->methods) {
         std::string mangledName = stmt->name + "." + method->name;
         
-        // Temporarily change name to compile
+        // Temporarily change name to avoid collision during compile
         std::string originalName = method->name;
-        // In reality, visitFunctionStmt uses method->name.
-        // I should probably have a move-based or argument-based visitFunctionStmt.
-        // For now, let's just use the current visitFunctionStmt and Rename the function after creation.
-        
+        method->name = mangledName;
         visitFunctionStmt(method.get());
-        llvm::Function* methodFunc = module->getFunction(method->name);
+        method->name = originalName; // Restore
+
+        llvm::Function* methodFunc = module->getFunction(mangledName);
         if (methodFunc) {
-            methodFunc->setName(mangledName);
-            
-            // Register method in class.methods object
-            // Need to wrap the function in an Any (type 5 for bytecode? No, maybe 4 for native-like or 5)
-            // Actually, Runtime.h doesn't have a manifast_create_function for LLVM functions.
-            // For now, let's just skip registering in methods object if we don't have the wrapper.
-            // The interpreter uses a pointer to Closure/Function.
+            llvm::Value* methodNameStr = builder->CreateGlobalString(originalName);
+            builder->CreateCall(addMethodFunc, {klassAny, methodNameStr, methodFunc});
         }
     }
 }

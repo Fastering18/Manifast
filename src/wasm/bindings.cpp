@@ -84,7 +84,7 @@ void wasm_println(manifast::vm::VM* vm, ::Any* args, int nargs) {
 
 void wasm_assert(manifast::vm::VM* vm, ::Any* args, int nargs) {
     if (nargs < 1) {
-        throw manifast::RuntimeError("Runtime Error: assert() membutuhkan minimal 1 argumen");
+        MANIFAST_THROW("Runtime Error: assert() membutuhkan minimal 1 argumen");
     }
     
     bool truth = false;
@@ -98,7 +98,7 @@ void wasm_assert(manifast::vm::VM* vm, ::Any* args, int nargs) {
         if (nargs >= 2 && args[1].type == 1) {
             msg = (char*)args[1].ptr;
         }
-        throw manifast::RuntimeError("Runtime Error: [ASSERT GAGAL] " + msg);
+        MANIFAST_THROW("Runtime Error: [ASSERT GAGAL] " + msg);
     }
 }
 
@@ -128,35 +128,7 @@ void manifast_assert(::Any* cond, ::Any* msg) {
     }
 }
 
-double manifast_array_len(::Any* arr_any) {
-    if (arr_any->type != 6) return 0;
-    ManifastArray* arr = (ManifastArray*)arr_any->ptr;
-    return (double)arr->size;
-}
-
-void manifast_array_push(::Any* arr_any, ::Any* val_any) {
-    if (arr_any->type != 6) return;
-    ManifastArray* arr = (ManifastArray*)arr_any->ptr;
-    if (arr->size == arr->capacity) {
-        uint32_t new_cap = arr->capacity * 2;
-        if (new_cap == 0) new_cap = 4;
-        arr->elements = (::Any*)realloc(arr->elements, sizeof(::Any) * new_cap);
-        arr->capacity = new_cap;
-    }
-    arr->elements[arr->size] = *val_any;
-    arr->size++;
-}
-
-::Any* manifast_array_pop(::Any* arr_any) {
-    if (arr_any->type != 6) return manifast_create_nil();
-    ManifastArray* arr = (ManifastArray*)arr_any->ptr;
-    if (arr->size == 0) return manifast_create_nil();
-    ::Any val = arr->elements[arr->size - 1];
-    arr->size--;
-    ::Any* res = (::Any*)malloc(sizeof(::Any));
-    *res = val;
-    return res;
-}
+// manifast_array_len, manifast_array_push, manifast_array_pop are provided by Runtime.cpp (CORE_SOURCES)
 
 void wasm_len(manifast::vm::VM* vm, ::Any* args, int nargs) {
     if (nargs < 1) {
@@ -175,7 +147,7 @@ const char* mf_run_script_tier(const char* source, int tier) {
     auto statements = parser.parse();
     
     manifast::vm::VM vm;
-    vm.setTier((manifast::vm::VM::Tier)tier);
+    vm.setTier((manifast::vm::Tier)tier);
     
     vm.defineNative("print", wasm_print);
     vm.defineNative("println", wasm_println);
@@ -199,13 +171,7 @@ const char* mf_run_script_tier(const char* source, int tier) {
         manifast::vm::Compiler compiler;
         
         if (compiler.compile(statements, chunk)) {
-            try {
-                vm.interpret(&chunk, source);
-            } catch (const manifast::RuntimeError& e) {
-                g_wasm_output += "\n" + std::string(e.what()) + "\n";
-            } catch (const std::exception& e) {
-                g_wasm_output += "\nError: " + std::string(e.what()) + "\n";
-            }
+            vm.interpret(&chunk, source);
             chunk.free();
         } else {
             g_wasm_output = "Compilation Failed";

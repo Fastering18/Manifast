@@ -90,6 +90,38 @@ if [ "$COMMAND" == "test" ]; then
     exit $?
 fi
 
+if [ "$COMMAND" == "build-wasm" ]; then
+    WASM_BUILD_DIR="build-wasm"
+    echo "Building WebAssembly..."
+    
+    if [ -d "$WASM_BUILD_DIR" ]; then
+        rm -rf "$WASM_BUILD_DIR"
+    fi
+    
+    # Check if emcmake is in PATH
+    if ! command -v emcmake &> /dev/null; then
+        echo "Error: emcmake not found. Please activate Emscripten environment."
+        exit 1
+    fi
+    
+    echo "Configuring..."
+    # Use MinGW Makefiles if on Windows/Git Bash, otherwise default or Ninja
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+       emcmake cmake -G "MinGW Makefiles" -S src/wasm -B "$WASM_BUILD_DIR"
+    else
+       emcmake cmake -S src/wasm -B "$WASM_BUILD_DIR"
+    fi
+    
+    if [ $? -ne 0 ]; then exit $?; fi
+    
+    echo "Building..."
+    cmake --build "$WASM_BUILD_DIR" --target manifast
+    if [ $? -ne 0 ]; then exit $?; fi
+    
+    echo "WASM Build Success!"
+    exit 0
+fi
+
 echo "Unknown command: $COMMAND"
 show_help
 exit 1

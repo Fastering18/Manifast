@@ -1,6 +1,6 @@
 param (
     [Parameter(Mandatory=$true, Position=0)]
-    [ValidateSet("build", "run", "run-vm", "test", "clean", "help")]
+    [ValidateSet("build", "run", "run-vm", "test", "clean", "help", "build-wasm")]
     [string]$Command,
 
     [switch]$Fast,
@@ -22,6 +22,7 @@ function Show-Help {
     Write-Host "  run-vm        Run manifast file in vm tier"
     Write-Host "  test          Run the test suite"
     Write-Host "  clean         Remove the build directory"
+    Write-Host "  build-wasm    Build for WebAssembly (requires Emscripten)"
     Write-Host "  help          Show this help message"
     Write-Host ""
     Write-Host "Options:"
@@ -180,5 +181,37 @@ if ($Command -eq "test") {
     
     Write-Host "Running Modern Test Suite..." -ForegroundColor Cyan
     & $TestBin test $RemainingArgs
+    exit $LASTEXITCODE
+}
+
+if ($Command -eq "build-wasm") {
+    Write-Host "Building WebAssembly..." -ForegroundColor Cyan
+    $WasmBuildDir = "build-wasm"
+    
+    if (Test-Path $WasmBuildDir) {
+        Write-Host "Cleaning $WasmBuildDir..." -ForegroundColor Gray
+        cmd /c "rmdir /s /q $WasmBuildDir" 2>$null
+        if (Test-Path $WasmBuildDir) {
+             Start-Sleep -Seconds 1
+             cmd /c "rmdir /s /q $WasmBuildDir" 2>$null
+        }
+    }
+    
+    $EmsdkEnv = "D:\Program\Emscripten\emsdk\emsdk_env.bat"
+    
+    if (Test-Path $EmsdkEnv) {
+        Write-Host "Activating Emscripten ($EmsdkEnv)..." -ForegroundColor Gray
+        # We must run in cmd /c to let the bat file set env vars for the session of that cmd
+        cmd /c "call `"$EmsdkEnv`" > NUL && emcmake cmake -G `"MinGW Makefiles`" -S src/wasm -B $WasmBuildDir && cmake --build $WasmBuildDir --target manifast"
+    } else {
+        Write-Host "EMSDK script not found, assuming emcmake in PATH..." -ForegroundColor Yellow
+        cmd /c "emcmake cmake -G `"MinGW Makefiles`" -S src/wasm -B $WasmBuildDir && cmake --build $WasmBuildDir --target manifast"
+    }
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "WASM Build Success!" -ForegroundColor Green
+    } else {
+        Write-Host "WASM Build Failed!" -ForegroundColor Red
+    }
     exit $LASTEXITCODE
 }

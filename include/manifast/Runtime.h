@@ -76,6 +76,7 @@ MF_API void manifast_printfmt(Any* fmt, Any* any); // Simple version for now
 MF_API Any* manifast_input();
 MF_API void manifast_assert(Any* cond, Any* msg);
 MF_API Any* manifast_impor(const char* name);
+MF_API void manifast_class_add_method(Any* class_any, const char* name, ManifastNativeFn fn);
 MF_API Any* manifast_call_dynamic(Any* callee, Any* args, int nargs);
 
 // Internal Memory Management (exported for tests if needed)
@@ -86,6 +87,16 @@ MF_API char* mf_strdup(const char* s);
 
 #ifdef __cplusplus
 #include <stdexcept>
+#include <string>
+
+#ifdef __EMSCRIPTEN__
+#include <iostream>
+#include <cstdlib>
+#define MANIFAST_THROW(msg) do { std::cerr << "Runtime Error: " << msg << std::endl; std::abort(); } while(0)
+#else
+#define MANIFAST_THROW(msg) throw manifast::RuntimeError(msg)
+#endif
+
 namespace manifast {
     class RuntimeError : public std::runtime_error {
     public:

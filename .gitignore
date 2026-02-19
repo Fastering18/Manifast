@@ -34,3 +34,5 @@ Thumbs.db
 
 # Project specific
 *.mnf_log
+
+vcpkg_installed

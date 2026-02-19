@@ -16,7 +16,7 @@ namespace manifast {
 namespace vm {
 
 #define RUNTIME_ERROR(msg) \
-    do { runtimeError(msg); throw manifast::RuntimeError("Runtime Error: " + std::string(msg)); } while(0)
+    do { runtimeError(msg); MANIFAST_THROW("Runtime Error: " + std::string(msg)); } while(0)
 
 // Helper macros for instruction decoding
 #define GET_OP(i)   getOpCode(i)

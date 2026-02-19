@@ -137,6 +137,16 @@ MF_API Any* manifast_create_class(const char* name) {
     return a;
 }
 
+MF_API void manifast_class_add_method(Any* class_any, const char* name, ManifastNativeFn fn) {
+    if (class_any->type != 8) return;
+    ManifastClass* klass = (ManifastClass*)class_any->ptr;
+    Any fn_any;
+    fn_any.type = 4; // Native
+    fn_any.number = 0;
+    fn_any.ptr = (void*)fn;
+    manifast_object_set_raw(klass->methods, name, &fn_any);
+}
+
 MF_API Any* manifast_create_instance(Any* class_any) {
     if (class_any->type != 8) return nullptr;
     
@@ -462,10 +472,11 @@ MF_API Any* manifast_call_dynamic(Any* callee, Any* args, int nargs) {
         case 7: typeName = "objek"; break;
         case 9: typeName = "objek"; break; // Instance
     }
-
-    throw manifast::RuntimeError("Runtime Error: Panggilan ke non-fungsi (tipe " + typeName + ")");
+    
+    MANIFAST_THROW("Runtime Error: Panggilan ke non-fungsi (tipe " + std::to_string(callee->type) + ")");
 }
 
+#ifndef __EMSCRIPTEN__
 MF_API void manifast_print_any(Any* any) {
     if (!any) {
         printf("null");
@@ -516,6 +527,7 @@ MF_API void manifast_println_any(Any* any) {
     manifast_print_any(any);
     printf("\n");
 }
+#endif // !__EMSCRIPTEN__
 
 MF_API void manifast_printfmt(Any* fmt, Any* any) {
     // Placeholder for real printfmt
@@ -533,6 +545,7 @@ MF_API Any* manifast_input() {
     return manifast_create_string("");
 }
 
+#ifndef __EMSCRIPTEN__
 MF_API void manifast_assert(Any* cond, Any* msg) {
     bool truth = false;
     if (cond->type == 0) truth = (cond->number != 0);
@@ -542,16 +555,13 @@ MF_API void manifast_assert(Any* cond, Any* msg) {
     else truth = true;
 
     if (!truth) {
+        std::string assert_msg_str = "Assertion Failed";
         if (msg && msg->type == 1) {
-            std::string errMsg = "Assertion Gagal: " + std::string((char*)msg->ptr);
-            fprintf(stderr, "%s\n", errMsg.c_str());
-            throw manifast::RuntimeError(errMsg);
-        } else {
-            fprintf(stderr, "Assertion Gagal\n");
-            throw manifast::RuntimeError("Assertion Gagal");
+            assert_msg_str = "Assertion Gagal: " + std::string((char*)msg->ptr);
         }
+        throw manifast::RuntimeError(assert_msg_str);
     }
 }
-
+#endif // !__EMSCRIPTEN__
 
 } // extern "C"
