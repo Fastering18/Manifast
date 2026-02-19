@@ -177,7 +177,12 @@ MF_API void manifast_object_set_raw(ManifastObject* obj, const char* key, Any* v
 
 MF_API void manifast_object_set(Any* obj_any, const char* key, Any* val_any) {
     if (obj_any->type != 7) return;
-    manifast_object_set_raw((ManifastObject*)obj_any->ptr, key, val_any);
+    if (obj_any->type == 7) { // Object
+        manifast_object_set_raw((ManifastObject*)obj_any->ptr, key, val_any);
+    } else if (obj_any->type == 9) { // Instance
+        ManifastInstance* inst = (ManifastInstance*)obj_any->ptr;
+        manifast_object_set_raw(inst->fields, key, val_any);
+    }
 }
 
 MF_API Any* manifast_object_get_raw(ManifastObject* obj, const char* key) {
@@ -191,11 +196,21 @@ MF_API Any* manifast_object_get_raw(ManifastObject* obj, const char* key) {
 }
 
 MF_API Any* manifast_object_get(Any* obj_any, const char* key) {
-    if (obj_any->type != 7) {
-        static Any nilVal = {3, 0.0, nullptr};
-        return &nilVal;
+    if (obj_any->type == 7) { // Object
+        return manifast_object_get_raw((ManifastObject*)obj_any->ptr, key);
+    } else if (obj_any->type == 9) { // Instance
+        ManifastInstance* inst = (ManifastInstance*)obj_any->ptr;
+        // 1. Look in fields
+        Any* val = manifast_object_get_raw(inst->fields, key);
+        if (val && val->type != 3) return val;
+        // 2. Look in class methods
+        return manifast_object_get_raw(inst->klass->methods, key);
+    } else if (obj_any->type == 8) { // Class
+        ManifastClass* klass = (ManifastClass*)obj_any->ptr;
+        return manifast_object_get_raw(klass->methods, key);
     }
-    return manifast_object_get_raw((ManifastObject*)obj_any->ptr, key);
+    static Any nilVal = {3, 0.0, nullptr};
+    return &nilVal;
 }
 
 MF_API void manifast_array_set(Any* arr_any, double index_d, Any* val_any) {
@@ -416,8 +431,6 @@ MF_API Any* manifast_impor(const char* name) {
 MF_API Any* manifast_call_dynamic(Any* callee, Any* args, int nargs) {
     if (callee->type == 4) { // Native
         ManifastNativeFn fn = (ManifastNativeFn)callee->ptr;
-        // Native functions expect result in args[-1].
-        // We provide a stack-based temporary array.
         std::vector<Any> call_args(nargs + 1);
         for(int i = 0; i < nargs; ++i) call_args[i+1] = args[i];
         
@@ -426,8 +439,31 @@ MF_API Any* manifast_call_dynamic(Any* callee, Any* args, int nargs) {
         Any* res = (Any*)mf_malloc(sizeof(Any));
         *res = call_args[0];
         return res;
+    } else if (callee->type == 8) { // Class (Constructor)
+        Any* inst = manifast_create_instance(callee);
+        ManifastClass* klass = (ManifastClass*)callee->ptr;
+        Any* constructor = manifast_object_get_raw(klass->methods, "inisiasi");
+        if (constructor && constructor->type != 3) {
+            std::vector<Any> c_args(nargs + 1);
+            c_args[0] = *inst; // self
+            for (int i = 0; i < nargs; i++) c_args[i+1] = args[i];
+            manifast_call_dynamic(constructor, c_args.data(), nargs + 1);
+        }
+        return inst;
     }
-    return manifast_create_nil();
+    
+    std::string typeName = "unknown";
+    switch(callee->type) {
+        case 0: typeName = "angka"; break;
+        case 1: typeName = "string"; break;
+        case 2: typeName = "bool"; break;
+        case 3: typeName = "nil"; break;
+        case 6: typeName = "array"; break;
+        case 7: typeName = "objek"; break;
+        case 9: typeName = "objek"; break; // Instance
+    }
+
+    throw manifast::RuntimeError("Runtime Error: Panggilan ke non-fungsi (tipe " + typeName + ")");
 }
 
 MF_API void manifast_print_any(Any* any) {

@@ -1,3 +1,3 @@
 -- Placeholder for OS IO tests
 println("Testing OS IO...")
-print(impor("os"))
+println(impor("os"))

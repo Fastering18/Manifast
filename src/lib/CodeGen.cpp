@@ -909,7 +909,23 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
 
     std::string funcName = var->name;
     
+    llvm::Value* varVal = lookupVariable(funcName);
+    if (varVal) {
+        // Treat as dynamic call
+        llvm::Value* calleeVal = varVal; // Already Any*
+        llvm::Value* argsArr = builder->CreateAlloca(anyType, builder->getInt32(expr->args.size()));
+        for (size_t i = 0; i < expr->args.size(); ++i) {
+            llvm::Value* argVal = generateExpr(expr->args[i].get()); 
+            llvm::Value* argObj = builder->CreateLoad(anyType, argVal);
+            llvm::Value* slot = builder->CreateGEP(anyType, argsArr, {builder->getInt32(i)});
+            builder->CreateStore(argObj, slot);
+        }
+        return builder->CreateCall(module->getFunction("manifast_call_dynamic"), 
+            {calleeVal, argsArr, builder->getInt32(expr->args.size())});
+    }
+
     llvm::Function* func = nullptr;
+    bool isBuiltin = true;
     if (funcName == "print") {
         func = module->getFunction("manifast_print_any");
     } else if (funcName == "println") {
@@ -922,78 +938,76 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
         func = module->getFunction("manifast_assert");
     } else if (funcName == "impor") {
         if (expr->args.size() != 1) {
-            std::cerr << "impor() requires 1 argument\n";
-            return nullptr;
+            throw manifast::RuntimeError("Runtime Error: impor() membutuhkan 1 argumen");
         }
         llvm::Value* argVal = generateExpr(expr->args[0].get());
         llvm::Value* strPtr = unboxString(argVal);
         return builder->CreateCall(module->getFunction("manifast_impor"), {strPtr}, "impor_res");
     } else if (funcName == "len") {
         if (expr->args.size() != 1) {
-            std::cerr << "len() requires 1 argument\n";
-            return nullptr;
+            throw manifast::RuntimeError("Runtime Error: len() membutuhkan 1 argumen");
         }
         llvm::Value* arg = generateExpr(expr->args[0].get());
         llvm::Value* lenVal = builder->CreateCall(module->getFunction("manifast_array_len"), {arg});
         return boxDouble(lenVal);
     } else {
         func = module->getFunction(funcName);
+        isBuiltin = false;
     }
 
     if (!func) {
-        std::cerr << "Unknown function: " << var->name << "\n";
-        return nullptr;
+        throw manifast::RuntimeError("Runtime Error: Fungsi tidak ditemukan: '" + var->name + "'");
     }
 
-    bool isPrint = (funcName == "print" || funcName == "println");
+    if (isBuiltin) {
+        bool isPrint = (funcName == "print" || funcName == "println");
+        if (!isPrint && func->arg_size() != expr->args.size()) {
+            throw manifast::RuntimeError("Runtime Error: Jumlah argumen tidak sesuai untuk fungsi '" + var->name + "'");
+        }
 
-    if (!isPrint && func->arg_size() != expr->args.size()) {
-        std::cerr << "Incorrect number of arguments for " << var->name << "\n";
-        return nullptr;
-    }
-
-    if (isPrint) {
-        llvm::Value* res = nullptr;
-        for (size_t i = 0; i < expr->args.size(); ++i) {
-            if (i > 0) {
-                // Print tab
-                llvm::Value* tab = createString("\t");
-                builder->CreateCall(module->getFunction("manifast_print_any"), {tab});
+        if (isPrint) {
+            for (size_t i = 0; i < expr->args.size(); ++i) {
+                if (i > 0) {
+                    llvm::Value* tab = createString("\t");
+                    builder->CreateCall(module->getFunction("manifast_print_any"), {tab});
+                }
+                llvm::Value* argVal = generateExpr(expr->args[i].get());
+                if (!argVal) return nullptr;
+                builder->CreateCall(func, {argVal});
             }
-            
-            llvm::Value* argVal = generateExpr(expr->args[i].get());
+            if (funcName == "println") {
+                llvm::Value* nl = createString("\n");
+                builder->CreateCall(module->getFunction("manifast_print_any"), {nl});
+            }
+            return boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+        }
+
+        std::vector<llvm::Value*> argsV;
+        for (const auto& arg : expr->args) {
+            llvm::Value* argVal = generateExpr(arg.get());
             if (!argVal) return nullptr;
-            
-            if (i == expr->args.size() - 1 && funcName == "println") {
-                builder->CreateCall(module->getFunction("manifast_println_any"), {argVal});
-            } else {
-                builder->CreateCall(module->getFunction("manifast_print_any"), {argVal});
-            }
+            argsV.push_back(argVal);
         }
-
-        if (expr->args.empty() && funcName == "println") {
-             // Print just newline
-             llvm::Value* empty = createString("");
-             builder->CreateCall(module->getFunction("manifast_println_any"), {empty});
+        return builder->CreateCall(func, argsV);
+    } else {
+        // JIT (Native Signature) Call: void (void* vm, Any* args, int nargs)
+        // Result slot at argsArr[0], args start at argsArr[1]
+        llvm::Value* argsArr = builder->CreateAlloca(anyType, builder->getInt32(expr->args.size() + 1));
+        
+        for (size_t i = 0; i < expr->args.size(); i++) {
+             llvm::Value* argVal = generateExpr(expr->args[i].get());
+             llvm::Value* argObj = builder->CreateLoad(anyType, argVal);
+             llvm::Value* slot = builder->CreateGEP(anyType, argsArr, {builder->getInt32(i + 1)});
+             builder->CreateStore(argObj, slot);
         }
-
-        return boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+        
+        llvm::Value* vmPtr = builder->CreateBitCast(builder->getInt64(0), builder->getPtrTy());
+        llvm::Value* passArgsPtr = builder->CreateGEP(anyType, argsArr, {builder->getInt32(1)});
+        builder->CreateCall(func, {vmPtr, passArgsPtr, builder->getInt32(expr->args.size())});
+        
+        // Result is in argsArr[0]
+        return builder->CreateGEP(anyType, argsArr, {builder->getInt32(0)});
     }
-
-    std::vector<llvm::Value*> argsV;
-    for (const auto& arg : expr->args) {
-        llvm::Value* argVal = generateExpr(arg.get()); // Any*
-        if (!argVal) return nullptr;
-        argsV.push_back(argVal);
-    }
-
-    llvm::Value* callRes = builder->CreateCall(func, argsV);
-    
-    if (func->getReturnType()->isVoidTy()) {
-        return boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
-    }
-    
-    return callRes;
 }
 
 void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
@@ -1027,15 +1041,34 @@ void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
 }
 
 void CodeGen::visitReturnStmt(const ReturnStmt* stmt) {
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+    bool isMain = (func->getName() == "manifast_main");
+
     if (stmt->value) {
         llvm::Value* val = generateExpr(stmt->value.get()); // Any*
         if (val) {
-            builder->CreateRet(val);
+            if (isMain) {
+                builder->CreateRet(val);
+            } else {
+                // Native: store in args[-1]
+                llvm::Value* argsPtr = func->getArg(1);
+                llvm::Value* resSlot = builder->CreateGEP(anyType, argsPtr, {builder->getInt32(-1)});
+                llvm::Value* valObj = builder->CreateLoad(anyType, val);
+                builder->CreateStore(valObj, resSlot);
+                builder->CreateRetVoid();
+            }
         }
     } else {
-        // Return 0 for now.
-         llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
-         builder->CreateRet(retVal);
+        llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+        if (isMain) {
+            builder->CreateRet(retVal);
+        } else {
+            llvm::Value* argsPtr = func->getArg(1);
+            llvm::Value* resSlot = builder->CreateGEP(anyType, argsPtr, {builder->getInt32(-1)});
+            llvm::Value* nilObj = builder->CreateLoad(anyType, retVal); // retVal is 0.0 boxed
+            builder->CreateStore(nilObj, resSlot);
+            builder->CreateRetVoid();
+        }
     }
 }
 
@@ -1057,11 +1090,14 @@ void CodeGen::visitTryStmt(const TryStmt* stmt) {
 }
 
 void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
-    // Return type Any*, Args Any*
-    std::vector<llvm::Type*> argTypes(stmt->params.size(), builder->getPtrTy());
-    llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), argTypes, false);
+    // Signature: void (void* vm, Any* args, int nargs)
+    llvm::Type* vmPtrTy = builder->getPtrTy();
+    llvm::Type* argsPtrTy = builder->getPtrTy();
+    llvm::Type* nargsTy = builder->getInt32Ty();
+
+    llvm::FunctionType* ft = llvm::FunctionType::get(builder->getVoidTy(), {vmPtrTy, argsPtrTy, nargsTy}, false);
     llvm::Function* func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, stmt->name, module.get());
-    func->addFnAttr("stack-probe-size", "1048576"); // Disable stack probing
+    func->addFnAttr("stack-probe-size", "1048576"); 
     func->addFnAttr("no-stack-arg-probe");
 
     llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
@@ -1071,27 +1107,31 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
 
     pushScope();
     
-    uint32_t idx = 0;
-    for (auto& arg : func->args()) {
-        // Create alloca for arg (Type Any)
+    // Extract parameters from args array
+    llvm::Value* argsPtr = func->getArg(1);
+    
+    for (size_t i = 0; i < stmt->params.size(); i++) {
         llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
-        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->params[idx]);
+        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->params[i]);
         
-        // Load Any struct from the passed pointer and store into alloca
-        llvm::Value* loadedArg = builder->CreateLoad(anyType, &arg);
+        llvm::Value* slot = builder->CreateGEP(anyType, argsPtr, {builder->getInt32(i)});
+        llvm::Value* loadedArg = builder->CreateLoad(anyType, slot);
         builder->CreateStore(loadedArg, alloca);
         
-        scopes.back()[stmt->params[idx]] = alloca;
-        idx++;
+        scopes.back()[stmt->params[i]] = alloca;
     }
 
     // Body
     generateStmt(stmt->body.get());
     
-    // Default return 0 if no return stmt
+    // Default return nil (Any*) if no return stmt
     if (!builder->GetInsertBlock()->getTerminator()) {
-         llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
-         builder->CreateRet(retVal);
+        llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+        llvm::Value* argsPtr = func->getArg(1);
+        llvm::Value* resSlot = builder->CreateGEP(anyType, argsPtr, {builder->getInt32(-1)});
+        llvm::Value* nilObj = builder->CreateLoad(anyType, retVal);
+        builder->CreateStore(nilObj, resSlot);
+        builder->CreateRetVoid();
     }
     
     popScope();

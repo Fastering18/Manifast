@@ -62,9 +62,9 @@ void wasm_print_any(::Any* val, int depth = 0) {
         g_wasm_output += (inst->klass->name ? inst->klass->name : "?");
         g_wasm_output += "]";
     }
-    else if (val->type == 4) g_wasm_output += "[Native Function]";
-    else if (val->type == 5) g_wasm_output += "[Function]";
-    else g_wasm_output += "{Object}";
+    else if (val->type == 4) g_wasm_output += "[Fungsi Native]";
+    else if (val->type == 5) g_wasm_output += "[Fungsi]";
+    else g_wasm_output += "{Objek}";
 }
 
 void wasm_print(manifast::vm::VM* vm, ::Any* args, int nargs) {
@@ -77,10 +77,14 @@ void wasm_print(manifast::vm::VM* vm, ::Any* args, int nargs) {
     fflush(stdout);
 }
 
+void wasm_println(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    wasm_print(vm, args, nargs);
+    g_wasm_output += "\n";
+}
+
 void wasm_assert(manifast::vm::VM* vm, ::Any* args, int nargs) {
     if (nargs < 1) {
-        g_wasm_output += "\n[ERROR] assert() membutuhkan minimal 1 argumen\n";
-        return;
+        throw manifast::RuntimeError("Runtime Error: assert() membutuhkan minimal 1 argumen");
     }
     
     bool truth = false;
@@ -90,13 +94,11 @@ void wasm_assert(manifast::vm::VM* vm, ::Any* args, int nargs) {
     else truth = true;
 
     if (!truth) {
-        std::string msg = "Assertion Failed";
+        std::string msg = "Assertion Gagal";
         if (nargs >= 2 && args[1].type == 1) {
             msg = (char*)args[1].ptr;
         }
-        g_wasm_output += "\n[ASSERT FAILED] " + msg + "\n";
-        // In VM, we usually throw or set error state. 
-        // For WASM we can just mark it in output for now or throw if we want it to stop.
+        throw manifast::RuntimeError("Runtime Error: [ASSERT GAGAL] " + msg);
     }
 }
 
@@ -118,11 +120,11 @@ void manifast_assert(::Any* cond, ::Any* msg) {
     else truth = true;
 
     if (!truth) {
-        std::string errMsg = "Assertion Failed";
+        std::string errMsg = "Assertion Gagal";
         if (msg && msg->type == 1) {
             errMsg = (char*)msg->ptr;
         }
-        g_wasm_output += "\n[ASSERT FAILED] " + errMsg + "\n";
+        g_wasm_output += "\n[ASSERT GAGAL] " + errMsg + "\n";
     }
 }
 
@@ -197,7 +199,13 @@ const char* mf_run_script_tier(const char* source, int tier) {
         manifast::vm::Compiler compiler;
         
         if (compiler.compile(statements, chunk)) {
-            vm.interpret(&chunk, source);
+            try {
+                vm.interpret(&chunk, source);
+            } catch (const manifast::RuntimeError& e) {
+                g_wasm_output += "\n" + std::string(e.what()) + "\n";
+            } catch (const std::exception& e) {
+                g_wasm_output += "\nError: " + std::string(e.what()) + "\n";
+            }
             chunk.free();
         } else {
             g_wasm_output = "Compilation Failed";

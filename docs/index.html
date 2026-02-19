@@ -335,7 +335,7 @@
         }
 
         function runCode() {
-            if (!window.Module._mf_run_script_tier) {
+            if (!window.Module || !window.Module.ccall) {
                 alert("Wasm not loaded yet!");
                 return;
             }

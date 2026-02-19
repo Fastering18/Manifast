@@ -16,7 +16,7 @@ namespace manifast {
 namespace vm {
 
 #define RUNTIME_ERROR(msg) \
-    do { runtimeError(msg); return; } while(0)
+    do { runtimeError(msg); throw manifast::RuntimeError("Runtime Error: " + std::string(msg)); } while(0)
 
 // Helper macros for instruction decoding
 #define GET_OP(i)   getOpCode(i)
@@ -296,7 +296,7 @@ void VM::runtimeError(const std::string& message) {
     int line = (pc < (int)frame.chunk->lines.size()) ? frame.chunk->lines[pc] : -1;
     int offset = (pc < (int)frame.chunk->offsets.size()) ? frame.chunk->offsets[pc] : -1;
 
-    fprintf(stderr, "\n[ERROR RUNTIME] Baris %d\n", line);
+    fprintf(stderr, "\nRuntime Error: Baris %d\n", line);
     
     // Print source context with caret if available
     if (offset != -1 && !source.empty()) {
