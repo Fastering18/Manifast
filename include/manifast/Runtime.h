@@ -83,6 +83,16 @@ MF_API Any* manifast_call_dynamic(Any* callee, Any* args, int nargs);
 MF_API void* mf_malloc(size_t size);
 MF_API char* mf_strdup(const char* s);
 
+#include <stdint.h>
+
+// Plot callback for WASM/embedded use
+typedef void (*ManifastPlotShowCallback)(const uint8_t* rgba, int w, int h);
+MF_API void manifast_set_plot_show_callback(ManifastPlotShowCallback cb);
+
+// Clear output callback
+typedef void (*ManifastClearOutputCallback)();
+MF_API void manifast_set_clear_output_callback(ManifastClearOutputCallback cb);
+
 } // extern "C"
 
 #ifdef __cplusplus

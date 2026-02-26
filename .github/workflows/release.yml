@@ -101,20 +101,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Ninja (Ubuntu)
+      - name: Install Dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libfmt-dev
 
-      - name: Configure CMake
-        run: >
-          cmake -S . -B build -G "Ninja"
-          -DMANIFAST_ENABLE_LLVM=OFF
-          -DMANIFAST_BUILD_TESTS=OFF
-          -DCMAKE_BUILD_TYPE=Release
-          "-DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake"
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-fmt
 
-      - name: Build
-        run: cmake --build build --target manifast_core
+      - name: Configure & Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DMANIFAST_ENABLE_LLVM=OFF \
+            -DMANIFAST_BUILD_TESTS=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target manifast_core
+
+      - name: Configure & Build (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DMANIFAST_ENABLE_LLVM=OFF \
+            -DMANIFAST_BUILD_TESTS=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target manifast_core
 
       - name: Create Archive
         shell: bash

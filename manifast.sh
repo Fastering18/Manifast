@@ -1,21 +1,21 @@
 #!/bin/bash
 
-# Default values
 BUILD_DIR="build"
 COMMAND=$1
 FAST_MODE=0
 
-# Help message
 show_help() {
     echo "Manifast Build Tool (Linux/macOS)"
     echo "Usage: ./manifast.sh <command> [options]"
     echo ""
     echo "Commands:"
     echo "  build       Configure and build the project"
-    echo "  run         Run manifast code"
+    echo "  run         Run manifast file in jit tier"
+    echo "  run-vm      Run manifast file in vm tier"
     echo "  test        Run the test suite"
     echo "  install     Install binaries to system and add to PATH"
     echo "  clean       Remove the build directory"
+    echo "  build-wasm  Build for WebAssembly (requires Emscripten)"
     echo "  help        Show this help message"
     echo ""
     echo "Options:"
@@ -27,34 +27,55 @@ if [ -z "$COMMAND" ]; then
     exit 1
 fi
 
-# Check for flags
-for arg in "$@"; do
+shift
+REMAINING_ARGS=("$@")
+
+for arg in "${REMAINING_ARGS[@]}"; do
     if [ "$arg" == "--fast" ]; then
         FAST_MODE=1
     fi
 done
-
-if [ "$COMMAND" == "clean" ]; then
-    echo "Cleaning build directory ($BUILD_DIR)..."
-    rm -rf $BUILD_DIR
-    echo "Done."
-    exit 0
-fi
 
 if [ "$COMMAND" == "help" ]; then
     show_help
     exit 0
 fi
 
+if [ "$COMMAND" == "clean" ]; then
+    echo "Cleaning build directory ($BUILD_DIR)..."
+    rm -rf "$BUILD_DIR"
+    echo "Done."
+    exit 0
+fi
+
 if [ "$COMMAND" == "run" ]; then
-    MNF_BIN="$BUILD_DIR/bin/manifast"
-    if [ ! -f "$MNF_BIN" ]; then
+    BIN="$BUILD_DIR/bin/mifast"
+    if [ ! -f "$BIN" ]; then
         echo "Error: Binary not found. Run 'build' first."
         exit 1
     fi
-    
-    echo "Running Tests..."
-    "$MNF_BIN" $2
+    "$BIN" run "${REMAINING_ARGS[@]}"
+    exit $?
+fi
+
+if [ "$COMMAND" == "run-vm" ]; then
+    BIN="$BUILD_DIR/bin/mifast"
+    if [ ! -f "$BIN" ]; then
+        echo "Error: Binary not found. Run 'build' first."
+        exit 1
+    fi
+    "$BIN" run "${REMAINING_ARGS[@]}" --vm
+    exit $?
+fi
+
+if [ "$COMMAND" == "test" ]; then
+    BIN="$BUILD_DIR/bin/mifast"
+    if [ ! -f "$BIN" ]; then
+        echo "Error: Binary not found. Run 'build' first."
+        exit 1
+    fi
+    echo "Running Test Suite..."
+    "$BIN" test "${REMAINING_ARGS[@]}"
     exit $?
 fi
 
@@ -75,19 +96,7 @@ if [ "$COMMAND" == "build" ]; then
     fi
     
     echo "Building Project..."
-    cmake --build $BUILD_DIR
-    exit $?
-fi
-
-if [ "$COMMAND" == "test" ]; then
-    TEST_BIN="$BUILD_DIR/bin/manifast"
-    if [ ! -f "$TEST_BIN" ]; then
-        echo "Error: Binary not found. Run 'build' first."
-        exit 1
-    fi
-    
-    echo "Running Tests..."
-    "$TEST_BIN" tests/Manifast/test.mnf --test tests
+    cmake --build "$BUILD_DIR" --parallel $(nproc 2>/dev/null || echo 4)
     exit $?
 fi
 
@@ -112,7 +121,6 @@ if [ "$COMMAND" == "install" ]; then
     [ -f "$BIN_DIR/mifastc" ] && cp "$BIN_DIR/mifastc" "$INSTALL_BIN/"
     cp "$LIB_DIR"/*.a "$INSTALL_LIB/" 2>/dev/null
     
-    # Add to PATH if not already present
     if ! echo "$PATH" | grep -q "$INSTALL_BIN"; then
         SHELL_RC="$HOME/.bashrc"
         [ -n "$ZSH_VERSION" ] && SHELL_RC="$HOME/.zshrc"
@@ -135,14 +143,12 @@ if [ "$COMMAND" == "build-wasm" ]; then
         rm -rf "$WASM_BUILD_DIR"
     fi
     
-    # Check if emcmake is in PATH
     if ! command -v emcmake &> /dev/null; then
         echo "Error: emcmake not found. Please activate Emscripten environment."
         exit 1
     fi
     
     echo "Configuring..."
-    # Use MinGW Makefiles if on Windows/Git Bash, otherwise default or Ninja
     if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
        emcmake cmake -G "MinGW Makefiles" -S src/wasm -B "$WASM_BUILD_DIR"
     else

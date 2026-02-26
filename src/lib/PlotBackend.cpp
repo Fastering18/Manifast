@@ -198,6 +198,10 @@ void PlotBackend::render(ChartType type) {
     }
 }
 
+void PlotBackend::renderChart(ChartType type) {
+    render(type);
+}
+
 bool PlotBackend::saveToFile(const std::string& path, ChartType type) {
     render(type);
     writePNG(path.c_str(), framebuffer_.data(), config_.width, config_.height);

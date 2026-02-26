@@ -35,6 +35,12 @@ public:
 
     bool saveToFile(const std::string& path, ChartType type = ChartType::Line);
     bool showWindow(ChartType type = ChartType::Line);
+    
+    void renderChart(ChartType type = ChartType::Line);
+    const std::vector<uint8_t>& getFramebuffer() const { return framebuffer_; }
+    int getWidth() const { return config_.width; }
+    int getHeight() const { return config_.height; }
+    void reset() { series_.clear(); framebuffer_.clear(); }
 
 private:
     std::vector<Series> series_;

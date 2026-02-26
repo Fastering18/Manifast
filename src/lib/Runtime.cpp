@@ -6,6 +6,16 @@
 #include <vector>
 #include <string>
 #include <cmath>
+#include <unordered_map>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 
 #include "manifast/PlotBackend.h"
 
@@ -13,6 +23,27 @@
 extern "C" {
 
 static size_t g_allocated_memory = 0;
+static ManifastPlotShowCallback g_plot_show_callback = nullptr;
+static ManifastClearOutputCallback g_clear_output_callback = nullptr; // New global callback
+
+static std::unordered_map<std::string, char*> g_string_pool;
+
+static char* manifast_intern_string(const char* s) {
+    auto it = g_string_pool.find(s);
+    if (it != g_string_pool.end()) return it->second;
+    char* news = mf_strdup(s);
+    g_string_pool[s] = news;
+    return news;
+}
+
+MF_API void manifast_set_plot_show_callback(ManifastPlotShowCallback cb) {
+    g_plot_show_callback = cb;
+}
+
+// Implementation for the new clear output callback setter
+MF_API void manifast_set_clear_output_callback(ManifastClearOutputCallback cb) {
+    g_clear_output_callback = cb;
+}
 
 MF_API void* mf_malloc(size_t size) {
     if (size > 256 * 1024 * 1024) { // Hard cap 256MB
@@ -70,7 +101,7 @@ MF_API Any* manifast_create_string(const char* str) {
     Any* a = (Any*)mf_malloc(sizeof(Any));
     a->type = 1; // String
     a->number = 0;
-    a->ptr = mf_strdup(str);
+    a->ptr = manifast_intern_string(str);
     return a;
 }
 
@@ -183,7 +214,7 @@ MF_API void manifast_object_set_raw(ManifastObject* obj, const char* key, Any* v
         obj->entries = (ManifastObjectEntry*)realloc(obj->entries, sizeof(ManifastObjectEntry) * obj->capacity);
     }
     
-    obj->entries[obj->size].key = mf_strdup(key);
+    obj->entries[obj->size].key = manifast_intern_string(key);
     obj->entries[obj->size].value = *val_any;
     obj->size++;
 }
@@ -198,8 +229,16 @@ MF_API void manifast_object_set(Any* obj_any, const char* key, Any* val_any) {
 }
 
 MF_API Any* manifast_object_get_raw(ManifastObject* obj, const char* key) {
+    if (obj->size == 0) {
+        static Any nilVal = {3, 0.0, nullptr};
+        return &nilVal;
+    }
+    
+    // Intern the lookup key so we can use pointer equality
+    const char* interned_key = manifast_intern_string(key);
+    
     for (uint32_t i = 0; i < obj->size; ++i) {
-        if (strcmp(obj->entries[i].key, key) == 0) {
+        if (obj->entries[i].key == interned_key) {
             return &obj->entries[i].value;
         }
     }
@@ -394,6 +433,27 @@ static void m_linspace(void* vm, Any* args, int nargs) {
 }
 
 MF_API Any* manifast_impor(const char* name) {
+    std::string sname = name;
+    if (sname.length() > 3 && (sname.ends_with(".dll") || sname.ends_with(".so") || sname.ends_with(".dylib"))) {
+        void* handle = nullptr;
+#ifdef _WIN32
+        handle = (void*)LoadLibraryA(name);
+#else
+        handle = dlopen(name, RTLD_NOW);
+#endif
+        if (!handle) return manifast_create_nil();
+
+        typedef Any* (*InitFn)(void*);
+        InitFn init = nullptr;
+#ifdef _WIN32
+        init = (InitFn)GetProcAddress((HMODULE)handle, "manifast_init");
+#else
+        init = (InitFn)dlsym(handle, "manifast_init");
+#endif
+        if (init) return init(nullptr);
+        return manifast_create_nil();
+    }
+
     if (strcmp(name, "math") == 0) {
         Any* obj = manifast_create_object();
         struct { const char* n; ManifastNativeFn f; } math_funcs[] = {
@@ -439,8 +499,12 @@ MF_API Any* manifast_impor(const char* name) {
              exit(code);
         };
         auto clearOutput = [](void* vm, Any* args, int nargs) {
-            printf("\033[2J\033[H");
-            fflush(stdout);
+            if (g_clear_output_callback) {
+                g_clear_output_callback();
+            } else {
+                printf("\033[2J\033[H");
+                fflush(stdout);
+            }
             args[-1] = {3, 0.0, nullptr};
         };
         Any fn1 = {4, 0.0, (void*)+waktuNano};
@@ -594,8 +658,15 @@ MF_API Any* manifast_impor(const char* name) {
         };
 
         auto plot_show = [](void* vm, Any* args, int nargs) {
-            bool ok = g_plot.showWindow(manifast::plot::ChartType::Line);
-            args[-1] = {2, ok ? 1.0 : 0.0, nullptr};
+            g_plot.renderChart(manifast::plot::ChartType::Line);
+            if (g_plot_show_callback) {
+                const auto& fb = g_plot.getFramebuffer();
+                g_plot_show_callback(fb.data(), g_plot.getWidth(), g_plot.getHeight());
+                args[-1] = {2, 1.0, nullptr};
+            } else {
+                bool ok = g_plot.showWindow(manifast::plot::ChartType::Line);
+                args[-1] = {2, ok ? 1.0 : 0.0, nullptr};
+            }
         };
 
         Any fn_line = {4, 0.0, (void*)+plot_line};
