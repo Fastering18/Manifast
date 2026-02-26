@@ -382,8 +382,9 @@ void VM::run(int entryFrameDepth) {
 
     int instructions = 0;
     for (;;) {
-        if (instructions++ > 1000000) {
-            fprintf(stderr, "Error: Execution limit reached (1M instructions)\n");
+        if (instructions++ > 100000000) {
+            fprintf(stderr, "Error: Batas eksekusi tercapai (100 juta instruksi)\n");
+            RUNTIME_ERROR("Batas eksekusi tercapai");
             return;
         }
         

@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://fastering.thedev.id/Manifast/sitemap.xml

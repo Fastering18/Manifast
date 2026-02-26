@@ -4,7 +4,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manifast Playground</title>
+    <title>Manifast Playground | Indonesian-Syntax High-Performance Language</title>
+
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="Manifast Playground | Indonesian-Syntax High-Performance Language">
+    <meta name="description"
+        content="Experiment with Manifast, a high-performance programming language featuring Indonesian syntax. Powered by LLVM and WASM for near-native speed in your browser.">
+    <meta name="keywords"
+        content="Manifast, bahasa pemrograman, Indonesian programming language, LLVM, WebAssembly, coding playground, IDE">
+    <meta name="author" content="Fastering18">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://fastering.thedev.id/Manifast/">
+    <meta property="og:title" content="Manifast Playground | Indonesian-Syntax Language">
+    <meta property="og:description"
+        content="High-performance coding with Indonesian syntax. Try it now in your browser!">
+    <meta property="og:image"
+        content="https://repository-images.githubusercontent.com/832731807/f6f59b0b-6d6c-4b36-a8a2-8a9d1d1d1d1d">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://fastering.thedev.id/Manifast/">
+    <meta property="twitter:title" content="Manifast Playground | Indonesian-Syntax Language">
+    <meta property="twitter:description"
+        content="High-performance coding with Indonesian syntax. Try it now in your browser!">
+    <meta property="twitter:image"
+        content="https://repository-images.githubusercontent.com/832731807/f6f59b0b-6d6c-4b36-a8a2-8a9d1d1d1d1d">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -298,6 +325,45 @@
             color: var(--text-primary);
             border-color: var(--text-secondary);
             background: var(--bg-surface);
+        }
+
+        /* CodeMirror Syntax Styling */
+        .cm-s-one-dark .cm-keyword {
+            color: #c678dd;
+            font-weight: bold;
+        }
+
+        .cm-s-one-dark .cm-string {
+            color: #98c379;
+        }
+
+        .cm-s-one-dark .cm-builtin {
+            color: #61afef;
+        }
+
+        .cm-s-one-dark .cm-number {
+            color: #d19a66;
+        }
+
+        .cm-s-one-dark .cm-comment {
+            color: #5c6370;
+            font-style: italic;
+        }
+
+        .cm-s-one-dark .cm-operator {
+            color: #56b6c2;
+        }
+
+        .cm-s-one-dark .cm-variable {
+            color: #e06c75;
+        }
+
+        .cm-s-one-dark .cm-property {
+            color: #e06c75;
+        }
+
+        .cm-s-one-dark .CodeMirror-cursor {
+            border-left: 2px solid var(--accent) !important;
         }
 
         ::-webkit-scrollbar {
@@ -611,7 +677,12 @@
                 console.error("[Manifast] Execution error:", err);
                 const span = document.createElement('span');
                 span.style.color = 'var(--error)';
-                span.textContent = "\n[FATAL ERROR] " + err.message + "\n";
+                let msg = err.message || "Unknown error";
+                if (msg.includes("Batas eksekusi tercapai")) {
+                    msg = "Limit Eksekusi Tercapai! (Kurangi n/iterasi atau optimasi kode)";
+                    span.style.color = 'var(--warning)';
+                }
+                span.textContent = "\n[ERROR] " + msg + "\n";
                 outputEl.appendChild(span);
             } finally {
                 setRunning(false);

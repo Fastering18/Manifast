@@ -40,5 +40,7 @@ add_custom_command(TARGET manifast POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:manifast> ${CMAKE_SOURCE_DIR}/../../docs/manifast.js
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/manifast.wasm ${CMAKE_SOURCE_DIR}/../../docs/manifast.wasm
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/index.html ${CMAKE_SOURCE_DIR}/../../docs/index.html
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/robots.txt ${CMAKE_SOURCE_DIR}/../../docs/robots.txt
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/llms.txt ${CMAKE_SOURCE_DIR}/../../docs/llms.txt
     COMMENT "Copying WebAssembly outputs to /docs directory"
 )

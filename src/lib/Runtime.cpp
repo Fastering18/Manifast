@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdio>
 #include <chrono>
+#include <thread>
 #include <vector>
 #include <string>
 #include <cmath>
@@ -507,12 +508,22 @@ MF_API Any* manifast_impor(const char* name) {
             }
             args[-1] = {3, 0.0, nullptr};
         };
+        auto tunggu = [](void* vm, Any* args, int nargs) {
+            if (nargs < 1 || args[0].type != 0) return;
+            double sec = args[0].number;
+            // Native wait might block the main thread, but Emscripten handles this for now
+            // if we are using async methods or if we just want it to work in native
+            std::this_thread::sleep_for(std::chrono::milliseconds((int)(sec)));
+            args[-1] = {3, 0.0, nullptr};
+        };
         Any fn1 = {4, 0.0, (void*)+waktuNano};
         Any fn2 = {4, 0.0, (void*)+exitFn};
         Any fn3 = {4, 0.0, (void*)+clearOutput};
+        Any fn4 = {4, 0.0, (void*)+tunggu};
         manifast_object_set(obj, "waktuNano", &fn1);
         manifast_object_set(obj, "keluar", &fn2);
         manifast_object_set(obj, "clearOutput", &fn3);
+        manifast_object_set(obj, "tunggu", &fn4);
         return obj;
     } else if (strcmp(name, "string") == 0) {
         Any* obj = manifast_create_object();

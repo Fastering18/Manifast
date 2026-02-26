@@ -1,0 +1,19 @@
+# Manifast: Fast Indonesian-Syntax Programming Language
+
+Manifast is a high-performance programming language featuring Indonesian syntax, designed for speed and simplicity. It leverages LLVM for JIT and AOT compilation, offering native performance with a syntax that is intuitive for Indonesian developers.
+
+## Key Features
+- **Indonesian Syntax**: Uses familiar Indonesian keywords (e.g., `fungsi`, `jika`, `kembali`).
+- **LLVM-Powered**: High-performance execution via LLVM JIT/AOT.
+- **Embedded VM**: Includes a lightweight bytecode VM for constrained environments and WASM.
+- **Cross-Platform**: Supports Windows, Linux, and WebAssembly.
+- **WASM Playground**: A web-based IDE for testing and sharing Manifast code.
+
+## Resources
+- **GitHub Repository**: https://github.com/Fastering18/Manifast
+- **Documentation**: https://fastering.thedev.id/Manifast/
+- **Playground**: https://fastering.thedev.id/Manifast/
+
+## Installation
+- **Windows (PowerShell)**: `irm https://fastering.thedev.id/Manifast/install.ps1 | iex`
+- **Linux/macOS (Bash)**: `curl -fsSL https://fastering.thedev.id/Manifast/install.sh | bash`

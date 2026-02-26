@@ -4,7 +4,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manifast Playground</title>
+    <title>Manifast Playground | Indonesian-Syntax High-Performance Language</title>
+
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="Manifast Playground | Indonesian-Syntax High-Performance Language">
+    <meta name="description"
+        content="Experiment with Manifast, a high-performance programming language featuring Indonesian syntax. Powered by LLVM and WASM for near-native speed in your browser.">
+    <meta name="keywords"
+        content="Manifast, bahasa pemrograman, Indonesian programming language, LLVM, WebAssembly, coding playground, IDE">
+    <meta name="author" content="Fastering18">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://fastering.thedev.id/Manifast/">
+    <meta property="og:title" content="Manifast Playground | Indonesian-Syntax Language">
+    <meta property="og:description"
+        content="High-performance coding with Indonesian syntax. Try it now in your browser!">
+    <meta property="og:image"
+        content="https://repository-images.githubusercontent.com/832731807/f6f59b0b-6d6c-4b36-a8a2-8a9d1d1d1d1d">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://fastering.thedev.id/Manifast/">
+    <meta property="twitter:title" content="Manifast Playground | Indonesian-Syntax Language">
+    <meta property="twitter:description"
+        content="High-performance coding with Indonesian syntax. Try it now in your browser!">
+    <meta property="twitter:image"
+        content="https://repository-images.githubusercontent.com/832731807/f6f59b0b-6d6c-4b36-a8a2-8a9d1d1d1d1d">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -300,6 +327,45 @@
             background: var(--bg-surface);
         }
 
+        /* CodeMirror Syntax Styling */
+        .cm-s-one-dark .cm-keyword {
+            color: #c678dd;
+            font-weight: bold;
+        }
+
+        .cm-s-one-dark .cm-string {
+            color: #98c379;
+        }
+
+        .cm-s-one-dark .cm-builtin {
+            color: #61afef;
+        }
+
+        .cm-s-one-dark .cm-number {
+            color: #d19a66;
+        }
+
+        .cm-s-one-dark .cm-comment {
+            color: #5c6370;
+            font-style: italic;
+        }
+
+        .cm-s-one-dark .cm-operator {
+            color: #56b6c2;
+        }
+
+        .cm-s-one-dark .cm-variable {
+            color: #e06c75;
+        }
+
+        .cm-s-one-dark .cm-property {
+            color: #e06c75;
+        }
+
+        .cm-s-one-dark .CodeMirror-cursor {
+            border-left: 2px solid var(--accent) !important;
+        }
+
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -526,14 +592,42 @@
                 console.log("[Manifast] WASM VM loaded successfully");
                 document.getElementById('loader').style.opacity = '0';
                 setTimeout(() => document.getElementById('loader').remove(), 500);
+
+                // Register event callback
+                // 0=log, 1=error, 2=plot, 3=clear, 4=done, 5=delay
+                const eventCallback = Module.addFunction((type, dataPtr) => {
+                    const data = Module.UTF8ToString(dataPtr);
+                    const outputEl = document.getElementById('output');
+
+                    if (type === 0) { // Log
+                        const span = document.createElement('span');
+                        span.textContent = data;
+                        outputEl.appendChild(span);
+                    } else if (type === 1) { // Error
+                        const span = document.createElement('span');
+                        span.style.color = 'var(--error)';
+                        span.textContent = "\n[ERROR] " + data + "\n";
+                        outputEl.appendChild(span);
+                    } else if (type === 2) { // Plot (Image)
+                        const img = document.createElement('img');
+                        img.src = data;
+                        outputEl.appendChild(img);
+                    } else if (type === 3) { // Clear
+                        outputEl.innerHTML = '';
+                    } else if (type === 5) { // Delay/Sleep (Visual only for now)
+                        // This can be used for animations if the runner handles yielding
+                    }
+                    outputEl.scrollTop = outputEl.scrollHeight;
+                }, 'vpp');
+
+                if (Module._mf_set_event_callback) {
+                    Module._mf_set_event_callback(eventCallback);
+                }
+
                 initSidebar();
             },
-            print: (text) => {
-                console.log("[MF stdout]", text);
-            },
-            printErr: (text) => {
-                console.warn("[MF stderr]", text);
-            }
+            print: (text) => console.log("[MF stdout]", text),
+            printErr: (text) => console.warn("[MF stderr]", text)
         };
 
         // --- Playback Engine ---
@@ -552,37 +646,6 @@
             console.log("[Manifast] Playback stopped by user");
         }
 
-        async function renderOutput(text) {
-            const outputEl = document.getElementById('output');
-            outputEl.innerHTML = '';
-
-            if (!text) return;
-
-            const myId = ++playbackId;
-            const tokens = text.split(/(\[CLR\]|\[DLY:\d+\]|\[IMG:data:[^\]]+\])/);
-
-            for (const token of tokens) {
-                if (myId !== playbackId) return;
-
-                if (token === '[CLR]') {
-                    outputEl.innerHTML = '';
-                } else if (token.startsWith('[DLY:')) {
-                    const ms = parseInt(token.match(/\d+/)[0]);
-                    await new Promise(r => setTimeout(r, ms));
-                } else if (token.startsWith('[IMG:')) {
-                    const src = token.match(/\[IMG:(data:[^\]]+)\]/)[1];
-                    const img = document.createElement('img');
-                    img.src = src;
-                    outputEl.appendChild(img);
-                } else if (token) {
-                    const span = document.createElement('span');
-                    span.textContent = token;
-                    outputEl.appendChild(span);
-                }
-                outputEl.scrollTop = outputEl.scrollHeight;
-            }
-        }
-
         async function runCode() {
             if (!window.Module._mf_run_script_tier) {
                 alert("WASM not loaded yet!");
@@ -594,29 +657,33 @@
             const timingEl = document.getElementById('timing');
 
             setRunning(true);
-            outputEl.innerHTML = '<span style="color: var(--accent); opacity: 0.7">> Executing...</span>\n';
+            outputEl.innerHTML = '<span style="color: hsla(200, 100%, 70%, 0.8)">> Executing...</span>\n';
             timingEl.innerText = '';
 
             console.log("[Manifast] Running script...");
+            const startTime = performance.now();
 
-            await new Promise(r => setTimeout(r, 30));
-
-            const start = performance.now();
             try {
+                // Execute synchronously (events will trigger our callback)
                 const result = window.Module.ccall('mf_run_script_tier', 'string', ['string', 'number'], [code, 0]);
-                const duration = (performance.now() - start).toFixed(2);
 
-                console.log("[Manifast] Execution done in", duration, "ms");
-                console.log("[Manifast] Raw output length:", result ? result.length : 0);
+                const endTime = performance.now();
+                timingEl.innerText = `${((endTime - startTime) / 1000).toFixed(3)}s`;
 
-                outputEl.innerHTML = '';
-                await renderOutput(result || '');
-
-                timingEl.innerText = `[${duration}ms]`;
+                if (result && result.includes("[ERROR RUNTIME]")) {
+                    console.error("[Manifast] Runtime Error detected");
+                }
             } catch (err) {
-                console.error("[Manifast] Runtime error:", err);
-                outputEl.innerHTML = `<span style="color: var(--error)">RUNTIME ERROR:</span>\n${err.message}`;
-                timingEl.innerText = '[Error]';
+                console.error("[Manifast] Execution error:", err);
+                const span = document.createElement('span');
+                span.style.color = 'var(--error)';
+                let msg = err.message || "Unknown error";
+                if (msg.includes("Batas eksekusi tercapai")) {
+                    msg = "Limit Eksekusi Tercapai! (Kurangi n/iterasi atau optimasi kode)";
+                    span.style.color = 'var(--warning)';
+                }
+                span.textContent = "\n[ERROR] " + msg + "\n";
+                outputEl.appendChild(span);
             } finally {
                 setRunning(false);
             }
