@@ -1,0 +1,52 @@
+-- Test extended math functions (MATLAB-common)
+lokal math = impor("math")
+
+-- Helper
+fungsi near(a, b)
+  lokal diff = a - b
+  jika diff < 0 maka diff = 0 - diff tutup
+  kembali diff < 0.0001
+tutup
+
+-- Hyperbolic trig
+assert(near(math.sinh(0), 0), "sinh(0) harusnya 0")
+assert(near(math.cosh(0), 1), "cosh(0) harusnya 1")
+assert(near(math.tanh(0), 0), "tanh(0) harusnya 0")
+assert(near(math.asinh(0), 0), "asinh(0) harusnya 0")
+assert(near(math.acosh(1), 0), "acosh(1) harusnya 0")
+assert(near(math.atanh(0), 0), "atanh(0) harusnya 0")
+
+-- Rounding
+assert(math.round(3.5) == 4, "round(3.5) harusnya 4")
+assert(math.round(3.4) == 3, "round(3.4) harusnya 3")
+assert(math.round(-2.5) == -2 atau math.round(-2.5) == -3, "round(-2.5)")
+assert(math.trunc(3.9) == 3, "trunc(3.9) harusnya 3")
+assert(math.trunc(-3.9) == -3, "trunc(-3.9) harusnya -3")
+
+-- Logarithmic
+assert(math.log2(8) == 3, "log2(8) harusnya 3")
+assert(near(math.log10(100), 2), "log10(100) harusnya 2")
+
+-- Special
+assert(math.sign(5) == 1, "sign(5) harusnya 1")
+assert(math.sign(-3) == -1, "sign(-3) harusnya -1")
+assert(math.sign(0) == 0, "sign(0) harusnya 0")
+assert(math.hypot(3, 4) == 5, "hypot(3,4) harusnya 5")
+assert(math.mod(10, 3) == 1, "mod(10,3) harusnya 1")
+
+-- Comparison
+assert(math.max(3, 7) == 7, "max(3,7) harusnya 7")
+assert(math.min(3, 7) == 3, "min(3,7) harusnya 3")
+assert(math.clamp(5, 1, 10) == 5, "clamp(5,1,10) harusnya 5")
+assert(math.clamp(-5, 0, 10) == 0, "clamp(-5,0,10) harusnya 0")
+assert(math.clamp(15, 0, 10) == 10, "clamp(15,0,10) harusnya 10")
+
+-- Constants
+assert(near(math.tau, 6.2831), "tau harusnya ~6.2831")
+
+-- Linspace
+lokal ls = math.linspace(0, 1, 5)
+assert(len(ls) == 5, "linspace harusnya 5 elemen")
+assert(near(ls[1], 0), "linspace[1] harusnya 0")
+assert(near(ls[5], 1), "linspace[5] harusnya 1")
+assert(near(ls[3], 0.5), "linspace[3] harusnya 0.5")

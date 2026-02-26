@@ -249,8 +249,9 @@ void VM::defineNative(const std::string& name, NativeFn fn) {
 
 void VM::resetStack() {
     stack.clear();
-    stack.resize(4096, {3, 0.0, nullptr});
+    stack.resize(maxStackSize, {3, 0.0, nullptr});
     frames.clear();
+    frames.reserve(512);
 }
 
 void VM::interpret(Chunk* chunk, std::string_view src) {

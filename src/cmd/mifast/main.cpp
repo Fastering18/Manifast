@@ -15,7 +15,9 @@
 #include "manifast/Parser.h"
 #include "manifast/VM/Compiler.h"
 #include "manifast/VM/VM.h"
+#ifdef MANIFAST_HAS_LLVM
 #include "manifast/CodeGen.h" 
+#endif
 
 #ifdef _WIN32
 #include <io.h>
@@ -122,9 +124,14 @@ bool runTestInProcess(const std::string& source, std::string& outputLog, bool us
                     finalSuccess = true;
                 } else finalSuccess = false;
             } else {
+#ifdef MANIFAST_HAS_LLVM
                 manifast::CodeGen codegen;
                 codegen.compile(statements);
                 finalSuccess = codegen.run();
+#else
+                fmt::print(fg(fmt::color::red), "Error: This binary was compiled without LLVM JIT support. Use --vm.\n");
+                finalSuccess = false;
+#endif
             }
         }
     } catch (const manifast::RuntimeError& e) {
@@ -144,8 +151,8 @@ void printUsage() {
     fmt::print(fmt::emphasis::bold, "Manifast Management Tool (mifast) v0.0.12\n");
     fmt::print("Usage: mifast <command> [args]\n\n");
     fmt::print("Commands:\n");
-    fmt::print("  run <file> [--vm]    Compile and run a Manifast file\n");
-    fmt::print("  test [--vm]          Run the project test suite (In-Process)\n");
+    fmt::print("  run <file> [--vm] [--stack-size MB]  Compile and run a Manifast file\n");
+    fmt::print("  test [--vm]                          Run the project test suite (In-Process)\n");
 }
 
 void runTestRunner(bool useVM) {
@@ -273,6 +280,7 @@ int main(int argc, char* argv[]) {
     // Simple argument parsing
     bool useVM = false;
     bool debugDev = false;
+    size_t stackSizeMB = 16; // default 16MB stack size
     std::string filePath;
     
     // Check for --vm in any position after command
@@ -280,6 +288,9 @@ int main(int argc, char* argv[]) {
         std::string arg = argv[i];
         if(arg == "--vm") useVM = true;
         else if(arg == "--debugdev") debugDev = true;
+        else if(arg == "--stack-size" && i + 1 < argc) {
+            stackSizeMB = std::stoull(argv[++i]);
+        }
         else if (filePath.empty()) filePath = arg;
     }
 
@@ -311,6 +322,11 @@ int main(int argc, char* argv[]) {
                 if (compiler.compile(statements, chunk)) {
                     manifast::vm::VM vm;
                     vm.debugMode = debugDev;
+                    
+                    // Convert MB to number of Any variants (roughly 16 bytes each)
+                    size_t numSlots = (stackSizeMB * 1024 * 1024) / sizeof(Any);
+                    vm.setStackSize(numSlots);
+                    
                     vm.interpret(&chunk);
                     chunk.free();
                 } else {
@@ -318,9 +334,14 @@ int main(int argc, char* argv[]) {
                      return 1;
                 }
             } else {
+#ifdef MANIFAST_HAS_LLVM
                 manifast::CodeGen codegen;
                 codegen.compile(statements);
                 if (!codegen.run()) return 1;
+#else
+                fmt::print(fg(fmt::color::red), "Error: This binary was compiled without LLVM JIT support. Use --vm.\n");
+                return 1;
+#endif
             }
 
         } catch (const std::exception& e) {

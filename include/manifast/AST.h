@@ -120,11 +120,12 @@ public:
 
 class FunctionExpr : public Expr {
 public:
-    std::vector<std::string> params;
+    std::vector<std::pair<std::string, std::string>> params; // Name, Type
+    std::string returnType;
     std::unique_ptr<Stmt> body;
     
-    FunctionExpr(std::vector<std::string> params, std::unique_ptr<Stmt> body)
-        : params(std::move(params)), body(std::move(body)) {}
+    FunctionExpr(std::vector<std::pair<std::string, std::string>> params, std::string returnType, std::unique_ptr<Stmt> body)
+        : params(std::move(params)), returnType(std::move(returnType)), body(std::move(body)) {}
 };
 
 class ObjectExpr : public Expr {
@@ -172,11 +173,12 @@ public:
 class VarDeclStmt : public Stmt {
 public:
     std::string name;
+    std::string typeAnnotation; // Optional type hint (e.g. "angka")
     std::unique_ptr<Expr> initializer; // Can be null
     bool isConst;
 
-    VarDeclStmt(std::string name, std::unique_ptr<Expr> initializer, bool isConst)
-        : name(std::move(name)), initializer(std::move(initializer)), isConst(isConst) {}
+    VarDeclStmt(std::string name, std::string typeAnnotation, std::unique_ptr<Expr> initializer, bool isConst)
+        : name(std::move(name)), typeAnnotation(std::move(typeAnnotation)), initializer(std::move(initializer)), isConst(isConst) {}
 };
 
 class IfStmt : public Stmt {
@@ -213,11 +215,12 @@ public:
 class FunctionStmt : public Stmt {
 public:
     std::string name;
-    std::vector<std::string> params; // Just names for now
+    std::vector<std::pair<std::string, std::string>> params; // Name, Type
+    std::string returnType;
     std::unique_ptr<Stmt> body;
 
-    FunctionStmt(std::string name, std::vector<std::string> params, std::unique_ptr<Stmt> body)
-        : name(std::move(name)), params(std::move(params)), body(std::move(body)) {}
+    FunctionStmt(std::string name, std::vector<std::pair<std::string, std::string>> params, std::string returnType, std::unique_ptr<Stmt> body)
+        : name(std::move(name)), params(std::move(params)), returnType(std::move(returnType)), body(std::move(body)) {}
 };
 
 class ClassStmt : public Stmt {

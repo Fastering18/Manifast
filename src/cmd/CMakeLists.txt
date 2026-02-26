@@ -1,21 +1,28 @@
-add_executable(mifastc mifastc/main.cpp)
+if(MANIFAST_ENABLE_LLVM)
+    add_executable(mifastc mifastc/main.cpp)
 
-llvm_map_components_to_libnames(mifastc_llvm_libs
-    core orcjit support target executionengine analysis native
-    passes mc object option ipo instrumentation
-    bitreader bitwriter
-    x86codegen x86asmparser x86desc x86info
-)
+    llvm_map_components_to_libnames(mifastc_llvm_libs
+        core orcjit support target executionengine analysis native
+        passes mc object option ipo instrumentation
+        bitreader bitwriter
+        x86codegen x86asmparser x86desc x86info
+    )
 
-target_link_libraries(mifastc PRIVATE 
-    manifast_jit 
-    ${mifastc_llvm_libs}
-    ${LLVM_SYSTEM_LIBS}
-)
+    target_link_libraries(mifastc PRIVATE 
+        manifast_jit 
+        ${mifastc_llvm_libs}
+        ${LLVM_SYSTEM_LIBS}
+    )
 
-set_target_properties(mifastc PROPERTIES ENABLE_EXPORTS ON)
+    set_target_properties(mifastc PROPERTIES ENABLE_EXPORTS ON)
+endif()
 
 add_executable(mifast mifast/main.cpp)
-target_link_libraries(mifast PRIVATE manifast_core manifast_jit fmt::fmt)
-target_compile_definitions(mifast PRIVATE FMT_HEADER_ONLY)
+if(MANIFAST_ENABLE_LLVM)
+    target_link_libraries(mifast PRIVATE manifast_core manifast_jit fmt::fmt)
+    target_compile_definitions(mifast PRIVATE MANIFAST_HAS_LLVM FMT_HEADER_ONLY)
+else()
+    target_link_libraries(mifast PRIVATE manifast_core fmt::fmt)
+    target_compile_definitions(mifast PRIVATE FMT_HEADER_ONLY)
+endif()
 set_target_properties(mifast PROPERTIES ENABLE_EXPORTS ON)

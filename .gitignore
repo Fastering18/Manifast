@@ -34,5 +34,10 @@ Thumbs.db
 
 # Project specific
 *.mnf_log
+test_plot_output.bmp
+test_scatter_output.bmp
+*.tmp
+build-nollvm/
+build-llvm/
 
-vcpkg_installed
+vcpkg_installed/

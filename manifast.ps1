@@ -120,6 +120,13 @@ if ($Command -eq "build") {
         # Toolchain detection (vcpkg)
         $VcpkgToolchain = "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
         if (-not (Test-Path $VcpkgToolchain)) {
+            $VcpkgExe = Get-Command vcpkg -ErrorAction SilentlyContinue
+            if ($VcpkgExe) {
+                $VcpkgRoot = Split-Path (Split-Path $VcpkgExe.Path)
+                $VcpkgToolchain = "$VcpkgRoot\scripts\buildsystems\vcpkg.cmake"
+            }
+        }
+        if (-not (Test-Path $VcpkgToolchain)) {
             $VcpkgToolchain = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
         }
         
@@ -154,7 +161,10 @@ if ($Command -eq "build") {
              Write-Host "  Mode: DEFAULT (Vcpkg Bundle)" -ForegroundColor Blue
              if (Test-Path $VcpkgToolchain) {
                  Write-Host "  Using Toolchain: $VcpkgToolchain" -ForegroundColor Gray
-                 cmake -S . -B $BuildDir -G Ninja -DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain
+                 # Explicitly set triplet and prefix path to help CMake find vcpkg packages (like asmjit)
+                 # even if the compiler doesn't match the default triplet.
+                 $VcpkgInstalled = Join-Path $PSScriptRoot "vcpkg_installed\x64-windows"
+                 cmake -S . -B $BuildDir -G Ninja -DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_PREFIX_PATH=$VcpkgInstalled
              } else {
                  cmake -S . -B $BuildDir -G Ninja
              }

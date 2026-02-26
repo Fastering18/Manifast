@@ -15,6 +15,7 @@ set(CORE_SOURCES
     ../../src/lib/VM.cpp
     ../../src/lib/Compiler.cpp
     ../../src/lib/Runtime.cpp
+    ../../src/lib/PlotBackend.cpp
 )
 
 add_executable(manifast bindings.cpp ${CORE_SOURCES})
@@ -30,4 +31,12 @@ target_link_options(manifast PRIVATE
     -sEXPORTED_FUNCTIONS=["_mf_run_script","_mf_run_script_tier","_malloc","_free"]
     -sNO_EXIT_RUNTIME=1
     --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/index.html
+)
+
+# Move outputs to /docs automatically
+add_custom_command(TARGET manifast POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/../../docs
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:manifast> ${CMAKE_SOURCE_DIR}/../../docs/manifast.js
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/manifast.wasm ${CMAKE_SOURCE_DIR}/../../docs/manifast.wasm
+    COMMENT "Copying WebAssembly outputs to /docs directory"
 )

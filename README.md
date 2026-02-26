@@ -6,8 +6,8 @@ Fast, scriptable programming language with Indonesian-based syntax, powered by L
 
 ## Syntax Samples
 ```manifast
--- Functions
-fungsi hitung(x, y)
+-- Functions (Now with Type Annotations)
+fungsi hitung(x: angka, y: angka): angka
     kembali x * y + 10
 tutup
 
@@ -28,34 +28,31 @@ lokal user = { nama: "Manifast", versi: 0.1 }
 ## Welcome Contributors!
 We are open to anyone who wants to contribute to this project. Whether it's reporting bugs, suggesting features, or submitting pull requests, your help is appreciated!
 
-## Performance
+## Performance Tiers
 
-Manifast features a **Tier-0 Bytecode VM** designed for ultra-low latency embedding (e.g., Game Engines, Configuration, Web).
+Manifast uses a multi-tier execution model to balance startup speed and raw performance:
 
-| Metric | Time | Notes |
-|--------|------|-------|
-| **VM Startup** | **~0.05 ms** (50µs) | Full Pipeline (Lex/Parse/Compile/Run) |
-| **Execution** | **<0.01 ms** (10µs) | VM Loop Only (Est.) |
-| **Memory** | **<500 KB** | Core Library Size |
+| Tier | Engine | Target Use-case | Latency |
+|------|--------|-----------------|---------|
+| **Tier 0** | Bytecode VM | Scripting, Configs, Embedding, Web | **~50µs** startup |
+| **Tier 1 (Core)** | AsmJit | Fast arithmetic, lightweight JIT | **~1-2ms** startup |
+| **Tier 1 (Full)** | LLVM JIT | Heavy computation, scientific math | **~50-100ms** startup |
 
-## Todo list
-- [x] Lexer (Tokens, Indonesian Keywords, Lua-style Comments)
-- [x] Parser (Hand-written Recursive Descent, AST)
-- [x] Optional Semicolons
-- [x] LLVM Code Generation (Foundation, IR Extraction)
-- [x] Variables & Scoping
-- [x] Function Codegen
-- [x] Control Flow (jika, kalau, sebaliknya, selama, untuk)
-- [x] Try-Catch Implementation (coba-tangkap)
-- [x] Tables & Arrays (Object-oriented features)
-- [x] Memory Management (C++ RAII/Ownership)
-- [x] Standard Library (print, println, wait, tipe)
-- [x] JIT Compiler Pipeline (Tier 1)
-- [x] **Bytecode VM (Tier 0)** - Ultra-fast startup, high-stability
-- [x] Emscripten/WebAssembly Support
-- [x] Embedding Language Support ([Live Playground](https://fastering.thedev.id/Manifast/))
-- [x] Automatic Self-Injection for Method Calls
-- [ ] Built-in modules: os, string, math
+### Benchmarks
+- **VM Startup**: ~0.05 ms (Full Lex/Parse/Compile/Run pipeline).
+- **Core Memory**: < 500 KB (No LLVM dependencies).
+- **Embedded API**: Fully thread-safe, multiple VM instances support.
+
+## Feature Status
+- [x] **Basic Syntax**: `fungsi`, `lokal`, `jika`, `selama`, `kembali`, etc.
+- [x] **Type Annotations**: Optional static typing for better JIT optimization.
+- [x] **Tables & Objects**: Dynamic objects with method injection.
+- [x] **Error Handling**: `coba/tangkap` (Try/Catch) mechanism.
+- [x] **Math Stdlib**: Extended MATLAB-style functions (`linspace`, `clamp`, `sin`, `log`, etc).
+- [x] **Plot Module**: High-performance plotting (`plot.line`, `plot.scatter`, `plot.show`).
+- [x] **WebAssembly**: Fully integrated with auto-deploy to [Playground](https://fastering.thedev.id/Manifast/).
+- [x] **Stack Config**: Configurable VM stack size per instance via `--stack-size`.
+- [x] **Distribution**: Ready for DEB, NSIS, and cross-platform embedded binaries.
 - [ ] IDE Support (LSP)
 - [ ] Self compilation
 
@@ -73,7 +70,7 @@ cd Manifast
 ```
 
 ### Setup Dependencies
-Make sure `vcpkg` is installed and in your PATH.
+Make sure `vcpkg` is installed and in your PATH. The `vcpkg.json` manages dependencies like `fmt` and `asmjit`.
 ```powershell
 vcpkg install
 ```
@@ -89,10 +86,22 @@ We recommend using **LLVM 18+**.
 
 ### Build & Run
 We provide a unified helper script: `manifast.ps1` (Windows) or `manifast.sh` (Linux/macOS).
+By default, CMake builds `manifast_core` alongside the LLVM JIT. If you want a lightweight VM-only embedded build, configure with `-DMANIFAST_ENABLE_LLVM=OFF`.
 
 **Standard Build (Clone & Go):**
 ```powershell
 .\manifast.ps1 build
+```
+
+**Run scripts:**
+```powershell
+.\manifast.ps1 run script.mnf --stack-size 64mb
+.\manifast.ps1 run-vm script.mnf
+```
+
+**Build WebAssembly:**
+```powershell
+.\manifast.ps1 build-wasm
 ```
 
 **Fast Build (Uses System LLVM):**

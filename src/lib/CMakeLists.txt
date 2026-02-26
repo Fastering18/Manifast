@@ -4,6 +4,7 @@ add_library(manifast_core
   Runtime.cpp
   VM.cpp
   Compiler.cpp
+  PlotBackend.cpp
 )
 
 target_include_directories(manifast_core PUBLIC 
@@ -14,29 +15,37 @@ target_link_libraries(manifast_core PUBLIC
   fmt::fmt
 )
 
+if(MANIFAST_HAS_ASMJIT)
+  target_link_libraries(manifast_core PUBLIC asmjit::asmjit)
+  target_compile_definitions(manifast_core PUBLIC MANIFAST_HAS_ASMJIT)
+endif()
+
 # --- JIT Library (LLVM) ---
-add_library(manifast_jit
-  CodeGen.cpp
-)
+if(MANIFAST_ENABLE_LLVM)
+  add_library(manifast_jit
+    CodeGen.cpp
+  )
 
-target_include_directories(manifast_jit PUBLIC 
-  ${CMAKE_SOURCE_DIR}/include
-)
+  target_include_directories(manifast_jit PUBLIC 
+    ${CMAKE_SOURCE_DIR}/include
+  )
 
-llvm_map_components_to_libnames(llvm_libs
-  core
-  orcjit
-  support
-  target
-  executionengine
-  analysis
-  native
-)
+  llvm_map_components_to_libnames(llvm_libs
+    core
+    orcjit
+    support
+    target
+    executionengine
+    analysis
+    native
+  )
 
-target_link_libraries(manifast_jit PUBLIC
-  manifast_core
-  ${llvm_libs}
-)
+  target_link_libraries(manifast_jit PUBLIC
+    manifast_core
+    ${llvm_libs}
+    ${LLVM_SYSTEM_LIBS}
+  )
 
-# Alias for backward compatibility if needed, or just remove
-add_library(manifast_lib ALIAS manifast_jit)
+  # Alias for backward compatibility if needed, or just remove
+  add_library(manifast_lib ALIAS manifast_jit)
+endif()

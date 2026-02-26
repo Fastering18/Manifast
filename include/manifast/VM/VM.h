@@ -18,6 +18,9 @@ public:
     void setTier(Tier t) { currentTier = t; }
     Tier getTier() const { return currentTier; }
 
+    void setStackSize(size_t size) { maxStackSize = size; stack.resize(maxStackSize); }
+    size_t getStackSize() const { return maxStackSize; }
+
     void interpret(Chunk* chunk, std::string_view source = "");
     void runtimeError(const std::string& message);
     
@@ -31,6 +34,7 @@ public:
 private:
     // Registers (Stack)
     // Lua uses a stack, where functions operate on a window (CallFrame)
+    size_t maxStackSize = 1048576; // Default to 1MB of 16-byte Any objects (~16MB memory)
     std::vector<Any> stack;
     
     // Call Stack

@@ -38,7 +38,7 @@ Architecture: x64-windows
 Multi-Arch: same
 Abi: 66b7f806058bc659f70637ab1602631659f4b9c9f0079a45960683f7e498f0ca
 Description: Google Testing and Mocking Framework
-Status: install ok installed
+Status: purge ok not-installed
 
 Package: zstd
 Version: 1.5.7
@@ -73,5 +73,14 @@ Architecture: x64-windows
 Multi-Arch: same
 Abi: dab11bda2b5f697b1c02dc6c5f23272f13e60e6155e643330db6d34295ed912c
 Description: A stub package that ensures Visual Studio has Active Template Library (ATL) installed.
+Status: install ok installed
+
+Package: asmjit
+Version: 2025-10-13
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 3ff68ae15974b2764b4f0e8fde3284c9f97e46b45d23d23c00ea0219cf3ec94f
+Description: AsmJit is a lightweight library for machine code generation written in C++ language
 Status: install ok installed
 

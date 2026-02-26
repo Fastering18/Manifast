@@ -6,50 +6,59 @@ project(manifast
 )
 
 # --- Options ---
-option(MANIFAST_BUILD_TESTS "Build tests" ON)
+option(MANIFAST_ENABLE_LLVM "Enable LLVM JIT/AOT support" ON)
 
 # --- Standard Setup ---
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF) # Enforce standards
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # --- Dependencies (vcpkg) ---
 find_package(fmt CONFIG REQUIRED)
-find_package(LLVM REQUIRED CONFIG COMPONENTS 
-    core orcjit native lto passes mc object option 
-    ipo instrumentation bitreader bitwriter selectiondag 
-    support
-)
+find_package(asmjit CONFIG QUIET)
+if(asmjit_FOUND)
+  message(STATUS "Found AsmJit — lightweight JIT enabled")
+  set(MANIFAST_HAS_ASMJIT ON)
+else()
+  message(STATUS "AsmJit not found — building without lightweight JIT")
+  set(MANIFAST_HAS_ASMJIT OFF)
+endif()
 
-message(STATUS "Found LLVM ${LLVM_VERSION}")
-message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+if(MANIFAST_ENABLE_LLVM)
+  find_package(LLVM REQUIRED CONFIG COMPONENTS 
+      core orcjit native lto passes mc object option 
+      ipo instrumentation bitreader bitwriter selectiondag 
+      support
+  )
 
-# Map LLVM includes and libs
-include_directories(${LLVM_INCLUDE_DIRS})
-add_definitions(${LLVM_DEFINITIONS})
+  message(STATUS "Found LLVM ${LLVM_VERSION}")
+  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-if(WIN32)
-  # System libs needed for static LLVM/LLD linking on Windows
-  set(LLVM_SYSTEM_LIBS psapi shell32 ole32 uuid advapi32 ws2_32 ntdll z zstd)
+  include_directories(${LLVM_INCLUDE_DIRS})
+  add_definitions(${LLVM_DEFINITIONS})
 
-  # Workaround for faulty libxml2 path in some MSYS2 LLVM packages
-  if(TARGET LLVMWindowsManifest)
-    set_target_properties(LLVMWindowsManifest PROPERTIES INTERFACE_INCLUDE_DIRECTORIES 
-      "D:/Program/msys64/ucrt64/include/libxml2;D:/Program/msys64/ucrt64/include")
-  endif()
+  if(WIN32)
+    set(LLVM_SYSTEM_LIBS psapi shell32 ole32 uuid advapi32 ws2_32 ntdll z)
 
-  if(TARGET LibXml2::LibXml2)
-    set_target_properties(LibXml2::LibXml2 PROPERTIES INTERFACE_INCLUDE_DIRECTORIES 
-      "D:/Program/msys64/ucrt64/include/libxml2;D:/Program/msys64/ucrt64/include")
+    if(TARGET LLVMWindowsManifest)
+      set_target_properties(LLVMWindowsManifest PROPERTIES INTERFACE_INCLUDE_DIRECTORIES 
+        "D:/Program/msys64/ucrt64/include/libxml2;D:/Program/msys64/ucrt64/include")
+    endif()
+
+    if(TARGET LibXml2::LibXml2)
+      set_target_properties(LibXml2::LibXml2 PROPERTIES INTERFACE_INCLUDE_DIRECTORIES 
+        "D:/Program/msys64/ucrt64/include/libxml2;D:/Program/msys64/ucrt64/include")
+    endif()
+  else()
+    if(NOT TARGET CURL::libcurl)
+      add_library(CURL::libcurl INTERFACE IMPORTED)
+    endif()
+    if(NOT TARGET LibEdit::LibEdit)
+      add_library(LibEdit::LibEdit INTERFACE IMPORTED)
+    endif()
   endif()
 else()
-  # On Linux CI, LLVM may reference optional targets that aren't installed
-  if(NOT TARGET CURL::libcurl)
-    add_library(CURL::libcurl INTERFACE IMPORTED)
-  endif()
-  if(NOT TARGET LibEdit::LibEdit)
-    add_library(LibEdit::LibEdit INTERFACE IMPORTED)
-  endif()
+  message(STATUS "LLVM disabled — building VM-only (embedded) mode")
 endif()
 
 
@@ -62,7 +71,39 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 add_subdirectory(src/lib)
 add_subdirectory(src/cmd)
 
-if(MANIFAST_BUILD_TESTS)
-  enable_testing()
-  add_subdirectory(tests)
+
+# --- CPack Configuration ---
+set(CPACK_PACKAGE_NAME "manifast")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VENDOR "Fastering18")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Fast Indonesian-syntax programming language powered by LLVM")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Fastering18/Manifast")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/README.md")
+
+# Install targets
+install(TARGETS mifast RUNTIME DESTINATION bin)
+if(MANIFAST_ENABLE_LLVM)
+  install(TARGETS mifastc RUNTIME DESTINATION bin)
 endif()
+install(DIRECTORY include/manifast DESTINATION include
+  FILES_MATCHING PATTERN "*.h"
+  PATTERN "vendor" EXCLUDE
+)
+install(TARGETS manifast_core ARCHIVE DESTINATION lib)
+if(MANIFAST_ENABLE_LLVM)
+  install(TARGETS manifast_jit ARCHIVE DESTINATION lib)
+endif()
+
+# NSIS (Windows installer)
+set(CPACK_NSIS_DISPLAY_NAME "Manifast Programming Language")
+set(CPACK_NSIS_PACKAGE_NAME "Manifast")
+set(CPACK_NSIS_MODIFY_PATH ON)
+set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+
+# DEB (Debian package)
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Fastering18 <fastering18@users.noreply.github.com>")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.17), libstdc++6")
+set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/Fastering18/Manifast")
+
+include(CPack)

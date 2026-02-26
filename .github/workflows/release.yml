@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-linux:
+  build-linux-general:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -29,17 +29,21 @@ jobs:
 
       - name: Package
         run: |
-          mkdir -p dist
-          cp build/bin/mifast dist/
-          cp build/bin/mifastc dist/
-          tar -czvf manifast-linux-${{ matrix.arch }}.tar.gz -C dist .
-
+          cd build
+          cpack -G DEB
+          cpack -G TGZ
+      
       - uses: actions/upload-artifact@v4
         with:
-          name: manifast-linux-${{ matrix.arch }}
-          path: manifast-linux-${{ matrix.arch }}.tar.gz
+          name: manifast-linux-x64-deb
+          path: build/manifast-*.deb
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifast-linux-x64-tgz
+          path: build/manifast-*.tar.gz
 
-  build-windows:
+  build-windows-general:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,36 +59,71 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-llvm
             mingw-w64-ucrt-x86_64-fmt
-            mingw-w64-ucrt-x86_64-gtest
+            mingw-w64-ucrt-x86_64-nsis
 
       - name: Configure & Build
         shell: msys2 {0}
         run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DVCPKG_MANIFEST_FEATURES=""
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel $(nproc)
 
       - name: Package
         shell: msys2 {0}
         run: |
-          mkdir -p dist
-          cp build/bin/mifast.exe dist/
-          cp build/bin/mifastc.exe dist/
-          # Copy required DLLs
-          ldd build/bin/mifast.exe | grep ucrt64 | awk '{print $3}' | xargs -I{} cp {} dist/ 2>/dev/null || true
-
-      - name: Create Archive
-        shell: pwsh
-        run: Compress-Archive -Path dist/* -DestinationPath manifast-windows-x64.zip
+          # Copy DLLs over before zipping
+          mkdir -p build/bin
+          ldd build/bin/mifast.exe | grep ucrt64 | awk '{print $3}' | xargs -I{} cp {} build/bin/ 2>/dev/null || true
+          
+          cd build
+          cpack -G NSIS
+          cpack -G ZIP
 
       - uses: actions/upload-artifact@v4
         with:
-          name: manifast-windows-x64
-          path: manifast-windows-x64.zip
+          name: manifast-windows-x64-exe
+          path: build/manifast-*-setup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifast-windows-x64-zip
+          path: build/manifast-*.zip
+
+  build-embedded-lib:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: manifast-embedded-linux-x64
+          - os: windows-latest
+            artifact_name: manifast-embedded-windows-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build -G "Ninja" -DMANIFAST_ENABLE_LLVM=OFF -DMANIFAST_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
+        # On windows, since LLVM is off, we can just use the standard MSVC compiler
+
+      - name: Build
+        run: cmake --build build --target manifast_core
+
+      - name: Create Archive
+        shell: bash
+        run: |
+          mkdir -p embedded-dist/include
+          cp -r include/manifast embedded-dist/include/
+          mkdir -p embedded-dist/lib
+          find build -name "*manifast_core*" -exec cp {} embedded-dist/lib/ \;
+          cd embedded-dist
+          zip -r ../${{ matrix.artifact_name }}.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.zip
 
   release:
-    needs: [build-linux, build-windows]
+    needs: [build-linux-general, build-windows-general, build-embedded-lib]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -98,6 +137,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/manifast-linux-x64/manifast-linux-x64.tar.gz
-            artifacts/manifast-windows-x64/manifast-windows-x64.zip
+            artifacts/manifast-linux-x64-deb/*
+            artifacts/manifast-linux-x64-tgz/*
+            artifacts/manifast-windows-x64-exe/*
+            artifacts/manifast-windows-x64-zip/*
+            artifacts/manifast-embedded-linux-x64/*
+            artifacts/manifast-embedded-windows-x64/*
           generate_release_notes: true

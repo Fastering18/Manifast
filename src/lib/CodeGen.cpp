@@ -271,10 +271,16 @@ void CodeGen::emitAssembly(const std::string& path) {
     auto features = "";
 
     llvm::TargetOptions opt;
+#if LLVM_VERSION_MAJOR >= 21
+    llvm::Triple targetTripleObj(targetTriple);
+    auto targetMachine = target->createTargetMachine(targetTripleObj, cpu, features, opt, llvm::Reloc::PIC_);
+    module->setDataLayout(targetMachine->createDataLayout());
+    module->setTargetTriple(targetTripleObj);
+#else
     auto targetMachine = target->createTargetMachine(targetTriple, cpu, features, opt, llvm::Reloc::PIC_);
-
     module->setDataLayout(targetMachine->createDataLayout());
     module->setTargetTriple(targetTriple);
+#endif
 
     std::error_code ec;
     llvm::raw_fd_ostream dest(path, ec, llvm::sys::fs::OF_None);
@@ -310,10 +316,16 @@ void CodeGen::emitObject(const std::string& path) {
     auto features = "";
 
     llvm::TargetOptions opt;
+#if LLVM_VERSION_MAJOR >= 21
+    llvm::Triple targetTripleObj(targetTriple);
+    auto targetMachine = target->createTargetMachine(targetTripleObj, cpu, features, opt, llvm::Reloc::PIC_);
+    module->setDataLayout(targetMachine->createDataLayout());
+    module->setTargetTriple(targetTripleObj);
+#else
     auto targetMachine = target->createTargetMachine(targetTriple, cpu, features, opt, llvm::Reloc::PIC_);
-
     module->setDataLayout(targetMachine->createDataLayout());
     module->setTargetTriple(targetTriple);
+#endif
 
     std::error_code ec;
     llvm::raw_fd_ostream dest(path, ec, llvm::sys::fs::OF_None);
@@ -393,7 +405,11 @@ bool CodeGen::run() {
 
     // Set data layout and triple
     module->setDataLayout(jit->getDataLayout());
+#if LLVM_VERSION_MAJOR >= 21
+    module->setTargetTriple(llvm::Triple(jit->getTargetTriple().getTriple()));
+#else
     module->setTargetTriple(jit->getTargetTriple().getTriple());
+#endif
 
     auto err = jit->addIRModule(llvm::orc::ThreadSafeModule(std::move(module), std::move(context)));
     if (err) {
@@ -1113,13 +1129,13 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
     
     for (size_t i = 0; i < stmt->params.size(); i++) {
         llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
-        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->params[i]);
+        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->params[i].first); // Name
         
         llvm::Value* slot = builder->CreateGEP(anyType, argsPtr, {builder->getInt32(i)});
         llvm::Value* loadedArg = builder->CreateLoad(anyType, slot);
         builder->CreateStore(loadedArg, alloca);
         
-        scopes.back()[stmt->params[i]] = alloca;
+        scopes.back()[stmt->params[i].first] = alloca; // Name
     }
 
     // Body

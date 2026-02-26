@@ -238,7 +238,7 @@ void Compiler::compile(Stmt* stmt) {
     }
 }
 
-Chunk* Compiler::compileFunctionBody(const std::vector<std::string>& params, Stmt* body, const std::string& name) {
+Chunk* Compiler::compileFunctionBody(const std::vector<std::pair<std::string, std::string>>& params, Stmt* body, const std::string& name) {
     Chunk* chunk = new Chunk();
     chunk->name = name; 
     
@@ -248,7 +248,7 @@ Chunk* Compiler::compileFunctionBody(const std::vector<std::string>& params, Stm
     
     for (const auto& p : params) {
         int r = sub.allocReg();
-        sub.locals.push_back({p, sub.scopeDepth, r});
+        sub.locals.push_back({p.first, sub.scopeDepth, r});
     }
     
     if (auto* b = dynamic_cast<BlockStmt*>(body)) {

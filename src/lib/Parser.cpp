@@ -197,8 +197,8 @@ std::unique_ptr<Stmt> Parser::parseClassStatement() {
         if (match(TokenType::K_Function)) {
             auto func_stmt = parseFunctionStatement();
             FunctionStmt* func = static_cast<FunctionStmt*>(func_stmt.get());
-            // Inject 'self' as first parameter
-            func->params.insert(func->params.begin(), "self");
+            // Inject 'self' as first parameter with 'any' type
+            func->params.insert(func->params.begin(), {"self", "any"});
             methods.push_back(std::unique_ptr<FunctionStmt>(static_cast<FunctionStmt*>(func_stmt.release())));
         } else {
              advance();
@@ -214,20 +214,31 @@ std::unique_ptr<Stmt> Parser::parseFunctionStatement() {
     Token name = consume(TokenType::Identifier, "Diharapkan nama fungsi");
     consume(TokenType::LParen, "Diharapkan '(' setelah nama fungsi");
     
-    std::vector<std::string> params;
+    std::vector<std::pair<std::string, std::string>> params;
     if (!check(TokenType::RParen)) {
         do {
             Token param = consume(TokenType::Identifier, "Diharapkan nama parameter");
-            params.push_back(std::string(param.lexeme));
+            std::string paramType = "any";
+            if (match(TokenType::Colon)) {
+                Token typeHint = consume(TokenType::Identifier, "Diharapkan tipe data setelah ':'");
+                paramType = std::string(typeHint.lexeme);
+            }
+            params.push_back({std::string(param.lexeme), paramType});
         } while (match(TokenType::Comma));
     }
     consume(TokenType::RParen, "Diharapkan ')' setelah parameter");
+    
+    std::string returnType = "any";
+    if (match(TokenType::Colon)) {
+        Token typeHint = consume(TokenType::Identifier, "Diharapkan tipe kembalian setelah ':'");
+        returnType = std::string(typeHint.lexeme);
+    }
     
     Token body_start = currentToken;
     std::vector<std::unique_ptr<Stmt>> body = parseBlock(); 
     consume(TokenType::K_End, "Diharapkan 'tutup' setelah isi fungsi");
     
-    return makeNode<FunctionStmt>(keyword, std::string(name.lexeme), std::move(params), makeNode<BlockStmt>(body_start, std::move(body)));
+    return makeNode<FunctionStmt>(keyword, std::string(name.lexeme), std::move(params), std::move(returnType), makeNode<BlockStmt>(body_start, std::move(body)));
 }
 
 std::unique_ptr<Stmt> Parser::parseIfStatement() {
@@ -345,12 +356,17 @@ std::unique_ptr<Stmt> Parser::parseReturnStatement() {
 
 std::unique_ptr<Stmt> Parser::parseVarDeclaration() {
     Token name = consume(TokenType::Identifier, "Diharapkan nama variabel");
+    std::string typeAnnotation = "any";
+    if (match(TokenType::Colon)) {
+        Token typeHint = consume(TokenType::Identifier, "Diharapkan tipe data setelah ':'");
+        typeAnnotation = std::string(typeHint.lexeme);
+    }
     std::unique_ptr<Expr> initializer = nullptr;
     if (match(TokenType::Equal)) {
         initializer = parseExpression();
     }
     match(TokenType::Semicolon);
-    return std::make_unique<VarDeclStmt>(std::string(name.lexeme), std::move(initializer), false);
+    return std::make_unique<VarDeclStmt>(std::string(name.lexeme), std::move(typeAnnotation), std::move(initializer), false);
 }
 
 std::vector<std::unique_ptr<Stmt>> Parser::parseBlock() {
@@ -559,19 +575,30 @@ std::unique_ptr<Expr> Parser::parseCall() {
 std::unique_ptr<Expr> Parser::parseFunctionExpression() {
     consume(TokenType::LParen, "Expect '(' after 'fungsi'");
     
-    std::vector<std::string> params;
+    std::vector<std::pair<std::string, std::string>> params;
     if (!check(TokenType::RParen)) {
         do {
             Token param = consume(TokenType::Identifier, "Expect parameter name");
-            params.push_back(std::string(param.lexeme));
+            std::string paramType = "any";
+            if (match(TokenType::Colon)) {
+                Token typeHint = consume(TokenType::Identifier, "Expect type after ':'");
+                paramType = std::string(typeHint.lexeme);
+            }
+            params.push_back({std::string(param.lexeme), paramType});
         } while (match(TokenType::Comma));
     }
     consume(TokenType::RParen, "Expect ')' after parameters");
     
+    std::string returnType = "any";
+    if (match(TokenType::Colon)) {
+        Token typeHint = consume(TokenType::Identifier, "Expect return type after ':'");
+        returnType = std::string(typeHint.lexeme);
+    }
+    
     std::vector<std::unique_ptr<Stmt>> body = parseBlock(); 
     consume(TokenType::K_End, "Expect 'tutup' after function body");
     
-    return std::make_unique<FunctionExpr>(std::move(params), std::make_unique<BlockStmt>(std::move(body)));
+    return std::make_unique<FunctionExpr>(std::move(params), std::move(returnType), std::make_unique<BlockStmt>(std::move(body)));
 }
 
 std::unique_ptr<Expr> Parser::parsePrimary() {

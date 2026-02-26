@@ -1,0 +1,25 @@
+-- Test plot module basic API
+lokal plot = impor("plot")
+lokal math = impor("math")
+
+-- Generate sine wave data
+lokal x = math.linspace(0, math.tau, 50)
+lokal y = []
+untuk i = 1 ke len(x) lakukan
+    lokal val = math.sin(x[i])
+    y.push(val)
+tutup
+
+-- Create line chart and save to file
+lokal config = { title: "Sine Wave", xlabel: "X", ylabel: "Y", width: 800, height: 600 }
+plot.line(x, y, config)
+lokal saved = plot.save("test_plot_output.bmp")
+assert(saved, "plot.save harusnya berhasil")
+
+-- Reset and test scatter
+plot.reset()
+lokal sx = [1, 2, 3, 4, 5]
+lokal sy = [2, 4, 1, 5, 3]
+plot.scatter(sx, sy)
+lokal saved2 = plot.save("test_scatter_output.bmp")
+assert(saved2, "scatter save harusnya berhasil")
