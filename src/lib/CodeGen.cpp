@@ -990,7 +990,7 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
                 }
                 llvm::Value* argVal = generateExpr(expr->args[i].get());
                 if (!argVal) return nullptr;
-                builder->CreateCall(func, {argVal});
+                builder->CreateCall(module->getFunction("manifast_print_any"), {argVal});
             }
             if (funcName == "println") {
                 llvm::Value* nl = createString("\n");

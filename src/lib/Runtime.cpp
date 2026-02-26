@@ -189,7 +189,6 @@ MF_API void manifast_object_set_raw(ManifastObject* obj, const char* key, Any* v
 }
 
 MF_API void manifast_object_set(Any* obj_any, const char* key, Any* val_any) {
-    if (obj_any->type != 7) return;
     if (obj_any->type == 7) { // Object
         manifast_object_set_raw((ManifastObject*)obj_any->ptr, key, val_any);
     } else if (obj_any->type == 9) { // Instance
@@ -695,6 +694,26 @@ MF_API void manifast_print_any(Any* any) {
             break;
         case 7: // Object
             printf("{Objek}");
+            break;
+        case 8: // Class
+            if (any->ptr) {
+                ManifastClass* klass = (ManifastClass*)any->ptr;
+                printf("[Kelas %s]", klass->name ? klass->name : "Anonim");
+            } else {
+                printf("[Kelas Anonim]");
+            }
+            break;
+        case 9: // Instance
+            if (any->ptr) {
+                ManifastInstance* inst = (ManifastInstance*)any->ptr;
+                if (inst->klass && inst->klass->name) {
+                    printf("[Instance dari Kelas %s]", inst->klass->name);
+                } else {
+                    printf("[Instance Objek]");
+                }
+            } else {
+                printf("[Instance Null]");
+            }
             break;
         default:
             printf("tipe tidak dikenal %d", any->type);

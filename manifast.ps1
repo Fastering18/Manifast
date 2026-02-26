@@ -1,6 +1,6 @@
 param (
     [Parameter(Mandatory=$true, Position=0)]
-    [ValidateSet("build", "run", "run-vm", "test", "clean", "help", "build-wasm")]
+    [ValidateSet("build", "run", "run-vm", "test", "clean", "help", "build-wasm", "install")]
     [string]$Command,
 
     [switch]$Fast,
@@ -21,6 +21,7 @@ function Show-Help {
     Write-Host "  run           Run manifast file in jit tier"
     Write-Host "  run-vm        Run manifast file in vm tier"
     Write-Host "  test          Run the test suite"
+    Write-Host "  install       Install binaries to system and add to PATH"
     Write-Host "  clean         Remove the build directory"
     Write-Host "  build-wasm    Build for WebAssembly (requires Emscripten)"
     Write-Host "  help          Show this help message"
@@ -192,6 +193,47 @@ if ($Command -eq "test") {
     Write-Host "Running Modern Test Suite..." -ForegroundColor Cyan
     & $TestBin test $RemainingArgs
     exit $LASTEXITCODE
+}
+
+if ($Command -eq "install") {
+    $BinDir = "$BuildDir\bin"
+    $LibDir = "$BuildDir\lib"
+    
+    if (-not (Test-Path "$BinDir\mifast.exe")) {
+        Write-Host "Error: Binary not found. Run 'build' first." -ForegroundColor Red
+        exit 1
+    }
+    
+    $InstallDir = "$env:LOCALAPPDATA\Manifast"
+    $InstallBin = "$InstallDir\bin"
+    $InstallLib = "$InstallDir\lib"
+    
+    Write-Host "Installing Manifast to $InstallDir..." -ForegroundColor Cyan
+    
+    New-Item -ItemType Directory -Path $InstallBin -Force | Out-Null
+    New-Item -ItemType Directory -Path $InstallLib -Force | Out-Null
+    
+    Copy-Item "$BinDir\mifast.exe" "$InstallBin\" -Force
+    if (Test-Path "$BinDir\mifastc.exe") {
+        Copy-Item "$BinDir\mifastc.exe" "$InstallBin\" -Force
+    }
+    
+    Get-ChildItem "$LibDir\*" -Include "*.a","*.lib" -ErrorAction SilentlyContinue | ForEach-Object {
+        Copy-Item $_.FullName "$InstallLib\" -Force
+    }
+    
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -notlike "*$InstallBin*") {
+        [Environment]::SetEnvironmentVariable("Path", "$InstallBin;$UserPath", "User")
+        Write-Host "Added $InstallBin to user PATH." -ForegroundColor Green
+        Write-Host "Restart your terminal for PATH changes to take effect." -ForegroundColor Yellow
+    } else {
+        Write-Host "$InstallBin already in PATH." -ForegroundColor Gray
+    }
+    
+    Write-Host "Manifast installed successfully!" -ForegroundColor Green
+    Write-Host "Run 'mifast --help' in a new terminal to verify." -ForegroundColor Gray
+    exit 0
 }
 
 if ($Command -eq "build-wasm") {

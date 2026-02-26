@@ -14,6 +14,7 @@ show_help() {
     echo "  build       Configure and build the project"
     echo "  run         Run manifast code"
     echo "  test        Run the test suite"
+    echo "  install     Install binaries to system and add to PATH"
     echo "  clean       Remove the build directory"
     echo "  help        Show this help message"
     echo ""
@@ -88,6 +89,42 @@ if [ "$COMMAND" == "test" ]; then
     echo "Running Tests..."
     "$TEST_BIN" tests/Manifast/test.mnf --test tests
     exit $?
+fi
+
+if [ "$COMMAND" == "install" ]; then
+    BIN_DIR="$BUILD_DIR/bin"
+    LIB_DIR="$BUILD_DIR/lib"
+    
+    if [ ! -f "$BIN_DIR/mifast" ]; then
+        echo "Error: Binary not found. Run 'build' first."
+        exit 1
+    fi
+    
+    INSTALL_DIR="$HOME/.local"
+    INSTALL_BIN="$INSTALL_DIR/bin"
+    INSTALL_LIB="$INSTALL_DIR/lib"
+    
+    echo "Installing Manifast to $INSTALL_DIR..."
+    
+    mkdir -p "$INSTALL_BIN" "$INSTALL_LIB"
+    
+    cp "$BIN_DIR/mifast" "$INSTALL_BIN/"
+    [ -f "$BIN_DIR/mifastc" ] && cp "$BIN_DIR/mifastc" "$INSTALL_BIN/"
+    cp "$LIB_DIR"/*.a "$INSTALL_LIB/" 2>/dev/null
+    
+    # Add to PATH if not already present
+    if ! echo "$PATH" | grep -q "$INSTALL_BIN"; then
+        SHELL_RC="$HOME/.bashrc"
+        [ -n "$ZSH_VERSION" ] && SHELL_RC="$HOME/.zshrc"
+        echo "export PATH=\"$INSTALL_BIN:\$PATH\"" >> "$SHELL_RC"
+        echo "Added $INSTALL_BIN to PATH in $SHELL_RC"
+        echo "Run 'source $SHELL_RC' or restart your terminal."
+    else
+        echo "$INSTALL_BIN already in PATH."
+    fi
+    
+    echo "Manifast installed successfully!"
+    exit 0
 fi
 
 if [ "$COMMAND" == "build-wasm" ]; then

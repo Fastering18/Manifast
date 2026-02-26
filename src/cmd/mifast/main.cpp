@@ -153,6 +153,7 @@ void printUsage() {
     fmt::print("Commands:\n");
     fmt::print("  run <file> [--vm] [--stack-size MB]  Compile and run a Manifast file\n");
     fmt::print("  test [--vm]                          Run the project test suite (In-Process)\n");
+    fmt::print("  build <file> [-o output]             Compile a Manifast wrapper to native executable (AOT)\n");
 }
 
 void runTestRunner(bool useVM) {
@@ -282,6 +283,7 @@ int main(int argc, char* argv[]) {
     bool debugDev = false;
     size_t stackSizeMB = 16; // default 16MB stack size
     std::string filePath;
+    std::string outputPath;
     
     // Check for --vm in any position after command
     for(int i = 2; i < argc; i++) {
@@ -291,11 +293,115 @@ int main(int argc, char* argv[]) {
         else if(arg == "--stack-size" && i + 1 < argc) {
             stackSizeMB = std::stoull(argv[++i]);
         }
+        else if(arg == "-o" && i + 1 < argc) {
+            outputPath = argv[++i];
+        }
         else if (filePath.empty()) filePath = arg;
     }
 
     if (cmd == "test") {
         runTestRunner(useVM);
+    } else if (cmd == "build") {
+#ifndef MANIFAST_HAS_LLVM
+        fmt::print(fg(fmt::color::red), "Error: This binary was compiled without LLVM JIT support. Build command is unavailable.\n");
+        return 1;
+#else
+        if (filePath.empty()) {
+            fmt::print(fg(fmt::color::red), "Error: No input file specified for build.\n");
+            return 1;
+        }
+        if (outputPath.empty()) {
+            outputPath = fs::path(filePath).stem().string() + ".exe";
+        }
+        
+        std::ifstream file(filePath);
+        if (!file) {
+            fmt::print(fg(fmt::color::red), "Error: Could not open file.\n");
+            return 1;
+        }
+        std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        manifast::SyntaxConfig config;
+        manifast::Lexer lexer(source, config);
+        manifast::Parser parser(lexer);
+        parser.debugMode = debugDev;
+        
+        try {
+            auto statements = parser.parse();
+            if (parser.hadError()) {
+                fmt::print(fg(fmt::color::red), "Syntax errors found. Compilation aborted.\n");
+                return 1;
+            }
+            
+            manifast::CodeGen codegen;
+            codegen.compile(statements);
+            
+            fs::path out(outputPath);
+            std::string ext = out.extension().string();
+            
+            if (ext == ".ll") {
+                codegen.emitIR(outputPath);
+                fmt::print("Emitted IR: {}\n", outputPath);
+            } else if (ext == ".s") {
+                codegen.emitAssembly(outputPath);
+                fmt::print("Emitted Assembly: {}\n", outputPath);
+            } else if (ext == ".o" || ext == ".obj") {
+                codegen.emitObject(outputPath);
+                fmt::print("Emitted Object: {}\n", outputPath);
+            } else if (ext == ".exe" || ext == "") {
+                std::string actualOut = outputPath;
+                if (ext == "") actualOut += ".exe";
+                
+                codegen.addMainEntry();
+                
+                std::string objPath = actualOut + ".obj";
+                codegen.emitObject(objPath);
+                
+                fs::path exePath = fs::weakly_canonical(fs::path(argv[0]));
+                std::string libDir = (exePath.parent_path().parent_path() / "lib").string();
+                
+                // Prefer MSYS2 g++ if available
+                std::string gpp = "g++";
+#ifdef _WIN32
+                std::vector<std::string> msysPaths = {
+                    "D:/Program/msys64/ucrt64/bin/g++.exe",
+                    "C:/msys64/ucrt64/bin/g++.exe",
+                    "C:/msys64/mingw64/bin/g++.exe"
+                };
+                std::string msysLibDir;
+                for (const auto& p : msysPaths) {
+                    if (fs::exists(p)) {
+                        gpp = p;
+                        msysLibDir = fs::path(p).parent_path().parent_path().string() + "/lib";
+                        break;
+                    }
+                }
+#endif
+                
+                std::string cmdStr = gpp + " " + objPath + " -o " + actualOut + " -L\"" + libDir + "\"";
+#ifdef _WIN32
+                if (!msysLibDir.empty()) cmdStr += " -L\"" + msysLibDir + "\"";
+#endif
+                cmdStr += " -L. -lmanifast_core -lfmt -static";
+                
+                fmt::print("Linking executable: {}\n", cmdStr);
+                int ret = std::system(cmdStr.c_str());
+                
+                if (ret == 0) {
+                    fmt::print(fg(fmt::color::green), "Created Executable: {}\n", actualOut);
+                    fs::remove(objPath);
+                } else {
+                    fmt::print(fg(fmt::color::red), "Linking failed. Ensure g++ is in PATH and libraries are available in {}.\n", libDir);
+                    return 1;
+                }
+            } else {
+                fmt::print(fg(fmt::color::red), "Unknown output format: {}\n", ext);
+                return 1;
+            }
+        } catch (const std::exception& e) {
+            fmt::print(fg(fmt::color::red), "Error: {}\n", e.what());
+            return 1;
+        }
+#endif
     } else if (cmd == "run") {
         if (filePath.empty()) {
             fmt::print(fg(fmt::color::red), "Error: No file specified.\n");

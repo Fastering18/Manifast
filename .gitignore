@@ -41,3 +41,5 @@ build-nollvm/
 build-llvm/
 
 vcpkg_installed/
+vendor/
+*.obj
