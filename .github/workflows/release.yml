@@ -91,6 +91,7 @@ jobs:
   build-embedded-lib:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -100,9 +101,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '501db0f17ef6df184fcdbfbe0f87cde2313b6ab1'
+
       - name: Configure CMake
-        run: cmake -S . -B build -G "Ninja" -DMANIFAST_ENABLE_LLVM=OFF -DMANIFAST_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
-        # On windows, since LLVM is off, we can just use the standard MSVC compiler
+        run: >
+          cmake -S . -B build -G "Ninja"
+          -DMANIFAST_ENABLE_LLVM=OFF
+          -DMANIFAST_BUILD_TESTS=OFF
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
         run: cmake --build build --target manifast_core
