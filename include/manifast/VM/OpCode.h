@@ -16,7 +16,7 @@ enum class OpCode : uint8_t {
     LOADNIL,    // R(A)..R(A+B) := nil
     
     // Arithmetic
-    ADD, SUB, MUL, DIV, MOD, POW,
+    ADD, SUB, MUL, DIV, MOD, POW, UNM,
     
     // Logic
     NOT,        // R(A) := not R(B)

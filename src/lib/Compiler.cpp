@@ -333,14 +333,8 @@ int Compiler::compile(Expr* expr) {
         int right = compile(e->right.get());
         OpCode op = OpCode::NOT;
         if (e->op == TokenType::Minus) {
-             // We don't have UNM opcode yet, let's use 0 - x or add UNM
-             // For now LOADK 0 then SUB
-             int rZero = allocReg();
-             int kZero = makeConstant({0, 0.0, nullptr});
-             emit(createABx(OpCode::LOADK, rZero, kZero));
-             emit(createABC(OpCode::SUB, rZero, rZero, right));
-             freeReg(); // free right
-             return rZero;
+             emit(createABC(OpCode::UNM, right, right, 0));
+             return right;
         } else if (e->op == TokenType::Tilde) {
              // Bitwise NOT, assume we have it or use XOR with -1
         }

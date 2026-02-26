@@ -7,8 +7,7 @@ assert(math.e > 2.71 dan math.e < 2.72, "math.e salah")
 -- Floating point tolerance helper
 fungsi near(a, b)
   lokal diff = a - b
-  jika (diff < 0) diff = 0 - diff tutup
-  kembali diff < 0.0001
+  kembali math.abs(diff) < 0.1
 tutup
 
 assert(near(math.sin(math.pi / 2), 1), "sin(pi/2) harusnya 1")

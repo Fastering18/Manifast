@@ -4,21 +4,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manifast Playground | Premium Web Console</title>
-    <!-- Modern Typography: Inter -->
+    <title>Manifast Playground</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-
-    <!-- CodeMirror CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/one-dark.min.css">
-
     <style>
         :root {
-            /* Premium Color Palette (Tailored HSL) */
             --bg-deep: hsl(222, 25%, 6%);
             --bg-surface: hsl(222, 25%, 10%);
             --bg-glass: rgba(22, 27, 34, 0.7);
@@ -30,9 +25,7 @@
             --border-light: hsla(215, 20%, 30%, 0.5);
             --success: hsl(142, 70%, 50%);
             --error: hsl(0, 84%, 60%);
-
-            --panel-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-            --glass-blur: blur(12px);
+            --warning: hsl(38, 92%, 50%);
         }
 
         * {
@@ -53,11 +46,10 @@
             overflow: hidden;
         }
 
-        /* Glassmorphism Header */
         header {
             background: var(--bg-glass);
-            backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             padding: 0.75rem 1.5rem;
             border-bottom: 1px solid var(--border);
             display: flex;
@@ -89,7 +81,6 @@
             padding: 2px 8px;
             border-radius: 99px;
             border: 1px solid var(--border);
-            letter-spacing: 0.05em;
         }
 
         .status-container {
@@ -133,22 +124,18 @@
             }
         }
 
-        /* IDE Layout */
         .workspace {
             display: flex;
             flex: 1;
             overflow: hidden;
-            position: relative;
         }
 
-        /* Sidebar for Examples */
         .sidebar {
-            width: 240px;
+            width: 220px;
             background: var(--bg-surface);
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            transition: transform 0.3s ease;
         }
 
         .sidebar-header {
@@ -173,7 +160,7 @@
             cursor: pointer;
             font-size: 0.85rem;
             color: var(--text-secondary);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s;
             margin-bottom: 2px;
             display: flex;
             align-items: center;
@@ -184,7 +171,6 @@
         .example-item:hover {
             background: hsla(212, 100%, 65%, 0.1);
             color: var(--accent);
-            padding-left: 0.9rem;
         }
 
         .example-item.active {
@@ -194,7 +180,6 @@
             border-left-color: var(--accent);
         }
 
-        /* Editor Area */
         .main-editor {
             flex: 1;
             display: flex;
@@ -222,7 +207,6 @@
             overflow: hidden;
         }
 
-        /* Console Output */
         .console-area {
             height: 35%;
             border-top: 1px solid var(--border);
@@ -265,12 +249,6 @@
             }
         }
 
-        /* Controls */
-        .controls {
-            display: flex;
-            gap: 0.75rem;
-        }
-
         .btn {
             background: var(--accent);
             color: var(--bg-deep);
@@ -278,9 +256,9 @@
             padding: 0.4rem 1rem;
             border-radius: 6px;
             font-weight: 700;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             gap: 0.4rem;
@@ -289,49 +267,39 @@
         .btn:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px var(--accent-glow);
-            filter: brightness(1.1);
         }
 
         .btn:active {
             transform: translateY(0);
         }
 
-        .btn-run {
-            background: var(--accent);
-            position: relative;
+        .btn-stop {
+            background: var(--error);
+            display: none;
         }
 
-        .btn-run::after {
-            content: 'Ctrl+Enter';
-            position: absolute;
-            bottom: -20px;
-            right: 0;
-            font-size: 10px;
-            color: var(--text-secondary);
-            font-weight: 400;
-            opacity: 0.6;
-            pointer-events: none;
+        .btn-stop:hover {
+            box-shadow: 0 4px 12px hsla(0, 84%, 60%, 0.3);
         }
 
-        .btn-copy {
+        .btn-sm {
             background: transparent;
             color: var(--text-secondary);
             border: 1px solid var(--border);
             padding: 3px 8px;
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.2s;
             font-weight: 600;
         }
 
-        .btn-copy:hover {
+        .btn-sm:hover {
             color: var(--text-primary);
             border-color: var(--text-secondary);
             background: var(--bg-surface);
         }
 
-        /* Custom Scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -350,7 +318,6 @@
             background: var(--text-secondary);
         }
 
-        /* CodeMirror Customization */
         .CodeMirror {
             height: 100% !important;
             font-family: 'JetBrains Mono', 'Consolas', monospace !important;
@@ -363,7 +330,6 @@
             border-right: 1px solid var(--border) !important;
         }
 
-        /* Loading Overlay */
         .loader {
             position: fixed;
             inset: 0;
@@ -396,7 +362,13 @@
             font-size: 0.9rem;
             color: var(--text-secondary);
             font-weight: 500;
-            letter-spacing: 0.05em;
+        }
+
+        .shortcut-hint {
+            font-size: 10px;
+            color: var(--text-secondary);
+            opacity: 0.5;
+            margin-left: 8px;
         }
     </style>
 </head>
@@ -417,30 +389,33 @@
         <div class="status-container">
             <div class="status-indicator">
                 <div class="pulse-dot"></div>
-                WASM ENGINE ACTIVE
+                WASM VM ACTIVE
             </div>
 
-            <div class="controls">
-                <button class="btn btn-run" onclick="runCode()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-run" id="btnRun" onclick="runCode()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M8 5v14l11-7z" />
                     </svg>
-                    RUN SCRIPT
+                    RUN
+                </button>
+                <button class="btn btn-stop" id="btnStop" onclick="stopPlayback()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="6" width="12" height="12" />
+                    </svg>
+                    STOP
                 </button>
             </div>
+            <span class="shortcut-hint">Ctrl+Enter</span>
         </div>
     </header>
 
     <div class="workspace">
-        <!-- Sidebar Examples -->
         <aside class="sidebar">
-            <div class="sidebar-header">Explore Examples</div>
-            <div class="example-list" id="example-list">
-                <!-- Items injected by JS -->
-            </div>
+            <div class="sidebar-header">Examples</div>
+            <div class="example-list" id="example-list"></div>
         </aside>
 
-        <!-- Main Workspace -->
         <div class="main-editor">
             <div class="pane-header">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -450,15 +425,14 @@
                     </svg>
                     main.mnf
                 </div>
-                <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
                     <span id="timing"
                         style="color: var(--accent); font-weight: 500; font-family: 'JetBrains Mono';"></span>
-                    <button class="btn btn-copy" onclick="copyCode()">COPY</button>
+                    <button class="btn-sm" onclick="copyCode()">COPY</button>
                 </div>
             </div>
             <div id="editor-container"></div>
 
-            <!-- Console -->
             <div class="console-area">
                 <div class="pane-header">
                     <div style="display: flex; align-items: center; gap: 8px;">
@@ -467,56 +441,31 @@
                             <polyline points="4 17 10 11 4 5" />
                             <line x1="12" y1="19" x2="20" y2="19" />
                         </svg>
-                        Terminal Session
+                        Terminal
                     </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-copy" style="padding: 2px 6px; font-size: 0.6rem;"
-                            onclick="document.getElementById('output').innerHTML = ''">CLEAR</button>
-                        <span style="opacity: 0.5; font-weight: normal;">interpreter-v1@wasm</span>
-                    </div>
+                    <button class="btn-sm" onclick="document.getElementById('output').innerHTML = ''">CLEAR</button>
                 </div>
                 <div id="output"></div>
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/mode/simple.min.js"></script>
 
     <script>
-        // Manifast Syntax Definition
         CodeMirror.defineSimpleMode("manifast", {
             start: [
                 { regex: /--.*/, token: "comment" },
                 { regex: /"(?:[^\\]|\\.)*?(?:"|$)/, token: "string" },
                 { regex: /\b(?:fungsi|jika|kalau|sebaliknya|maka|tutup|kembali|lokal|untuk|ke|lakukan|selama|selagi|dan|atau|bukan|kelas|self|impor|benar|salah|nil|tetap|coba|tangkap)\b/, token: "keyword" },
-                { regex: /\b(?:print|println|tipe|tunggu|input|assert|exit|waktuNano|clearOutput|sin|cos|tan|asin|acos|atan|atan2|sqrt|abs|floor|ceil|pow|log|exp|pi|e)\b/, token: "builtin" },
+                { regex: /\b(?:print|println|tipe|tunggu|input|assert|exit|waktuNano|clearOutput|len|sin|cos|tan|sqrt|abs|floor|ceil|pow|log|exp)\b/, token: "builtin" },
                 { regex: /\b\d+\.?\d*\b/, token: "number" },
                 { regex: /[+\-*/%<>=!&|^]/, token: "operator" },
             ],
             meta: { lineComment: "--" }
         });
 
-        function copyCode() {
-            const btn = document.querySelector('.btn-copy');
-            const originalText = btn.innerText;
-            const originalBorderColor = btn.style.borderColor;
-            const originalColor = btn.style.color;
-
-            navigator.clipboard.writeText(window.editor.getValue()).then(() => {
-                btn.innerText = 'COPIED!';
-                btn.style.borderColor = 'var(--success)';
-                btn.style.color = 'var(--success)';
-                setTimeout(() => {
-                    btn.innerText = originalText;
-                    btn.style.borderColor = originalBorderColor;
-                    btn.style.color = originalColor;
-                }, 2000);
-            });
-        }
-
-        // Initialize Editor
         window.editor = CodeMirror(document.getElementById("editor-container"), {
             value: "-- Loading...",
             mode: "manifast",
@@ -533,24 +482,24 @@
 
         const examples = {
             fib: {
-                name: "Fibonacci Sequence",
-                code: `-- Fibonacci Recursive\nfungsi fib(n)\n  jika n < 2 maka kembali n tutup\n  kembali fib(n-1) + fib(n-2)\ntutup\n\nprintln("Menghitung fib(20)...")\nprintln("Hasil:", fib(20))`
+                name: "Fibonacci",
+                code: `-- Fibonacci Recursion\nlokal os = impor("os")\n\nfungsi fib(n)\n  jika n < 2 maka kembali n tutup\n  kembali fib(n-1) + fib(n-2)\ntutup\n\nlokal t0 = os.waktuNano()\nlokal h = fib(20)\nlokal t1 = os.waktuNano()\n\nprintln("fib(20) =", h)\nprintln("Waktu:", (t1 - t0) / 1000000, "ms")`
             },
             fizzbuzz: {
-                name: "FizzBuzz Loop",
+                name: "FizzBuzz",
                 code: `untuk i = 1 ke 20 lakukan\n  jika i % 15 == 0 maka println("FizzBuzz")\n  kalau i % 3 == 0 maka println("Fizz")\n  kalau i % 5 == 0 maka println("Buzz")\n  sebaliknya println(i)\n  tutup\ntutup`
             },
             plot: {
-                name: "Plot Visualization",
-                code: `lokal plot = impor("plot")\nlokal x = []\nlokal y = []\n\nuntuk i = 0 ke 10 lakukan\n  x.push(i)\n  y.push(i * i)\ntutup\n\nplot.line(x, y, {title: "Grafik Kuadrat", xlabel: "X", ylabel: "Y"})\nplot.show()`
+                name: "Plot Chart",
+                code: `lokal plot = impor("plot")\nlokal x = []\nlokal y = []\n\nuntuk i = 0 ke 10 lakukan\n  x.push(i)\n  y.push(i * i)\ntutup\n\nplot.line(x, y, {title: "Grafik Kuadrat", xlabel: "X", ylabel: "Y"})\nplot.show()\nprintln("Selesai!")`
             },
             oop: {
                 name: "Class & Objects",
                 code: `kelas Mobil maka\n  fungsi inisiasi(merk, thn)\n    self.merk = merk\n    self.thn = thn\n  tutup\n\n  fungsi info()\n    println("Mobil: " + self.merk + " (" + self.thn + ")")\n  tutup\ntutup\n\nlokal m1 = Mobil("Toyota", 2022)\nm1.info()`
             },
             mandelbrot: {
-                name: "Mandelbrot Iterative",
-                code: `lokal os = impor("os")\n\nfungsi gambar(iterasi)\n  os.clearOutput()\n  println("Mandelbrot Set [Iterasi: " + iterasi + "]")\n  untuk y = 0 ke 20 lakukan\n    lokal cy = (y/20)*2 - 1\n    untuk x = 0 ke 60 lakukan\n      lokal cx = (x/60)*2.5 - 1.75\n      lokal zx = 0; lokal zy = 0; lokal i = 0\n      selama (zx*zx + zy*zy < 4) dan (i < iterasi) lakukan\n        lokal t = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = t\n        i = i + 1\n      tutup\n      jika i == iterasi maka print("#") sebaliknya print(" ") tutup\n    tutup\n    println("")\n  tutup\ntutup\n\nuntuk i = 1 ke 24 lakukan\n  gambar(i)\n  os.tunggu(30)\ntutup\nprintln("Selesai!")`
+                name: "Mandelbrot Animated",
+                code: `lokal os = impor("os")\n\nfungsi gambar(iterasi)\n  os.clearOutput()\n  println("Mandelbrot [Depth: " + iterasi + "]")\n  untuk y = 0 ke 20 lakukan\n    lokal cy = (y/20)*2 - 1\n    untuk x = 0 ke 60 lakukan\n      lokal cx = (x/60)*2.5 - 1.75\n      lokal zx = 0; lokal zy = 0; lokal i = 0\n      selama (zx*zx + zy*zy < 4) dan (i < iterasi) lakukan\n        lokal t = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = t\n        i = i + 1\n      tutup\n      jika i == iterasi maka print("#") sebaliknya print(" ") tutup\n    tutup\n    println("")\n  tutup\ntutup\n\nuntuk i = 1 ke 24 lakukan\n  gambar(i)\n  os.tunggu(30)\ntutup\nprintln("Done!")`
             }
         };
 
@@ -559,6 +508,7 @@
             Object.keys(examples).forEach(key => {
                 const item = document.createElement('div');
                 item.className = 'example-item';
+                item.dataset.key = key;
                 item.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg> ${examples[key].name}`;
                 item.onclick = () => {
                     document.querySelectorAll('.example-item').forEach(i => i.classList.remove('active'));
@@ -570,99 +520,113 @@
             });
         }
 
+        // --- WASM Module Integration ---
         window.Module = {
             onRuntimeInitialized: function () {
+                console.log("[Manifast] WASM VM loaded successfully");
                 document.getElementById('loader').style.opacity = '0';
                 setTimeout(() => document.getElementById('loader').remove(), 500);
+
+                // Register event callback
+                // 0=log, 1=error, 2=plot, 3=clear, 4=done, 5=delay
+                const eventCallback = Module.addFunction((type, dataPtr) => {
+                    const data = Module.UTF8ToString(dataPtr);
+                    const outputEl = document.getElementById('output');
+
+                    if (type === 0) { // Log
+                        const span = document.createElement('span');
+                        span.textContent = data;
+                        outputEl.appendChild(span);
+                    } else if (type === 1) { // Error
+                        const span = document.createElement('span');
+                        span.style.color = 'var(--error)';
+                        span.textContent = "\n[ERROR] " + data + "\n";
+                        outputEl.appendChild(span);
+                    } else if (type === 2) { // Plot (Image)
+                        const img = document.createElement('img');
+                        img.src = data;
+                        outputEl.appendChild(img);
+                    } else if (type === 3) { // Clear
+                        outputEl.innerHTML = '';
+                    } else if (type === 5) { // Delay/Sleep (Visual only for now)
+                        // This can be used for animations if the runner handles yielding
+                    }
+                    outputEl.scrollTop = outputEl.scrollHeight;
+                }, 'vpp');
+
+                if (Module._mf_set_event_callback) {
+                    Module._mf_set_event_callback(eventCallback);
+                }
+
                 initSidebar();
             },
-            print: (text) => {
-                appendRawOutput(text + "\n");
-            },
-            printErr: (text) => {
-                appendRawOutput(`<span style="color: var(--error)">${text}</span>\n`);
-            }
+            print: (text) => console.log("[MF stdout]", text),
+            printErr: (text) => console.warn("[MF stderr]", text)
         };
 
-        let currentOutputString = "";
-
-        function appendRawOutput(html) {
-            const outputEl = document.getElementById('output');
-            const span = document.createElement('span');
-            span.innerHTML = html;
-            outputEl.appendChild(span);
-            outputEl.scrollTop = outputEl.scrollHeight;
-        }
-
+        // --- Playback Engine ---
         let playbackId = 0;
+        let isRunning = false;
 
-        async function renderOutput(text) {
-            const outputEl = document.getElementById('output');
-            outputEl.innerHTML = '';
-
-            if (!text) return;
-
-            const myPlaybackId = ++playbackId;
-
-            // Tokenize by markers: [CLR], [DLY:ms], [IMG:data...]
-            const tokens = text.split(/(\[CLR\]|\[DLY:\d+\]|\[IMG:data:[^\]]+\])/);
-
-            for (let token of tokens) {
-                if (myPlaybackId !== playbackId) return; // Cancel if new run started
-
-                if (token === '[CLR]') {
-                    outputEl.innerHTML = '';
-                } else if (token.startsWith('[DLY:')) {
-                    const ms = parseInt(token.match(/\d+/)[0]);
-                    await new Promise(r => setTimeout(r, ms));
-                } else if (token.startsWith('[IMG:')) {
-                    const base64 = token.match(/\[IMG:(data:[^\]]+)\]/)[1];
-                    const img = document.createElement('img');
-                    img.src = base64;
-                    outputEl.appendChild(img);
-                } else if (token) {
-                    const span = document.createElement('span');
-                    span.textContent = token;
-                    outputEl.appendChild(span);
-                }
-                outputEl.scrollTop = outputEl.scrollHeight;
-            }
+        function setRunning(running) {
+            isRunning = running;
+            document.getElementById('btnRun').style.display = running ? 'none' : 'flex';
+            document.getElementById('btnStop').style.display = running ? 'flex' : 'none';
         }
 
-        function runCode() {
-            if (!window.Module._mf_run_script_tier) return;
+        function stopPlayback() {
+            playbackId++;
+            setRunning(false);
+            console.log("[Manifast] Playback stopped by user");
+        }
+
+        async function runCode() {
+            if (!window.Module._mf_run_script_tier) {
+                alert("WASM not loaded yet!");
+                return;
+            }
 
             const code = window.editor.getValue();
             const outputEl = document.getElementById('output');
             const timingEl = document.getElementById('timing');
-            const runBtn = document.querySelector('.btn-run');
 
-            // Visual feedback
-            runBtn.style.opacity = '0.7';
-            runBtn.innerText = 'RUNNING...';
-            outputEl.innerHTML = '<span style="color: var(--accent); opacity: 0.7;">> Executing script...</span>\n';
+            setRunning(true);
+            outputEl.innerHTML = '<span style="color: hsla(200, 100%, 70%, 0.8)">> Executing...</span>\n';
             timingEl.innerText = '';
 
-            setTimeout(async () => {
-                const start = performance.now();
-                try {
-                    // Script output is captured in the return string
-                    const result = window.Module.ccall('mf_run_script_tier', 'string', ['string', 'number'], [code, 0]);
-                    const duration = (performance.now() - start).toFixed(2);
+            console.log("[Manifast] Running script...");
+            const startTime = performance.now();
 
-                    // Clear "Executing..." and show actual result
-                    outputEl.innerHTML = '';
-                    await renderOutput(result || '');
+            try {
+                // Execute synchronously (events will trigger our callback)
+                const result = window.Module.ccall('mf_run_script_tier', 'string', ['string', 'number'], [code, 0]);
 
-                    timingEl.innerText = `[${duration}ms]`;
-                } catch (err) {
-                    outputEl.innerHTML = `<span style="color: var(--error)">RUNTIME ERROR:</span>\n${err.message}`;
-                    timingEl.innerText = '[Error]';
-                } finally {
-                    runBtn.style.opacity = '1';
-                    runBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> RUN SCRIPT`;
+                const endTime = performance.now();
+                timingEl.innerText = `${((endTime - startTime) / 1000).toFixed(3)}s`;
+
+                if (result && result.includes("[ERROR RUNTIME]")) {
+                    console.error("[Manifast] Runtime Error detected");
                 }
-            }, 50);
+            } catch (err) {
+                console.error("[Manifast] Execution error:", err);
+                const span = document.createElement('span');
+                span.style.color = 'var(--error)';
+                span.textContent = "\n[FATAL ERROR] " + err.message + "\n";
+                outputEl.appendChild(span);
+            } finally {
+                setRunning(false);
+            }
+        }
+
+        function copyCode() {
+            const btn = document.querySelector('.btn-sm');
+            navigator.clipboard.writeText(window.editor.getValue()).then(() => {
+                const orig = btn.innerText;
+                btn.innerText = 'COPIED!';
+                btn.style.borderColor = 'var(--success)';
+                btn.style.color = 'var(--success)';
+                setTimeout(() => { btn.innerText = orig; btn.style.borderColor = ''; btn.style.color = ''; }, 2000);
+            });
         }
     </script>
     <script src="manifast.js"></script>

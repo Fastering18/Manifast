@@ -203,11 +203,22 @@ int mf_get_plot_buffer_size() {
     return (int)g_plot_bmp_buffer.size();
 }
 
+// Event callback for async mode (EventEmitter-style)
+// event_type: 0=log, 1=error, 2=plot, 3=clear, 4=done
+typedef void (*MfEventCallback)(int event_type, const char* data);
+static MfEventCallback g_event_callback = nullptr;
+
+void mf_set_event_callback(MfEventCallback cb) {
+    g_event_callback = cb;
+}
+
+static std::string g_event_output;
+
+// Synchronous run: collects all output, returns as string
 const char* mf_run_script_tier(const char* source, int tier) {
     g_wasm_output = "";
     g_plot_bmp_buffer.clear();
     
-    // Set callbacks so plot.show() and os.clearOutput() interact with the WASM environment
     manifast_set_plot_show_callback(wasm_plot_callback);
     manifast_set_clear_output_callback([](){ g_wasm_output += "[CLR]"; });
     
@@ -228,9 +239,6 @@ const char* mf_run_script_tier(const char* source, int tier) {
     vm.defineNative("sleep", wasm_sleep);
     vm.defineNative("tunggu", wasm_sleep);
     
-    // Also inject into os module if it gets imported
-    // (Runtime.cpp handles impor("os"), we can override or add to it)
-    
 #ifndef __EMSCRIPTEN__
     if (tier > 0) {
         manifast::CodeGen codegen;
@@ -244,15 +252,63 @@ const char* mf_run_script_tier(const char* source, int tier) {
         manifast::vm::Chunk chunk;
         manifast::vm::Compiler compiler;
         
-        if (compiler.compile(statements, chunk)) {
-            vm.interpret(&chunk, source);
-            chunk.free();
-        } else {
-            g_wasm_output = "Compilation Failed";
+        try {
+            if (compiler.compile(statements, chunk)) {
+                vm.interpret(&chunk, source);
+                chunk.free();
+            } else {
+                g_wasm_output += "\n[ERROR] Compilation Failed\n";
+            }
+        } catch (const std::exception& e) {
+            g_wasm_output += "\n[ERROR RUNTIME] ";
+            g_wasm_output += e.what();
+            g_wasm_output += "\n";
+            if (chunk.code.size() > 0) chunk.free();
         }
 #ifndef __EMSCRIPTEN__
     }
 #endif
+    
+    // If event callback is set, emit events by parsing markers
+    if (g_event_callback) {
+        std::string& out = g_wasm_output;
+        size_t pos = 0;
+        while (pos < out.size()) {
+            size_t clr = out.find("[CLR]", pos);
+            size_t dly = out.find("[DLY:", pos);
+            size_t img = out.find("[IMG:", pos);
+            
+            size_t next = std::min({clr, dly, img});
+            if (next == std::string::npos) {
+                if (pos < out.size()) {
+                    g_event_output = out.substr(pos);
+                    g_event_callback(0, g_event_output.c_str());
+                }
+                break;
+            }
+            
+            if (next > pos) {
+                g_event_output = out.substr(pos, next - pos);
+                g_event_callback(0, g_event_output.c_str());
+            }
+            
+            if (next == clr) {
+                g_event_callback(3, "");
+                pos = next + 5;
+            } else if (next == dly) {
+                size_t end = out.find(']', next);
+                g_event_output = out.substr(next + 5, end - next - 5);
+                g_event_callback(5, g_event_output.c_str()); // 5 = delay
+                pos = end + 1;
+            } else if (next == img) {
+                size_t end = out.find(']', next);
+                g_event_output = out.substr(next + 5, end - next - 5);
+                g_event_callback(2, g_event_output.c_str());
+                pos = end + 1;
+            }
+        }
+        g_event_callback(4, ""); // done
+    }
     
     static std::string last_output;
     last_output = g_wasm_output;

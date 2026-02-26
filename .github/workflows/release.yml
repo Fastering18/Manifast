@@ -59,6 +59,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-llvm
             mingw-w64-ucrt-x86_64-fmt
+            zip
             mingw-w64-ucrt-x86_64-nsis
 
       - name: Configure & Build
@@ -118,6 +119,7 @@ jobs:
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-fmt
+            zip
 
       - name: Configure & Build (Linux)
         if: runner.os == 'Linux'
@@ -138,15 +140,22 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --target manifast_core
 
-      - name: Create Archive
-        shell: bash
+      - name: Create Archive (Linux)
+        if: runner.os == 'Linux'
         run: |
-          mkdir -p embedded-dist/include
+          mkdir -p embedded-dist/include embedded-dist/lib
           cp -r include/manifast embedded-dist/include/
-          mkdir -p embedded-dist/lib
-          find build -name "*manifast_core*" -exec cp {} embedded-dist/lib/ \;
-          cd embedded-dist
-          zip -r ../${{ matrix.artifact_name }}.zip .
+          find build -name "libmanifast_core*" -type f -not -path "*/CMakeFiles/*" -exec cp {} embedded-dist/lib/ \;
+          cd embedded-dist && zip -r ../${{ matrix.artifact_name }}.zip .
+
+      - name: Create Archive (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          mkdir -p embedded-dist/include embedded-dist/lib
+          cp -r include/manifast embedded-dist/include/
+          find build -name "*manifast_core*" -type f -not -path "*/CMakeFiles/*" -exec cp {} embedded-dist/lib/ \;
+          cd embedded-dist && zip -r ../${{ matrix.artifact_name }}.zip .
 
       - uses: actions/upload-artifact@v4
         with:

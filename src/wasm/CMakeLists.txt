@@ -21,16 +21,17 @@ set(CORE_SOURCES
 add_executable(manifast bindings.cpp ${CORE_SOURCES})
 
 # Compile Options
-target_compile_options(manifast PRIVATE -fno-exceptions)
+target_compile_options(manifast PRIVATE -fexceptions)
 
 # Emscripten Link Options
 target_link_options(manifast PRIVATE
     -sWASM=1
     -sALLOW_MEMORY_GROWTH=1
-    -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap","UTF8ToString"]
-    -sEXPORTED_FUNCTIONS=["_mf_run_script","_mf_run_script_tier","_mf_get_plot_buffer","_mf_get_plot_buffer_size","_malloc","_free"]
+    -sALLOW_TABLE_GROWTH=1
+    -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap","UTF8ToString","addFunction"]
+    -sEXPORTED_FUNCTIONS=["_mf_run_script","_mf_run_script_tier","_mf_get_plot_buffer","_mf_get_plot_buffer_size","_mf_set_event_callback","_malloc","_free"]
+    -sDISABLE_EXCEPTION_CATCHING=0
     -sNO_EXIT_RUNTIME=1
-    --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/index.html
 )
 
 # Move outputs to /docs automatically
@@ -38,5 +39,6 @@ add_custom_command(TARGET manifast POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/../../docs
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:manifast> ${CMAKE_SOURCE_DIR}/../../docs/manifast.js
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/manifast.wasm ${CMAKE_SOURCE_DIR}/../../docs/manifast.wasm
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/index.html ${CMAKE_SOURCE_DIR}/../../docs/index.html
     COMMENT "Copying WebAssembly outputs to /docs directory"
 )

@@ -99,7 +99,7 @@ MF_API void manifast_set_clear_output_callback(ManifastClearOutputCallback cb);
 #include <stdexcept>
 #include <string>
 
-#ifdef __EMSCRIPTEN__
+#if defined(__EMSCRIPTEN__) && !defined(__EXCEPTIONS)
 #include <iostream>
 #include <cstdlib>
 #define MANIFAST_THROW(msg) do { std::cerr << "Runtime Error: " << msg << std::endl; std::abort(); } while(0)

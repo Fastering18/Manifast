@@ -43,6 +43,21 @@ Manifast uses a multi-tier execution model to balance startup speed and raw perf
 - **Core Memory**: < 500 KB (No LLVM dependencies).
 - **Embedded API**: Fully thread-safe, multiple VM instances support.
 
+## Quick Install
+Get Manifast up and running instantly on your machine.
+
+### Linux / macOS
+```bash
+curl -fsSL https://manifast.dev/install.sh | bash
+```
+
+### Windows (PowerShell)
+```powershell
+iwr -useb https://manifast.dev/install.ps1 | iex
+```
+
+---
+
 ## Feature Status
 - [x] **Basic Syntax**: `fungsi`, `lokal`, `jika`, `selama`, `kembali`, etc.
 - [x] **Type Annotations**: Optional static typing for better JIT optimization.
@@ -51,8 +66,8 @@ Manifast uses a multi-tier execution model to balance startup speed and raw perf
 - [x] **Math Stdlib**: Extended MATLAB-style functions (`linspace`, `clamp`, `sin`, `log`, etc).
 - [x] **Plot Module**: High-performance plotting (`plot.line`, `plot.scatter`, `plot.show`).
 - [x] **WebAssembly**: Fully integrated with auto-deploy to [Playground](https://fastering.thedev.id/Manifast/).
-- [x] **Stack Config**: Configurable VM stack size per instance via `--stack-size`.
-- [x] **Distribution**: Ready for DEB, NSIS, and cross-platform embedded binaries.
+- [x] **Async Event API**: EventEmitter-style output handling for logs, errors, and plots in WASM.
+- [x] **One-Liner Installers**: Quick distribution for all major platforms.
 - [ ] IDE Support (LSP)
 - [ ] Self compilation
 

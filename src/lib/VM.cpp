@@ -495,6 +495,15 @@ void VM::run(int entryFrameDepth) {
                 LR(GET_A(i)) = {2, isTruthy ? 0.0 : 1.0, nullptr};
                 break;
             }
+            case OpCode::UNM: {
+                Any vb = LR(GET_B(i));
+                if (vb.type == 0) { // Number
+                    LR(GET_A(i)) = {0, -vb.number, nullptr};
+                } else {
+                    RUNTIME_ERROR("Operasi unary minus hanya berlaku untuk angka");
+                }
+                break;
+            }
             case OpCode::LT: {
                 Any vb = LRK(GET_B(i));
                 Any vc = LRK(GET_C(i));
@@ -513,9 +522,14 @@ void VM::run(int entryFrameDepth) {
                 Any vb = LRK(GET_B(i));
                 Any vc = LRK(GET_C(i));
                 bool res = false;
-                if (vb.type == 0 && vc.type == 0) res = (vb.number == vc.number);
-                else if (vb.type == 1 && vc.type == 1) res = (std::strcmp((char*)vb.ptr, (char*)vc.ptr) == 0);
-                else if (vb.type == 3 && vc.type == 3) res = true;
+                if (vb.type == vc.type) {
+                    if (vb.type == 0) res = (vb.number == vc.number);
+                    else if (vb.type == 1 && vb.ptr && vc.ptr) res = (std::strcmp((char*)vb.ptr, (char*)vc.ptr) == 0);
+                    else if (vb.type == 2) res = (vb.number == vc.number);
+                    else if (vb.type == 3) res = true;
+                } else if ((vb.type == 0 && vc.type == 2) || (vb.type == 2 && vc.type == 0)) {
+                    res = (vb.number == vc.number);
+                }
                 if (res != (GET_A(i) != 0)) pc++;
                 break;
             }
