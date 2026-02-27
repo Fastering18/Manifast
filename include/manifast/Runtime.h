@@ -17,8 +17,28 @@
 
 extern "C" {
 
+enum AnyType {
+    ANY_NUMBER = 0,
+    ANY_STRING = 1,
+    ANY_BOOLEAN = 2,
+    ANY_NIL = 3,
+    ANY_NATIVE = 4,
+    ANY_BYTECODE = 5,
+    ANY_ARRAY = 6,
+    ANY_OBJECT = 7,
+    ANY_CLASS = 8,
+    ANY_INSTANCE = 9,
+    ANY_INT8 = 10,
+    ANY_INT16 = 11,
+    ANY_INT32 = 12,
+    ANY_INT64 = 13,
+    ANY_FLOAT32 = 14,
+    ANY_FLOAT64 = 15,
+    ANY_CHAR = 16
+};
+
 struct Any {
-    int32_t type;    // 0=Number, 1=String, 2=Boolean, 3=Nil, 4=Native, 5=Bytecode, 6=Array, 7=Object, 8=Class, 9=Instance
+    int32_t type;    // Uses AnyType enum
     double number;
     void* ptr;
 };
@@ -78,6 +98,8 @@ MF_API void manifast_assert(Any* cond, Any* msg);
 MF_API Any* manifast_impor(const char* name);
 MF_API void manifast_class_add_method(Any* class_any, const char* name, ManifastNativeFn fn);
 MF_API Any* manifast_call_dynamic(Any* callee, Any* args, int nargs);
+MF_API void manifast_plot_for(Any* y_arr, Any* x_arr, Any* config);
+MF_API void manifast_type_check(Any* val, int expected_type);
 
 // Internal Memory Management (exported for tests if needed)
 MF_API void* mf_malloc(size_t size);

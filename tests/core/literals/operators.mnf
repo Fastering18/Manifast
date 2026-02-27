@@ -2,3 +2,27 @@ println(1 + 2 * 3)
 println(10 / 2)
 println(2 ^ 3)
 println( benar dan salah )
+
+tipe bilangan = f64
+tipe Orang = {
+    nama: string,
+    umur: bilangan
+}
+
+lokal a: bilangan = 1
+a += 1
+assert(a == 2, "a harus 2")
+a -= 1
+assert(a == 1, "a harus 1")
+a *= 2
+assert(a == 2, "a harus 2")
+a /= 2
+assert(a == 1, "a harus 1")
+
+fungsi tambah(a: fungsi(): angka): angka
+    kembali a()+1
+tutup
+
+println(tambah(fungsi()
+    kembali 1
+tutup))

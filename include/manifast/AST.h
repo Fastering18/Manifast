@@ -8,6 +8,89 @@
 
 namespace manifast {
 
+// --- Types ---
+
+enum class TypeKind {
+    Any,
+    Int8, Int16, Int32, Int64,
+    Float32, Float64,
+    Char,
+    Bool,
+    String,
+    Void,
+    Array,
+    Pointer,
+    Function,
+    Struct,
+    Alias
+};
+
+struct Type {
+    TypeKind kind;
+    std::shared_ptr<Type> baseType; // For Array/Pointer
+    std::vector<Type> params; // For Function
+    std::shared_ptr<Type> returnType; // For Function
+
+    struct Field {
+        std::string name;
+        std::shared_ptr<Type> type;
+    };
+    std::vector<Field> fields; // For Struct
+    std::string aliasName; // For Alias
+
+    Type(TypeKind k = TypeKind::Any) : kind(k) {}
+    
+    static Type makeArray(Type base) {
+        Type t(TypeKind::Array);
+        t.baseType = std::make_shared<Type>(std::move(base));
+        return t;
+    }
+
+    static Type makePointer(Type base) {
+        Type t(TypeKind::Pointer);
+        t.baseType = std::make_shared<Type>(std::move(base));
+        return t;
+    }
+
+    std::string toString() const {
+        switch (kind) {
+            case TypeKind::Any: return "any";
+            case TypeKind::Int8: return "i8";
+            case TypeKind::Int16: return "i16";
+            case TypeKind::Int32: return "i32";
+            case TypeKind::Int64: return "i64";
+            case TypeKind::Float32: return "f32";
+            case TypeKind::Float64: return "f64";
+            case TypeKind::Char: return "char";
+            case TypeKind::Bool: return "boolean";
+            case TypeKind::String: return "string";
+            case TypeKind::Void: return "void";
+            case TypeKind::Array: return baseType->toString() + "[]";
+            case TypeKind::Pointer: return "*" + baseType->toString();
+            case TypeKind::Alias: return aliasName;
+            case TypeKind::Struct: {
+                std::string s = "{";
+                for (size_t i = 0; i < fields.size(); ++i) {
+                    s += fields[i].name + ": " + fields[i].type->toString();
+                    if (i < fields.size() - 1) s += ", ";
+                }
+                s += "}";
+                return s;
+            }
+            case TypeKind::Function: {
+                std::string s = "fungsi(";
+                for (size_t i = 0; i < params.size(); ++i) {
+                    s += params[i].toString();
+                    if (i < params.size() - 1) s += ", ";
+                }
+                s += "): " + returnType->toString();
+                return s;
+            }
+        }
+        return "unknown";
+    }
+};
+
 class Stmt;
 
 // Base class for all AST nodes
@@ -41,6 +124,12 @@ class BoolExpr : public Expr {
 public:
     bool value;
     BoolExpr(bool value) : value(value) {}
+};
+
+class CharExpr : public Expr {
+public:
+    char value;
+    CharExpr(char value) : value(value) {}
 };
 
 class NilExpr : public Expr {
@@ -120,11 +209,11 @@ public:
 
 class FunctionExpr : public Expr {
 public:
-    std::vector<std::pair<std::string, std::string>> params; // Name, Type
-    std::string returnType;
+    std::vector<std::pair<std::string, Type>> params; // Name, Type
+    Type returnType;
     std::unique_ptr<Stmt> body;
     
-    FunctionExpr(std::vector<std::pair<std::string, std::string>> params, std::string returnType, std::unique_ptr<Stmt> body)
+    FunctionExpr(std::vector<std::pair<std::string, Type>> params, Type returnType, std::unique_ptr<Stmt> body)
         : params(std::move(params)), returnType(std::move(returnType)), body(std::move(body)) {}
 };
 
@@ -173,12 +262,19 @@ public:
 class VarDeclStmt : public Stmt {
 public:
     std::string name;
-    std::string typeAnnotation; // Optional type hint (e.g. "angka")
+    Type typeAnnotation; // Use Type instead of string
     std::unique_ptr<Expr> initializer; // Can be null
     bool isConst;
 
-    VarDeclStmt(std::string name, std::string typeAnnotation, std::unique_ptr<Expr> initializer, bool isConst)
+    VarDeclStmt(std::string name, Type typeAnnotation, std::unique_ptr<Expr> initializer, bool isConst)
         : name(std::move(name)), typeAnnotation(std::move(typeAnnotation)), initializer(std::move(initializer)), isConst(isConst) {}
+};
+
+class TypeAliasStmt : public Stmt {
+public:
+    std::string name;
+    Type type;
+    TypeAliasStmt(std::string name, Type type) : name(std::move(name)), type(std::move(type)) {}
 };
 
 class IfStmt : public Stmt {
@@ -215,11 +311,11 @@ public:
 class FunctionStmt : public Stmt {
 public:
     std::string name;
-    std::vector<std::pair<std::string, std::string>> params; // Name, Type
-    std::string returnType;
+    std::vector<std::pair<std::string, Type>> params; // Name, Type
+    Type returnType;
     std::unique_ptr<Stmt> body;
 
-    FunctionStmt(std::string name, std::vector<std::pair<std::string, std::string>> params, std::string returnType, std::unique_ptr<Stmt> body)
+    FunctionStmt(std::string name, std::vector<std::pair<std::string, Type>> params, Type returnType, std::unique_ptr<Stmt> body)
         : name(std::move(name)), params(std::move(params)), returnType(std::move(returnType)), body(std::move(body)) {}
 };
 

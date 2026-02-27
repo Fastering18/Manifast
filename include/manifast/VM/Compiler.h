@@ -42,7 +42,7 @@ private:
     int allocReg();
     void freeReg(); // Pop last reg
     
-    Chunk* compileFunctionBody(const std::vector<std::pair<std::string, std::string>>& params, Stmt* body, const std::string& name = "<lambda>");
+    Chunk* compileFunctionBody(const std::vector<std::pair<std::string, Type>>& params, Stmt* body, const std::string& name = "<lambda>");
     int compileClass(ClassStmt* stmt);
     
     void beginScope();

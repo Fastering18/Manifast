@@ -40,12 +40,15 @@ public:
     const std::vector<uint8_t>& getFramebuffer() const { return framebuffer_; }
     int getWidth() const { return config_.width; }
     int getHeight() const { return config_.height; }
-    void reset() { series_.clear(); framebuffer_.clear(); }
+    void reset() { series_.clear(); framebuffer_.clear(); current_type_ = ChartType::Line; }
+    void setChartType(ChartType type) { current_type_ = type; }
+    ChartType getChartType() const { return current_type_; }
 
 private:
     std::vector<Series> series_;
     ChartConfig config_;
     std::vector<uint8_t> framebuffer_;
+    ChartType current_type_ = ChartType::Line;
 
     void render(ChartType type);
     void drawLine(int x0, int y0, int x1, int y1, uint32_t color);
@@ -53,6 +56,7 @@ private:
     void drawCircle(int cx, int cy, int r, uint32_t color);
     void setPixel(int x, int y, uint32_t color);
     void computeAxes(double& xmin, double& xmax, double& ymin, double& ymax);
+    void drawText(int x, int y, const std::string& text, uint32_t color, int scale = 1);
     int mapX(double val, double xmin, double xmax);
     int mapY(double val, double ymin, double ymax);
 

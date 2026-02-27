@@ -23,3 +23,12 @@ lokal sy = [2, 4, 1, 5, 3]
 plot.scatter(sx, sy)
 lokal saved2 = plot.save("test_scatter_output.bmp")
 assert(saved2, "scatter save harusnya berhasil")
+
+impor("plot").plotFor([1, 4, 9, 16, 25], [1, 2, 3, 4, 5], {
+    title: "VERIFIKASI PLOT",
+    xlabel: "SUMBU X",
+    ylabel: "SUMBU Y",
+    width: 600,
+    height: 400,
+    type: "line"
+})

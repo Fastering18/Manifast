@@ -29,11 +29,19 @@ private:
     std::unique_ptr<llvm::Module> module;
     std::unique_ptr<llvm::IRBuilder<>> builder;
     
+    struct VarInfo {
+        llvm::Value* value;
+        Type type;
+        VarInfo(llvm::Value* v = nullptr, Type t = Type(TypeKind::Any)) : value(v), type(std::move(t)) {}
+    };
+    
     // Scope management
-    std::vector<std::map<std::string, llvm::Value*>> scopes;
+    std::vector<std::map<std::string, VarInfo>> scopes;
     void pushScope();
     void popScope();
-    llvm::Value* lookupVariable(const std::string& name);
+    VarInfo lookupVariable(const std::string& name);
+    int mapTypeToRuntime(const Type& type);
+    Type resolveType(const Type& type);
 
     llvm::Value* generateExpr(const Expr* expr);
     void generateStmt(const Stmt* stmt);
@@ -44,12 +52,14 @@ private:
     llvm::Value* visitVariableExpr(const VariableExpr* expr);
     llvm::Value* visitBoolExpr(const BoolExpr* expr);
     llvm::Value* visitNilExpr(const NilExpr* expr);
+    llvm::Value* visitCharExpr(const CharExpr* expr);
     llvm::Value* visitUnaryExpr(const UnaryExpr* expr);
     llvm::Value* visitAssignExpr(const AssignExpr* expr);
     llvm::Value* visitCallExpr(const CallExpr* expr);
     llvm::Value* visitArrayExpr(const ArrayExpr* expr);
     llvm::Value* visitObjectExpr(const ObjectExpr* expr);
     llvm::Value* visitStringExpr(const StringExpr* expr);
+    llvm::Value* visitFunctionExpr(const FunctionExpr* expr);
     llvm::Value* visitIndexExpr(const IndexExpr* expr);
     llvm::Value* visitGetExpr(const GetExpr* expr);
     
@@ -63,7 +73,10 @@ private:
     void visitFunctionStmt(const FunctionStmt* stmt);
     void visitClassStmt(const ClassStmt* stmt);
     void visitTryStmt(const TryStmt* stmt);
+    void visitTypeAliasStmt(const TypeAliasStmt* stmt);
 
+    std::vector<std::map<std::string, Type>> typeAliases;
+    
 private:
     // Dynamic Typing Support
     llvm::StructType* anyType;

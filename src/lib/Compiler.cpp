@@ -227,6 +227,9 @@ void Compiler::compile(Stmt* stmt) {
         freeReg(); // free the class object if it's just a statement?
         // Actually, classes are usually stored in a variable by the identifier name.
     }
+    else if (auto* s = dynamic_cast<TypeAliasStmt*>(stmt)) {
+        // Type aliases are compile-time only; no bytecode emitted.
+    }
     else if (auto* s = dynamic_cast<ReturnStmt*>(stmt)) {
         if (s->value) {
             int r = compile(s->value.get());
@@ -238,7 +241,7 @@ void Compiler::compile(Stmt* stmt) {
     }
 }
 
-Chunk* Compiler::compileFunctionBody(const std::vector<std::pair<std::string, std::string>>& params, Stmt* body, const std::string& name) {
+Chunk* Compiler::compileFunctionBody(const std::vector<std::pair<std::string, Type>>& params, Stmt* body, const std::string& name) {
     Chunk* chunk = new Chunk();
     chunk->name = name; 
     
@@ -402,6 +405,31 @@ int Compiler::compile(Expr* expr) {
         if (auto* v = dynamic_cast<VariableExpr*>(e->target.get())) {
             int valReg = compile(e->value.get());
             int local = resolveLocal(v->name);
+            
+            if (e->op != TokenType::Equal) {
+                // Compound assignment: a += b => a = a + b
+                int targetReg = allocReg();
+                if (local != -1) {
+                    emit(createABC(OpCode::MOVE, targetReg, local, 0));
+                } else {
+                    int k = makeConstant({1, 0.0, mf_strdup(v->name.c_str())});
+                    emit(createABx(OpCode::GETGLOBAL, targetReg, k));
+                }
+                
+                OpCode op = OpCode::ADD;
+                switch (e->op) {
+                    case TokenType::PlusEqual: op = OpCode::ADD; break;
+                    case TokenType::MinusEqual: op = OpCode::SUB; break;
+                    case TokenType::StarEqual: op = OpCode::MUL; break;
+                    case TokenType::SlashEqual: op = OpCode::DIV; break;
+                    case TokenType::PercentEqual: op = OpCode::MOD; break;
+                    default: break;
+                }
+                emit(createABC(op, targetReg, targetReg, valReg));
+                freeReg(); // Free valReg
+                valReg = targetReg;
+            }
+
             if (local != -1) {
                 emit(createABC(OpCode::MOVE, local, valReg, 0));
                 freeReg();
@@ -415,13 +443,49 @@ int Compiler::compile(Expr* expr) {
             int objReg = compile(idx->object.get());
             int keyReg = compile(idx->index.get());
             int valReg = compile(e->value.get());
+            
+            if (e->op != TokenType::Equal) {
+                int targetReg = allocReg();
+                emit(createABC(OpCode::GETTABLE, targetReg, objReg, keyReg));
+                OpCode op = OpCode::ADD;
+                switch (e->op) {
+                    case TokenType::PlusEqual: op = OpCode::ADD; break;
+                    case TokenType::MinusEqual: op = OpCode::SUB; break;
+                    case TokenType::StarEqual: op = OpCode::MUL; break;
+                    case TokenType::SlashEqual: op = OpCode::DIV; break;
+                    case TokenType::PercentEqual: op = OpCode::MOD; break;
+                    default: break;
+                }
+                emit(createABC(op, targetReg, targetReg, valReg));
+                freeReg();
+                valReg = targetReg;
+            }
+            
             emit(createABC(OpCode::SETTABLE, objReg, keyReg, valReg));
-            nextReg -= 2; // free key and value (keep obj as result?)
-            return valReg; // Return the assigned value
+            nextReg -= 2; // free key and value
+            return valReg;
         } else if (auto* get = dynamic_cast<GetExpr*>(e->target.get())) {
             int objReg = compile(get->object.get());
             int kKey = makeConstant({1, 0.0, mf_strdup(get->name.c_str())});
             int valReg = compile(e->value.get());
+            
+            if (e->op != TokenType::Equal) {
+                int targetReg = allocReg();
+                emit(createABC(OpCode::GETTABLE, targetReg, objReg, kKey + 256));
+                OpCode op = OpCode::ADD;
+                switch (e->op) {
+                    case TokenType::PlusEqual: op = OpCode::ADD; break;
+                    case TokenType::MinusEqual: op = OpCode::SUB; break;
+                    case TokenType::StarEqual: op = OpCode::MUL; break;
+                    case TokenType::SlashEqual: op = OpCode::DIV; break;
+                    case TokenType::PercentEqual: op = OpCode::MOD; break;
+                    default: break;
+                }
+                emit(createABC(op, targetReg, targetReg, valReg));
+                freeReg();
+                valReg = targetReg;
+            }
+            
             emit(createABC(OpCode::SETTABLE, objReg, kKey + 256, valReg));
             freeReg(); // free value
             return valReg;

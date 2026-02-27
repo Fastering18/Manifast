@@ -28,9 +28,11 @@ target_link_options(manifast PRIVATE
     -sWASM=1
     -sALLOW_MEMORY_GROWTH=1
     -sALLOW_TABLE_GROWTH=1
-    -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap","UTF8ToString","addFunction"]
+    -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap","UTF8ToString","addFunction","removeFunction"]
     -sEXPORTED_FUNCTIONS=["_mf_run_script","_mf_run_script_tier","_mf_get_plot_buffer","_mf_get_plot_buffer_size","_mf_set_event_callback","_malloc","_free"]
     -sDISABLE_EXCEPTION_CATCHING=0
+    -sMODULARIZE=1
+    -sEXPORT_NAME="ManifastModule"
     -sNO_EXIT_RUNTIME=1
 )
 

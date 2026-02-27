@@ -2,7 +2,7 @@
 [![Build and Test](https://github.com/Fastering18/Manifast/actions/workflows/ci.yml/badge.svg)](https://github.com/Fastering18/Manifast/actions/workflows/ci.yml)
 https://github.com/Fastering18/Manifast  
 Fast, scriptable programming language with Indonesian-based syntax, powered by LLVM.
-**Current Version: 0.0.12**
+**Current Version: 0.0.13**
 
 ## Syntax Samples
 ```manifast
@@ -11,16 +11,20 @@ fungsi hitung(x: angka, y: angka): angka
     kembali x * y + 10
 tutup
 
--- Variables and Control Flow
-lokal a = 5
-jika a < 10 maka
-    untuk i = 1 ke 5 lakukan
-        a += i
-    tutup
-tutup
+-- Static Types (i8, i16, i32, i64, f32, f64, char)
+lokal hp: i32 = 100
+lokal grade: char = 'A'
 
--- Tables/Objects
-lokal user = { nama: "Manifast", versi: 0.1 }
+-- Compound Assignment (Works in VM & JIT)
+hp -= 10
+hp += 5
+
+-- Custom Type Aliases & Structs
+tipe bilangan = f64
+tipe Orang = {
+    nama: string,
+    umur: bilangan
+}
 ```
 
 [Full Grammar Definition (BNF)](docs/GRAMMAR.md)
@@ -64,7 +68,8 @@ iwr -useb https://manifast.dev/install.ps1 | iex
 - [x] **Tables & Objects**: Dynamic objects with method injection.
 - [x] **Error Handling**: `coba/tangkap` (Try/Catch) mechanism.
 - [x] **Math Stdlib**: Extended MATLAB-style functions (`linspace`, `clamp`, `sin`, `log`, etc).
-- [x] **Plot Module**: High-performance plotting (`plot.line`, `plot.scatter`, `plot.show`).
+- [x] **Plot Module**: High-performance plotting (`plot.line`, `plot.scatter`, `plot.show`, `plotFor`).
+- [x] **Custom Types**: User-defined type aliases (`tipe bilangan = f64`) and struct types.
 - [x] **WebAssembly**: Fully integrated with auto-deploy to [Playground](https://fastering.thedev.id/Manifast/).
 - [x] **Async Event API**: EventEmitter-style output handling for logs, errors, and plots in WASM.
 - [x] **One-Liner Installers**: Quick distribution for all major platforms.

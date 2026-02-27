@@ -27,6 +27,7 @@ private:
     Token number();
     Token identifier();
     Token string();
+    Token character();
 
 private:
     std::string_view source;

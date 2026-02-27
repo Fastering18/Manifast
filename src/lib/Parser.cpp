@@ -62,8 +62,6 @@ void Parser::error(Token token, const std::string& message) {
         default: found = "'" + std::string(token.lexeme) + "'"; break;
     }
 
-    fprintf(stderr, "\n[ERROR SINTAKS] Baris %d:%d\n", token.location.line, token.location.offset);
-    
     // Find start of line in source
     int start = token.location.offset;
     while (start > 0 && source[start-1] != '\n') start--;
@@ -73,8 +71,7 @@ void Parser::error(Token token, const std::string& message) {
     while (end < (int)source.length() && source[end] != '\n') end++;
     
     std::string lineStr = std::string(source.substr(start, end - start));
-    fprintf(stderr, "  %s\n", lineStr.c_str());
-    
+
     // Caret
     std::string caret = "  ";
     int col = token.location.offset - start;
@@ -84,9 +81,23 @@ void Parser::error(Token token, const std::string& message) {
     }
     for (int j = 0; j < (token.location.length > 0 ? token.location.length : 1); j++) caret += '^';
     
-    fprintf(stderr, "%s\n", caret.c_str());
-    fprintf(stderr, "-> %s, ditemukan %s\n\n", message.c_str(), found.c_str());
-    fflush(stderr);
+    char finalMsg[512];
+    sprintf(finalMsg, "-> %s, ditemukan %s", message.c_str(), found.c_str());
+
+    if (m_errorCallback) {
+        std::string full;
+        full += "\n[ERROR SINTAKS] Baris " + std::to_string(token.location.line) + ":" + std::to_string(token.location.offset) + "\n";
+        full += "  " + lineStr + "\n";
+        full += caret + "\n";
+        full += std::string(finalMsg) + "\n\n";
+        m_errorCallback(full);
+    } else {
+        fprintf(stderr, "\n[ERROR SINTAKS] Baris %d:%d\n", token.location.line, token.location.offset);
+        fprintf(stderr, "  %s\n", lineStr.c_str());
+        fprintf(stderr, "%s\n", caret.c_str());
+        fprintf(stderr, "%s\n\n", finalMsg);
+        fflush(stderr);
+    }
 }
 
 void Parser::synchronize() {
@@ -165,6 +176,7 @@ std::unique_ptr<Stmt> Parser::parseStatement() {
     if (match(TokenType::K_Return)) return parseReturnStatement();
     if (match(TokenType::K_Var)) return parseVarDeclaration();
     if (match(TokenType::K_Const)) return parseVarDeclaration();
+    if (match(TokenType::K_Type)) return parseTypeDeclaration();
     // Block
     if (match(TokenType::LBrace)) {
         Token open = previous();
@@ -198,7 +210,7 @@ std::unique_ptr<Stmt> Parser::parseClassStatement() {
             auto func_stmt = parseFunctionStatement();
             FunctionStmt* func = static_cast<FunctionStmt*>(func_stmt.get());
             // Inject 'self' as first parameter with 'any' type
-            func->params.insert(func->params.begin(), {"self", "any"});
+            func->params.insert(func->params.begin(), {"self", Type(TypeKind::Any)});
             methods.push_back(std::unique_ptr<FunctionStmt>(static_cast<FunctionStmt*>(func_stmt.release())));
         } else {
              advance();
@@ -214,24 +226,22 @@ std::unique_ptr<Stmt> Parser::parseFunctionStatement() {
     Token name = consume(TokenType::Identifier, "Diharapkan nama fungsi");
     consume(TokenType::LParen, "Diharapkan '(' setelah nama fungsi");
     
-    std::vector<std::pair<std::string, std::string>> params;
+    std::vector<std::pair<std::string, Type>> params;
     if (!check(TokenType::RParen)) {
         do {
             Token param = consume(TokenType::Identifier, "Diharapkan nama parameter");
-            std::string paramType = "any";
+            Type paramType(TypeKind::Any);
             if (match(TokenType::Colon)) {
-                Token typeHint = consume(TokenType::Identifier, "Diharapkan tipe data setelah ':'");
-                paramType = std::string(typeHint.lexeme);
+                paramType = parseType();
             }
-            params.push_back({std::string(param.lexeme), paramType});
+            params.push_back({std::string(param.lexeme), std::move(paramType)});
         } while (match(TokenType::Comma));
     }
     consume(TokenType::RParen, "Diharapkan ')' setelah parameter");
     
-    std::string returnType = "any";
+    Type returnType(TypeKind::Void);
     if (match(TokenType::Colon)) {
-        Token typeHint = consume(TokenType::Identifier, "Diharapkan tipe kembalian setelah ':'");
-        returnType = std::string(typeHint.lexeme);
+        returnType = parseType();
     }
     
     Token body_start = currentToken;
@@ -356,10 +366,9 @@ std::unique_ptr<Stmt> Parser::parseReturnStatement() {
 
 std::unique_ptr<Stmt> Parser::parseVarDeclaration() {
     Token name = consume(TokenType::Identifier, "Diharapkan nama variabel");
-    std::string typeAnnotation = "any";
+    Type typeAnnotation(TypeKind::Any);
     if (match(TokenType::Colon)) {
-        Token typeHint = consume(TokenType::Identifier, "Diharapkan tipe data setelah ':'");
-        typeAnnotation = std::string(typeHint.lexeme);
+        typeAnnotation = parseType();
     }
     std::unique_ptr<Expr> initializer = nullptr;
     if (match(TokenType::Equal)) {
@@ -403,7 +412,7 @@ std::unique_ptr<Expr> Parser::parseAssignment() {
             dynamic_cast<IndexExpr*>(expr.get())) {
              return makeNode<AssignExpr>(opToken, std::move(expr), std::move(value), op);
         }
-        error(opToken, "Lokasi penugasan tidak sah."); 
+        error(opToken, "Lokasi assignment tidak sah."); 
     }
     
     return expr;
@@ -575,24 +584,22 @@ std::unique_ptr<Expr> Parser::parseCall() {
 std::unique_ptr<Expr> Parser::parseFunctionExpression() {
     consume(TokenType::LParen, "Expect '(' after 'fungsi'");
     
-    std::vector<std::pair<std::string, std::string>> params;
+    std::vector<std::pair<std::string, Type>> params;
     if (!check(TokenType::RParen)) {
         do {
             Token param = consume(TokenType::Identifier, "Expect parameter name");
-            std::string paramType = "any";
+            Type paramType(TypeKind::Any);
             if (match(TokenType::Colon)) {
-                Token typeHint = consume(TokenType::Identifier, "Expect type after ':'");
-                paramType = std::string(typeHint.lexeme);
+                paramType = parseType();
             }
-            params.push_back({std::string(param.lexeme), paramType});
+            params.push_back({std::string(param.lexeme), std::move(paramType)});
         } while (match(TokenType::Comma));
     }
     consume(TokenType::RParen, "Expect ')' after parameters");
     
-    std::string returnType = "any";
+    Type returnType(TypeKind::Any);
     if (match(TokenType::Colon)) {
-        Token typeHint = consume(TokenType::Identifier, "Expect return type after ':'");
-        returnType = std::string(typeHint.lexeme);
+        returnType = parseType();
     }
     
     std::vector<std::unique_ptr<Stmt>> body = parseBlock(); 
@@ -601,11 +608,101 @@ std::unique_ptr<Expr> Parser::parseFunctionExpression() {
     return std::make_unique<FunctionExpr>(std::move(params), std::move(returnType), std::make_unique<BlockStmt>(std::move(body)));
 }
 
+Type Parser::parseType() {
+    Type type(TypeKind::Any);
+
+    if (match(TokenType::Identifier)) {
+        std::string_view name = previous().lexeme;
+        if (name == "any") type = Type(TypeKind::Any);
+        else if (name == "i8") type = Type(TypeKind::Int8);
+        else if (name == "i16") type = Type(TypeKind::Int16);
+        else if (name == "i32") type = Type(TypeKind::Int32);
+        else if (name == "i64") type = Type(TypeKind::Int64);
+        else if (name == "f32") type = Type(TypeKind::Float32);
+        else if (name == "f64") type = Type(TypeKind::Float64);
+        else if (name == "char") type = Type(TypeKind::Char);
+        else if (name == "boolean") type = Type(TypeKind::Bool);
+        else if (name == "string") type = Type(TypeKind::String);
+        else if (name == "void") type = Type(TypeKind::Void);
+        else {
+            // It might be a custom type alias
+            type.kind = TypeKind::Alias;
+            type.aliasName = std::string(name);
+        }
+    } else if (match(TokenType::LBrace)) {
+        // Struct Type: { field: type, ... }
+        type.kind = TypeKind::Struct;
+        if (!check(TokenType::RBrace)) {
+            while (!check(TokenType::RBrace) && !check(TokenType::EndOfFile)) {
+                Token fieldName = consume(TokenType::Identifier, "Diharapkan nama field");
+                consume(TokenType::Colon, "Diharapkan ':' setelah nama field");
+                Type fieldType = parseType();
+                type.fields.push_back(Type::Field{std::string(fieldName.lexeme), std::make_shared<Type>(std::move(fieldType))});
+                match(TokenType::Comma); // Optional comma
+            }
+        }
+        consume(TokenType::RBrace, "Diharapkan '}' setelah field struct");
+    } else if (match(TokenType::K_Int32)) { // Legacy / keyword mapped
+        type = Type(TypeKind::Int32);
+    } else if (match(TokenType::K_String)) {
+        type = Type(TypeKind::String);
+    } else if (match(TokenType::K_Boolean)) {
+        type = Type(TypeKind::Bool);
+    } else if (match(TokenType::K_Int8)) {
+        type = Type(TypeKind::Int8);
+    } else if (match(TokenType::K_Int16)) {
+        type = Type(TypeKind::Int16);
+    } else if (match(TokenType::K_Int64)) {
+        type = Type(TypeKind::Int64);
+    } else if (match(TokenType::K_Float32)) {
+        type = Type(TypeKind::Float32);
+    } else if (match(TokenType::K_Float64)) {
+        type = Type(TypeKind::Float64);
+    } else if (match(TokenType::K_Char)) {
+        type = Type(TypeKind::Char);
+    } else if (match(TokenType::K_Function)) {
+        type = Type(TypeKind::Function);
+        consume(TokenType::LParen, "Diharapkan '(' setelah 'fungsi'");
+        if (!check(TokenType::RParen)) {
+            do {
+                type.params.push_back(parseType());
+            } while (match(TokenType::Comma));
+        }
+        consume(TokenType::RParen, "Diharapkan ')'");
+        consume(TokenType::Colon, "Diharapkan ':' sebelum tipe kembalian");
+        type.returnType = std::make_shared<Type>(parseType());
+    } else if (match(TokenType::Star)) {
+        type = Type::makePointer(parseType());
+    }
+
+    // Postfix: []
+    while (match(TokenType::LBracket)) {
+        consume(TokenType::RBracket, "Diharapkan ']'");
+        type = Type::makeArray(type);
+    }
+
+    return type;
+}
+
+std::unique_ptr<Stmt> Parser::parseTypeDeclaration() {
+    Token keyword = previous();
+    Token name = consume(TokenType::Identifier, "Expect type name");
+    consume(TokenType::Equal, "Expect '=' after type name");
+    Type type = parseType();
+    return makeNode<TypeAliasStmt>(keyword, std::string(name.lexeme), std::move(type));
+}
+
 std::unique_ptr<Expr> Parser::parsePrimary() {
     if (match(TokenType::K_False)) return makeNode<BoolExpr>(previous(), false);
     if (match(TokenType::K_True)) return makeNode<BoolExpr>(previous(), true);
     if (match(TokenType::K_Null)) return makeNode<NilExpr>(previous()); 
     if (match(TokenType::Number)) return makeNode<NumberExpr>(previous(), std::stod(std::string(previous().lexeme)));
+    if (match(TokenType::Character)) {
+        Token str = previous();
+        std::string lex = std::string(str.lexeme);
+        char c = lex.length() > 2 ? lex[1] : '\0'; // handle 'A'
+        return makeNode<CharExpr>(str, c);
+    }
     if (match(TokenType::String)) {
         Token str = previous();
         std::string lex = std::string(str.lexeme);

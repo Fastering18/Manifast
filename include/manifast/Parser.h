@@ -7,10 +7,13 @@
 #include <memory>
 #include <optional>
 
+#include <functional>
+
 namespace manifast {
 
 class Parser {
 public:
+    void setErrorCallback(std::function<void(const std::string&)> cb) { m_errorCallback = cb; }
     Parser(Lexer& lexer, std::string_view source = "");
     bool debugMode = false;
     bool hadError() const { return hasError; }
@@ -30,6 +33,7 @@ private:
     std::unique_ptr<Stmt> parseClassStatement();
     std::unique_ptr<Stmt> parseTryStatement();
     std::unique_ptr<Stmt> parseReturnStatement();
+    std::unique_ptr<Stmt> parseTypeDeclaration();
     std::vector<std::unique_ptr<Stmt>> parseBlock(); 
 
     // Expression Parsers 
@@ -49,6 +53,7 @@ private:
     std::unique_ptr<Expr> parseCall();  
     std::unique_ptr<Expr> parseFunctionExpression();
     std::unique_ptr<Expr> parsePrimary();
+    Type parseType();
 
     // Helpers
     bool match(TokenType type);
@@ -74,6 +79,7 @@ private:
     Token currentToken;
     Token previousToken;
     bool hasError = false;
+    std::function<void(const std::string&)> m_errorCallback;
 };
 
 } // namespace manifast

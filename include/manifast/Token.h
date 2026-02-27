@@ -13,6 +13,7 @@ enum class TokenType {
     Identifier,
     Number,
     String,
+    Character,
     
     // Keywords (Indonesian / Configurable mapped)
     // We keep generic names here to allow mapping "jika" -> K_If
@@ -47,7 +48,15 @@ enum class TokenType {
     // Primitive Types (Future use)
     K_String,       // string
     K_Boolean,      // boolean
-    K_Int32,        // int32
+    K_Int8,         // i8
+    K_Int16,        // i16
+    K_Int32,        // i32
+    K_Int64,        // i64
+    K_Float32,      // f32
+    K_Float64,      // f64
+    K_Char,         // char
+    K_Type,         // tipe
+    K_AliasDirect,  // For alias resolution if needed
     
 
     
@@ -116,7 +125,15 @@ inline std::string_view tokenTypeToString(TokenType type) {
         case TokenType::K_Or: return "Or";
         case TokenType::K_String: return "StringToken";
         case TokenType::K_Boolean: return "BooleanToken";
+        case TokenType::K_Int8: return "Int8Token";
+        case TokenType::K_Int16: return "Int16Token";
         case TokenType::K_Int32: return "Int32Token";
+        case TokenType::K_Int64: return "Int64Token";
+        case TokenType::K_Float32: return "Float32Token";
+        case TokenType::K_Float64: return "Float64Token";
+        case TokenType::K_Char: return "CharToken";
+        case TokenType::K_Type: return "TypeToken";
+        case TokenType::K_AliasDirect: return "AliasDirect";
         
         case TokenType::Plus: return "+";
         case TokenType::Minus: return "-";

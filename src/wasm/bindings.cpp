@@ -8,6 +8,25 @@
 
 extern "C" {
 
+void manifast_call_native(const char* mod_name, const char* fn_name, ::Any* args, int nargs) {
+    ::Any* mod = manifast_impor(mod_name);
+    if (!mod || mod->type != 7) return;
+    ::Any* fn = manifast_object_get(mod, fn_name);
+    if (!fn || (fn->type != 4 && fn->type != 5)) return;
+    
+    // For module methods, we need to inject the module as 'self' (args[0])
+    // manifast_call_dynamic already handles this if we pass args correctly.
+    // In our case, the WASM VM passes args WITHOUT self.
+    // But manifast_call_dynamic expects args[0..nargs-1].
+    // If it's a native function that expects self, we should provide it.
+    
+    std::vector<::Any> new_args;
+    new_args.push_back(*mod);
+    for(int i=0; i<nargs; i++) new_args.push_back(args[i]);
+    
+    manifast_call_dynamic(fn, new_args.data(), (int)new_args.size());
+}
+
 void wasm_print(manifast::vm::VM* vm, ::Any* args, int nargs);
 
 static std::string g_wasm_output;
@@ -132,19 +151,20 @@ void wasm_println(manifast::vm::VM* vm, ::Any* args, int nargs) {
 }
 
 void wasm_assert(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    int idx = 0; if (nargs >= 1 && args[0].type != ANY_NIL) idx = 0; // Fix arg index
     if (nargs < 1) {
         MANIFAST_THROW("Runtime Error: assert() membutuhkan minimal 1 argumen");
     }
     
     bool truth = false;
-    if (args[0].type == 2) truth = (args[0].number != 0);
-    else if (args[0].type == 3) truth = false;
-    else if (args[0].type == 0) truth = (args[0].number != 0);
+    if (args[0].type == ANY_BOOLEAN) truth = (args[0].number != 0);
+    else if (args[0].type == ANY_NIL) truth = false;
+    else if (args[0].type == ANY_NUMBER) truth = (args[0].number != 0);
     else truth = true;
 
     if (!truth) {
         std::string msg = "Assertion Gagal";
-        if (nargs >= 2 && args[1].type == 1) {
+        if (nargs >= 2 && args[1].type == ANY_STRING) {
             msg = (char*)args[1].ptr;
         }
         MANIFAST_THROW("Runtime Error: [ASSERT GAGAL] " + msg);
@@ -163,14 +183,14 @@ void manifast_println_any(::Any* val) {
 
 void manifast_assert(::Any* cond, ::Any* msg) {
     bool truth = false;
-    if (cond->type == 2) truth = (cond->number != 0);
-    else if (cond->type == 3) truth = false;
-    else if (cond->type == 0) truth = (cond->number != 0);
+    if (cond->type == ANY_BOOLEAN) truth = (cond->number != 0);
+    else if (cond->type == ANY_NIL) truth = false;
+    else if (cond->type == ANY_NUMBER) truth = (cond->number != 0);
     else truth = true;
 
     if (!truth) {
         std::string errMsg = "Assertion Gagal";
-        if (msg && msg->type == 1) {
+        if (msg && msg->type == ANY_STRING) {
             errMsg = (char*)msg->ptr;
         }
         g_wasm_output += "\n[ASSERT GAGAL] " + errMsg + "\n";
@@ -179,10 +199,50 @@ void manifast_assert(::Any* cond, ::Any* msg) {
 
 void wasm_len(manifast::vm::VM* vm, ::Any* args, int nargs) {
     if (nargs < 1) {
-        args[-1] = {0, 0, nullptr};
+        args[-1] = {ANY_NIL, 0, nullptr};
         return;
     }
-    args[-1] = {0, manifast_array_len(&args[0]), nullptr};
+    args[-1] = {ANY_NUMBER, (double)manifast_array_len(&args[0]), nullptr};
+}
+
+void wasm_plot_for(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    if (nargs < 1) return;
+    int offset = (args[0].type == ANY_OBJECT) ? 1 : 0;
+    ::Any* y = &args[offset];
+    ::Any* x = (nargs - offset >= 2 && args[offset+1].type == ANY_ARRAY) ? &args[offset+1] : nullptr;
+    ::Any* cfg = (nargs - offset >= 3) ? &args[offset+2] : (nargs - offset >= 2 && args[offset+1].type == ANY_OBJECT) ? &args[offset+1] : nullptr;
+    manifast_plot_for(y, x, cfg);
+    args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
+}
+
+void wasm_plot_line(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    manifast_call_native("plot", "line", args, nargs);
+    args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
+}
+
+void wasm_plot_scatter(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    manifast_call_native("plot", "scatter", args, nargs);
+    args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
+}
+
+void wasm_plot_bar(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    manifast_call_native("plot", "bar", args, nargs);
+    args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
+}
+
+void wasm_plot_show(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    manifast_call_native("plot", "show", args, nargs);
+    args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
+}
+
+void wasm_plot_reset(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    manifast_call_native("plot", "reset", args, nargs);
+    args[-1] = {ANY_NIL, 0.0, nullptr};
+}
+
+void wasm_plot_save(manifast::vm::VM* vm, ::Any* args, int nargs) {
+    manifast_call_native("plot", "save", args, nargs);
+    args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
 }
 
 // Plot callback: receives RGBA framebuffer, encodes BMP, base64, emits to output
@@ -225,6 +285,9 @@ const char* mf_run_script_tier(const char* source, int tier) {
     manifast::SyntaxConfig config;
     manifast::Lexer lexer(source, config);
     manifast::Parser parser(lexer, source);
+    parser.setErrorCallback([](const std::string& msg){
+        g_wasm_output += msg;
+    });
     
     auto statements = parser.parse();
     
@@ -236,8 +299,17 @@ const char* mf_run_script_tier(const char* source, int tier) {
     vm.defineNative("assert", wasm_assert);
     vm.defineNative("len", wasm_len);
     vm.defineNative("clearOutput", wasm_clear_output);
+    vm.defineNative("plotFor", wasm_plot_for);
     vm.defineNative("sleep", wasm_sleep);
     vm.defineNative("tunggu", wasm_sleep);
+
+    // Module-style plot functions
+    vm.defineNative("plot_line", wasm_plot_line);
+    vm.defineNative("plot_scatter", wasm_plot_scatter);
+    vm.defineNative("plot_bar", wasm_plot_bar);
+    vm.defineNative("plot_show", wasm_plot_show);
+    vm.defineNative("plot_reset", wasm_plot_reset);
+    vm.defineNative("plot_save", wasm_plot_save);
     
 #ifndef __EMSCRIPTEN__
     if (tier > 0) {
@@ -259,55 +331,11 @@ const char* mf_run_script_tier(const char* source, int tier) {
             } else {
                 g_wasm_output += "\n[ERROR] Compilation Failed\n";
             }
-        } catch (const std::exception& e) {
-            g_wasm_output += "\n[ERROR RUNTIME] ";
-            g_wasm_output += e.what();
-            g_wasm_output += "\n";
-            if (chunk.code.size() > 0) chunk.free();
-        }
-#ifndef __EMSCRIPTEN__
-    }
-#endif
-    
-    // If event callback is set, emit events by parsing markers
-    if (g_event_callback) {
-        std::string& out = g_wasm_output;
-        size_t pos = 0;
-        while (pos < out.size()) {
-            size_t clr = out.find("[CLR]", pos);
-            size_t dly = out.find("[DLY:", pos);
-            size_t img = out.find("[IMG:", pos);
-            
-            size_t next = std::min({clr, dly, img});
-            if (next == std::string::npos) {
-                if (pos < out.size()) {
-                    g_event_output = out.substr(pos);
-                    g_event_callback(0, g_event_output.c_str());
-                }
-                break;
-            }
-            
-            if (next > pos) {
-                g_event_output = out.substr(pos, next - pos);
-                g_event_callback(0, g_event_output.c_str());
-            }
-            
-            if (next == clr) {
-                g_event_callback(3, "");
-                pos = next + 5;
-            } else if (next == dly) {
-                size_t end = out.find(']', next);
-                g_event_output = out.substr(next + 5, end - next - 5);
-                g_event_callback(5, g_event_output.c_str()); // 5 = delay
-                pos = end + 1;
-            } else if (next == img) {
-                size_t end = out.find(']', next);
-                g_event_output = out.substr(next + 5, end - next - 5);
-                g_event_callback(2, g_event_output.c_str());
-                pos = end + 1;
-            }
-        }
-        g_event_callback(4, ""); // done
+    } catch (const std::exception& e) {
+        g_wasm_output += "\n[ERROR RUNTIME] ";
+        g_wasm_output += e.what();
+        g_wasm_output += "\n";
+        if (chunk.code.size() > 0) chunk.free();
     }
     
     static std::string last_output;

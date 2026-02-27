@@ -45,6 +45,62 @@ static void writePNG(const char* path, const uint8_t* data, int w, int h) {
     fclose(f);
 }
 
+// Minimal 5x7 Font (Subset: 0-9, A-Z, a-z, space, - , . , : )
+static const uint8_t FONT_5X7[] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, // space
+    0x3E, 0x51, 0x49, 0x45, 0x3E, // 0
+    0x00, 0x42, 0x7F, 0x40, 0x00, // 1
+    0x42, 0x61, 0x51, 0x49, 0x46, // 2
+    0x21, 0x41, 0x45, 0x4B, 0x31, // 3
+    0x18, 0x14, 0x12, 0x7F, 0x10, // 4
+    0x27, 0x45, 0x45, 0x45, 0x39, // 5
+    0x3C, 0x4A, 0x49, 0x49, 0x30, // 6
+    0x01, 0x71, 0x09, 0x05, 0x03, // 7
+    0x36, 0x49, 0x49, 0x49, 0x36, // 8
+    0x06, 0x49, 0x49, 0x29, 0x1E, // 9
+    0x7C, 0x12, 0x11, 0x12, 0x7C, // A
+    0x7F, 0x49, 0x49, 0x49, 0x36, // B
+    0x3E, 0x41, 0x41, 0x41, 0x22, // C
+    0x7F, 0x41, 0x41, 0x22, 0x1C, // D
+    0x7F, 0x49, 0x49, 0x49, 0x41, // E
+    0x7F, 0x09, 0x09, 0x09, 0x01, // F
+    0x3E, 0x41, 0x49, 0x49, 0x7A, // G
+    0x7F, 0x08, 0x08, 0x08, 0x7F, // H
+    0x00, 0x41, 0x7F, 0x41, 0x00, // I
+    0x20, 0x40, 0x41, 0x3F, 0x01, // J
+    0x7F, 0x08, 0x14, 0x22, 0x41, // K
+    0x7F, 0x40, 0x40, 0x40, 0x40, // L
+    0x7F, 0x02, 0x0C, 0x02, 0x7F, // M
+    0x7F, 0x04, 0x08, 0x10, 0x7F, // N
+    0x3E, 0x41, 0x41, 0x41, 0x3E, // O
+    0x7F, 0x09, 0x09, 0x09, 0x06, // P
+    0x3E, 0x41, 0x51, 0x21, 0x5E, // Q
+    0x7F, 0x09, 0x19, 0x29, 0x46, // R
+    0x46, 0x49, 0x49, 0x49, 0x31, // S
+    0x01, 0x01, 0x7F, 0x01, 0x01, // T
+    0x3F, 0x40, 0x40, 0x40, 0x3F, // U
+    0x1F, 0x20, 0x40, 0x20, 0x1F, // V
+    0x3F, 0x40, 0x38, 0x40, 0x3F, // W
+    0x63, 0x14, 0x08, 0x14, 0x63, // X
+    0x07, 0x08, 0x70, 0x08, 0x07, // Y
+    0x61, 0x51, 0x49, 0x45, 0x43, // Z
+    0x08, 0x08, 0x08, 0x08, 0x08, // -
+    0x00, 0x60, 0x60, 0x00, 0x00, // .
+    0x00, 0x36, 0x36, 0x00, 0x00  // :
+};
+
+static const uint8_t* getCharBmp(char c) {
+    if (c >= 'a' && c <= 'z') c -= ('a' - 'A'); // Simple lowercase map
+    int idx = 0;
+    if (c == ' ') idx = 0;
+    else if (c >= '0' && c <= '9') idx = 1 + (c - '0');
+    else if (c >= 'A' && c <= 'Z') idx = 11 + (c - 'A');
+    else if (c == '-') idx = 37;
+    else if (c == '.') idx = 38;
+    else if (c == ':') idx = 39;
+    return &FONT_5X7[idx * 5];
+}
+
 } // anonymous namespace
 
 namespace manifast {
@@ -129,6 +185,25 @@ int PlotBackend::mapY(double val, double ymin, double ymax) {
     return config_.height - config_.padding - (int)((val - ymin) / (ymax - ymin) * plot_h);
 }
 
+void PlotBackend::drawText(int x, int y, const std::string& text, uint32_t color, int scale) {
+    int cur_x = x;
+    for (char c : text) {
+        const uint8_t* bmp = getCharBmp(c);
+        for (int col = 0; col < 5; col++) {
+            for (int row = 0; row < 7; row++) {
+                if (bmp[col] & (1 << row)) {
+                    if (scale == 1) {
+                        setPixel(cur_x + col, y + row, color);
+                    } else {
+                        drawRect(cur_x + col * scale, y + row * scale, scale, scale, color);
+                    }
+                }
+            }
+        }
+        cur_x += 6 * scale;
+    }
+}
+
 void PlotBackend::render(ChartType type) {
     int w = config_.width, h = config_.height;
     framebuffer_.resize(w * h * 4);
@@ -150,12 +225,41 @@ void PlotBackend::render(ChartType type) {
     int px = config_.padding, py = config_.padding;
     int pw = w - 2*px, ph = h - 2*py;
 
-    // Draw grid lines (5 horizontal + 5 vertical)
+    // Draw grid lines and labels
     for (int i = 0; i <= 5; i++) {
+        double vx = xmin + (xmax - xmin) * i / 5.0;
+        double vy = ymin + (ymax - ymin) * i / 5.0;
         int gx = px + pw * i / 5;
-        int gy = py + ph * i / 5;
+        int gy = py + ph - ph * i / 5;
+
         drawLine(gx, py, gx, py + ph, config_.grid_color);
         drawLine(px, gy, px + pw, gy, config_.grid_color);
+
+        char buf[32];
+        if (std::abs(vx) >= 1e6 || (std::abs(vx) > 0 && std::abs(vx) < 0.01))
+            snprintf(buf, sizeof(buf), "%.1e", vx);
+        else
+            snprintf(buf, sizeof(buf), "%.2f", vx);
+        drawText(gx - 10, py + ph + 10, buf, config_.axis_color);
+
+        if (std::abs(vy) >= 1e6 || (std::abs(vy) > 0 && std::abs(vy) < 0.01))
+            snprintf(buf, sizeof(buf), "%.1e", vy);
+        else
+            snprintf(buf, sizeof(buf), "%.2f", vy);
+        drawText(px - 50, gy - 3, buf, config_.axis_color);
+    }
+
+    // Draw Title & Axis Labels
+    if (!config_.title.empty()) {
+        int title_scale = 2;
+        int title_w = (int)config_.title.length() * 6 * title_scale;
+        drawText(w / 2 - title_w / 2, 20, config_.title, config_.axis_color, title_scale);
+    }
+    if (!config_.xlabel.empty())
+        drawText(w / 2 - (int)config_.xlabel.length() * 6 / 2, h - 25, config_.xlabel, config_.axis_color);
+    if (!config_.ylabel.empty()) {
+        // Simple vertical text not implemented, draw at top left for now
+        drawText(10, py - 20, config_.ylabel, config_.axis_color);
     }
 
     // Draw axes border

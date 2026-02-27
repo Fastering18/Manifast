@@ -64,25 +64,52 @@ CodeGen::CodeGen() {
     // manifast_call_dynamic(Any*, Any*, int) -> Any*
     llvm::FunctionType* callDynFT = llvm::FunctionType::get(anyPtrTy, {anyPtrTy, anyPtrTy, builder->getInt32Ty()}, false);
     llvm::Function::Create(callDynFT, llvm::Function::ExternalLinkage, "manifast_call_dynamic", module.get());
+
+    // manifast_type_check(Any*, int) -> void
+    llvm::FunctionType* typeCheckFT = llvm::FunctionType::get(builder->getVoidTy(), {anyPtrTy, builder->getInt32Ty()}, false);
+    llvm::Function::Create(typeCheckFT, llvm::Function::ExternalLinkage, "manifast_type_check", module.get());
 }
 
 void CodeGen::pushScope() {
     scopes.push_back({});
+    typeAliases.push_back({});
 }
 
 void CodeGen::popScope() {
     if (scopes.size() > 1) {
         scopes.pop_back();
+        typeAliases.pop_back();
     }
 }
 
-llvm::Value* CodeGen::lookupVariable(const std::string& name) {
+CodeGen::VarInfo CodeGen::lookupVariable(const std::string& name) {
     for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
         if (it->find(name) != it->end()) {
             return (*it)[name];
         }
     }
-    return nullptr;
+    return {nullptr, Type(TypeKind::Any)};
+}
+
+int CodeGen::mapTypeToRuntime(const Type& type) {
+    Type resolved = resolveType(type);
+    switch (resolved.kind) {
+        case TypeKind::Any: return -1;
+        case TypeKind::Int8: return ANY_INT8;
+        case TypeKind::Int16: return ANY_INT16;
+        case TypeKind::Int32: return ANY_INT32;
+        case TypeKind::Int64: return ANY_INT64;
+        case TypeKind::Float32: return ANY_FLOAT32;
+        case TypeKind::Float64: return ANY_FLOAT64;
+        case TypeKind::Char: return ANY_CHAR;
+        case TypeKind::Bool: return ANY_BOOLEAN;
+        case TypeKind::String: return ANY_STRING;
+        case TypeKind::Void: return ANY_NIL;
+        case TypeKind::Array: return ANY_ARRAY;
+        case TypeKind::Pointer: return ANY_NATIVE;
+        case TypeKind::Function: return ANY_NATIVE;
+        default: return -1;
+    }
 }
 
 void CodeGen::initializeTypes() {
@@ -392,6 +419,12 @@ bool CodeGen::run() {
     REGISTER_SYM(manifast_create_class);
     REGISTER_SYM(manifast_create_instance);
     REGISTER_SYM(manifast_class_add_method);
+    REGISTER_SYM(manifast_type_check);
+    REGISTER_SYM(manifast_array_len);
+    REGISTER_SYM(manifast_array_push);
+    REGISTER_SYM(manifast_array_pop);
+    REGISTER_SYM(manifast_impor);
+    REGISTER_SYM(manifast_call_dynamic);
 
     if (auto Err = JD.define(llvm::orc::absoluteSymbols(std::move(RuntimeSymbols)))) {
         std::cerr << "Error defining runtime symbols: " << llvm::toString(std::move(Err)) << "\n";
@@ -448,6 +481,8 @@ llvm::Value* CodeGen::generateExpr(const Expr* expr) {
     if (auto* arr = dynamic_cast<const ArrayExpr*>(expr)) return visitArrayExpr(arr);
     if (auto* obj = dynamic_cast<const ObjectExpr*>(expr)) return visitObjectExpr(obj);
     if (auto* str = dynamic_cast<const StringExpr*>(expr)) return visitStringExpr(str);
+    if (auto* chr = dynamic_cast<const CharExpr*>(expr)) return visitCharExpr(chr);
+    if (auto* fnExpr = dynamic_cast<const FunctionExpr*>(expr)) return visitFunctionExpr(fnExpr);
     if (auto* idx = dynamic_cast<const IndexExpr*>(expr)) return visitIndexExpr(idx);
     if (auto* get = dynamic_cast<const GetExpr*>(expr)) return visitGetExpr(get);
     return nullptr;
@@ -474,6 +509,8 @@ void CodeGen::generateStmt(const Stmt* stmt) {
         visitFunctionStmt(funcStmt);
     } else if (auto* classStmt = dynamic_cast<const ClassStmt*>(stmt)) {
         visitClassStmt(classStmt);
+    } else if (auto* aliasStmt = dynamic_cast<const TypeAliasStmt*>(stmt)) {
+        visitTypeAliasStmt(aliasStmt);
     }
 }
 
@@ -569,7 +606,7 @@ void CodeGen::visitForStmt(const ForStmt* stmt) {
     llvm::Value* startLoaded = builder->CreateLoad(anyType, startV);
     builder->CreateStore(startLoaded, alloca);
     
-    scopes.back()[stmt->varName] = alloca;
+    scopes.back()[stmt->varName] = {alloca, Type(TypeKind::Int32)}; // Loop index is i32
 
     // 2. Blocks
     llvm::BasicBlock* condBB = llvm::BasicBlock::Create(*context, "forcond", func);
@@ -773,6 +810,15 @@ llvm::Value* CodeGen::visitNilExpr(const NilExpr* expr) {
     return builder->CreateCall(func, {});
 }
 
+llvm::Value* CodeGen::visitCharExpr(const CharExpr* expr) {
+    llvm::Function* func = module->getFunction("manifast_create_number");
+    if (!func) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getDoubleTy()}, false);
+        func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_number", module.get());
+    }
+    return builder->CreateCall(func, {llvm::ConstantFP::get(*context, llvm::APFloat((double)expr->value))});
+}
+
 llvm::Value* CodeGen::visitUnaryExpr(const UnaryExpr* expr) {
     llvm::Value* v = generateExpr(expr->right.get());
     if (!v) return nullptr;
@@ -798,20 +844,14 @@ llvm::Value* CodeGen::visitUnaryExpr(const UnaryExpr* expr) {
 }
 
 llvm::Value* CodeGen::visitVariableExpr(const VariableExpr* expr) {
-    llvm::Value* V = lookupVariable(expr->name);
-    if (!V) {
+    VarInfo info = lookupVariable(expr->name);
+    if (!info.value) {
         std::cerr << "Unknown variable name: " << expr->name << "\n";
         return nullptr;
     }
-    // V is pointer to the variable's storage (Any).
-    // Return a pointer to a COPY of the value (pass by value semantics for now).
-    // Or just return V? If we return V, modifications to the return value would modify the variable.
-    // In many expressions (like binary ops), we just Read.
-    // But if we pass it to a function etc...
-    // Let's return a copy to be safe and consistent with createNumber.
     
     llvm::Value* temp = builder->CreateAlloca(anyType, nullptr, "var_read");
-    llvm::Value* val = builder->CreateLoad(anyType, V, expr->name.c_str());
+    llvm::Value* val = builder->CreateLoad(anyType, info.value, expr->name.c_str());
     builder->CreateStore(val, temp);
     return temp;
 }
@@ -821,14 +861,21 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
     if (!val) return nullptr;
 
     if (auto* var = dynamic_cast<VariableExpr*>(expr->target.get())) {
-        llvm::Value* V = lookupVariable(var->name);
-        if (!V) {
+        VarInfo info = lookupVariable(var->name);
+        if (!info.value) {
             std::cerr << "Unknown variable name: " << var->name << "\n";
             return nullptr;
         }
 
+        // Type Check
+        int runtimeType = mapTypeToRuntime(info.type);
+        if (runtimeType != -1) {
+            llvm::Function* checkFunc = module->getFunction("manifast_type_check");
+            builder->CreateCall(checkFunc, {val, builder->getInt32(runtimeType)});
+        }
+
         if (expr->op != TokenType::Equal) {
-            llvm::Value* LVal = unboxNumber(V);
+            llvm::Value* LVal = unboxNumber(info.value);
             llvm::Value* RVal = unboxNumber(val);
             llvm::Value* res = nullptr;
             switch (expr->op) {
@@ -843,7 +890,7 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
         }
 
         llvm::Value* loadedVal = builder->CreateLoad(anyType, val);
-        builder->CreateStore(loadedVal, V);
+        builder->CreateStore(loadedVal, info.value);
         return val;
     } else if (auto* get = dynamic_cast<GetExpr*>(expr->target.get())) {
         llvm::Value* obj = generateExpr(get->object.get());
@@ -926,10 +973,10 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
 
     std::string funcName = var->name;
     
-    llvm::Value* varVal = lookupVariable(funcName);
-    if (varVal) {
+    VarInfo varInfo = lookupVariable(funcName);
+    if (varInfo.value) {
         // Treat as dynamic call
-        llvm::Value* calleeVal = varVal; // Already Any*
+        llvm::Value* calleeVal = varInfo.value; // Already Any*
         llvm::Value* argsArr = builder->CreateAlloca(anyType, builder->getInt32(expr->args.size()));
         for (size_t i = 0; i < expr->args.size(); ++i) {
             llvm::Value* argVal = generateExpr(expr->args[i].get()); 
@@ -1033,11 +1080,17 @@ void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
                                              llvm::GlobalValue::InternalLinkage,
                                              llvm::ConstantAggregateZero::get(anyType),
                                              stmt->name);
-        scopes.back()[stmt->name] = gVar;
+        scopes.back()[stmt->name] = VarInfo(gVar, stmt->typeAnnotation);
         
         if (stmt->initializer) {
             llvm::Value* initVal = generateExpr(stmt->initializer.get());
             if (initVal) {
+                // Type Check
+                int runtimeType = mapTypeToRuntime(stmt->typeAnnotation);
+                if (runtimeType != -1) {
+                    llvm::Function* checkFunc = module->getFunction("manifast_type_check");
+                    builder->CreateCall(checkFunc, {initVal, builder->getInt32(runtimeType)});
+                }
                 builder->CreateStore(builder->CreateLoad(anyType, initVal), gVar);
             }
         }
@@ -1046,11 +1099,17 @@ void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
         llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
         llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->name);
         
-        scopes.back()[stmt->name] = alloca;
+        scopes.back()[stmt->name] = VarInfo(alloca, stmt->typeAnnotation);
         
         if (stmt->initializer) {
             llvm::Value* initVal = generateExpr(stmt->initializer.get());
             if (initVal) {
+                // Type Check
+                int runtimeType = mapTypeToRuntime(stmt->typeAnnotation);
+                if (runtimeType != -1) {
+                    llvm::Function* checkFunc = module->getFunction("manifast_type_check");
+                    builder->CreateCall(checkFunc, {initVal, builder->getInt32(runtimeType)});
+                }
                 builder->CreateStore(builder->CreateLoad(anyType, initVal), alloca);
             }
         }
@@ -1135,7 +1194,7 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
         llvm::Value* loadedArg = builder->CreateLoad(anyType, slot);
         builder->CreateStore(loadedArg, alloca);
         
-        scopes.back()[stmt->params[i].first] = alloca; // Name
+        scopes.back()[stmt->params[i].first] = VarInfo(alloca, stmt->params[i].second); // Name, Type
     }
 
     // Body
@@ -1157,7 +1216,95 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
         std::cerr << "Function verification failed for " << stmt->name << "\n";
     }
     
-    if (oldBB) builder->SetInsertPoint(oldBB);
+    if (oldBB) {
+        builder->SetInsertPoint(oldBB);
+        
+        // Hoist function into the current scope
+        llvm::Value* alloca = builder->CreateAlloca(anyType, nullptr, stmt->name);
+        llvm::Value* typeSlot = builder->CreateStructGEP(anyType, alloca, 0);
+        builder->CreateStore(builder->getInt32(4), typeSlot); // ANY_NATIVE = 4
+
+        llvm::Value* numSlot = builder->CreateStructGEP(anyType, alloca, 1);
+        builder->CreateStore(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), numSlot);
+
+        llvm::Value* ptrSlot = builder->CreateStructGEP(anyType, alloca, 2);
+        
+        // Cast function pointer to i8* wrapper
+        llvm::Value* funcPtr = builder->CreateBitOrPointerCast(func, builder->getPtrTy());
+        builder->CreateStore(funcPtr, ptrSlot);
+
+        scopes.back()[stmt->name] = VarInfo(alloca, Type(TypeKind::Function));
+    }
+}
+
+llvm::Value* CodeGen::visitFunctionExpr(const FunctionExpr* expr) {
+    std::string anonName = "anon_fn_" + std::to_string(reinterpret_cast<uintptr_t>(expr));
+    llvm::Type* vmPtrTy = builder->getPtrTy();
+    llvm::Type* argsPtrTy = builder->getPtrTy();
+    llvm::Type* nargsTy = builder->getInt32Ty();
+
+    llvm::FunctionType* ft = llvm::FunctionType::get(builder->getVoidTy(), {vmPtrTy, argsPtrTy, nargsTy}, false);
+    llvm::Function* func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, anonName, module.get());
+    func->addFnAttr("stack-probe-size", "1048576"); 
+    func->addFnAttr("no-stack-arg-probe");
+
+    llvm::BasicBlock* bb = llvm::BasicBlock::Create(*context, "entry", func);
+    llvm::BasicBlock* oldBB = builder->GetInsertBlock();
+    builder->SetInsertPoint(bb);
+
+    pushScope();
+    llvm::Value* argsPtr = func->getArg(1);
+    
+    for (size_t i = 0; i < expr->params.size(); i++) {
+        llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
+        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, expr->params[i].first); 
+        
+        llvm::Value* slot = builder->CreateGEP(anyType, argsPtr, {builder->getInt32(i)});
+        llvm::Value* loadedArg = builder->CreateLoad(anyType, slot);
+        builder->CreateStore(loadedArg, alloca);
+        
+        scopes.back()[expr->params[i].first] = VarInfo(alloca, expr->params[i].second);
+    }
+
+    generateStmt(expr->body.get());
+    
+    if (!builder->GetInsertBlock()->getTerminator()) {
+        llvm::Value* retVal = boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
+        llvm::Value* argsPtr = func->getArg(1);
+        llvm::Value* resSlot = builder->CreateGEP(anyType, argsPtr, {builder->getInt32(-1)});
+        llvm::Value* nilObj = builder->CreateLoad(anyType, retVal);
+        builder->CreateStore(nilObj, resSlot);
+        builder->CreateRetVoid();
+    }
+    
+    popScope();
+
+    if (llvm::verifyFunction(*func, &llvm::errs())) {
+        std::cerr << "Function verification failed for anonymous function\n";
+    }
+    
+    if (oldBB) {
+        builder->SetInsertPoint(oldBB);
+        
+        llvm::Value* alloca = builder->CreateAlloca(anyType, nullptr, "anon_out");
+        llvm::Value* typeSlot = builder->CreateStructGEP(anyType, alloca, 0);
+        builder->CreateStore(builder->getInt32(4), typeSlot); // ANY_NATIVE = 4
+
+        llvm::Value* numSlot = builder->CreateStructGEP(anyType, alloca, 1);
+        builder->CreateStore(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)), numSlot);
+
+        llvm::Value* ptrSlot = builder->CreateStructGEP(anyType, alloca, 2);
+        llvm::Value* funcPtr = builder->CreateBitOrPointerCast(func, builder->getPtrTy());
+        builder->CreateStore(funcPtr, ptrSlot);
+        
+        // Return a temp pointer to the Alloca just like VariableExpr
+        llvm::Value* temp = builder->CreateAlloca(anyType, nullptr, "fn_dup");
+        llvm::Value* val = builder->CreateLoad(anyType, alloca);
+        builder->CreateStore(val, temp);
+        return temp;
+    }
+    
+    return nullptr;
 }
 
 llvm::Value* CodeGen::visitArrayExpr(const ArrayExpr* expr) {
@@ -1235,7 +1382,7 @@ void CodeGen::visitClassStmt(const ClassStmt* stmt) {
     llvm::Function* currentFunc = builder->GetInsertBlock()->getParent();
     llvm::IRBuilder<> tmpBuilder(&currentFunc->getEntryBlock(), currentFunc->getEntryBlock().begin());
     llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->name);
-    scopes.back()[stmt->name] = alloca;
+    scopes.back()[stmt->name] = VarInfo(alloca, Type(TypeKind::Any));
     
     llvm::Value* loadedKlass = builder->CreateLoad(anyType, klassAny);
     builder->CreateStore(loadedKlass, alloca);
@@ -1262,6 +1409,24 @@ void CodeGen::visitClassStmt(const ClassStmt* stmt) {
             builder->CreateCall(addMethodFunc, {klassAny, methodNameStr, methodFunc});
         }
     }
+}
+
+void CodeGen::visitTypeAliasStmt(const TypeAliasStmt* stmt) {
+    typeAliases.back()[stmt->name] = stmt->type;
+}
+
+Type CodeGen::resolveType(const Type& type) {
+    if (type.kind != TypeKind::Alias) return type;
+    
+    // Scoped lookup for alias
+    for (auto it = typeAliases.rbegin(); it != typeAliases.rend(); ++it) {
+        if (it->find(type.aliasName) != it->end()) {
+            return resolveType((*it).at(type.aliasName)); // Recursive resolution
+        }
+    }
+    
+    // Default to any if not found? Or keep as alias (unresolved)
+    return type; 
 }
 
 } // namespace manifast

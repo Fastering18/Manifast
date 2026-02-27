@@ -23,9 +23,67 @@
 
 extern "C" {
 
-static size_t g_allocated_memory = 0;
+static manifast::plot::PlotBackend g_plot;
+static bool g_plot_initialized = false;
 static ManifastPlotShowCallback g_plot_show_callback = nullptr;
-static ManifastClearOutputCallback g_clear_output_callback = nullptr; // New global callback
+static ManifastClearOutputCallback g_clear_output_callback = nullptr;
+
+static void plot_for_impl(Any* y_arr, Any* x_arr, Any* config) {
+     g_plot = manifast::plot::PlotBackend();
+     manifast::plot::ChartType chartType = manifast::plot::ChartType::Line;
+
+     if (config && config->type == ANY_OBJECT) {
+         manifast::plot::ChartConfig cfg;
+         ManifastObject* cobj = (ManifastObject*)config->ptr;
+         Any* t = manifast_object_get_raw(cobj, "title");
+         if (t && t->type == ANY_STRING) cfg.title = (char*)t->ptr;
+         Any* xl = manifast_object_get_raw(cobj, "xlabel");
+         if (xl && xl->type == ANY_STRING) cfg.xlabel = (char*)xl->ptr;
+         Any* yl = manifast_object_get_raw(cobj, "ylabel");
+         if (yl && yl->type == ANY_STRING) cfg.ylabel = (char*)yl->ptr;
+         Any* w = manifast_object_get_raw(cobj, "width");
+         if (w && w->type == ANY_NUMBER) cfg.width = (int)w->number;
+         Any* h = manifast_object_get_raw(cobj, "height");
+         if (h && h->type == ANY_NUMBER) cfg.height = (int)h->number;
+         Any* tp = manifast_object_get_raw(cobj, "type");
+         if (tp && tp->type == ANY_STRING) {
+             const char* typeStr = (const char*)tp->ptr;
+             if (strcmp(typeStr, "scatter") == 0) chartType = manifast::plot::ChartType::Scatter;
+             else if (strcmp(typeStr, "bar") == 0) chartType = manifast::plot::ChartType::Bar;
+         }
+         g_plot.setConfig(cfg);
+     }
+
+     manifast::plot::Series s;
+     if (y_arr && y_arr->type == ANY_ARRAY) {
+         ManifastArray* ya = (ManifastArray*)y_arr->ptr;
+         if (x_arr && x_arr->type == ANY_ARRAY) {
+             ManifastArray* xa = (ManifastArray*)x_arr->ptr;
+             for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
+             for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
+         } else {
+             for (uint32_t i = 0; i < ya->size; i++) {
+                 s.x.push_back((double)(i + 1));
+                 s.y.push_back(ya->elements[i].number);
+             }
+         }
+         g_plot.addSeries(s);
+         g_plot_initialized = true;
+     }
+
+     g_plot.renderChart(chartType);
+     if (g_plot_show_callback) {
+         const auto& fb = g_plot.getFramebuffer();
+         g_plot_show_callback(fb.data(), g_plot.getWidth(), g_plot.getHeight());
+     } else {
+         g_plot.showWindow(chartType);
+     }
+}
+
+
+static size_t g_allocated_memory = 0;
+// g_plot_show_callback moved up
+// g_clear_output_callback moved up
 
 static std::unordered_map<std::string, char*> g_string_pool;
 
@@ -92,7 +150,7 @@ MF_API char* mf_strdup(const char* s) {
 
 MF_API Any* manifast_create_number(double val) {
     Any* a = (Any*)mf_malloc(sizeof(Any));
-    a->type = 0;
+    a->type = ANY_NUMBER;
     a->number = val;
     a->ptr = nullptr;
     return a;
@@ -100,7 +158,7 @@ MF_API Any* manifast_create_number(double val) {
 
 MF_API Any* manifast_create_string(const char* str) {
     Any* a = (Any*)mf_malloc(sizeof(Any));
-    a->type = 1; // String
+    a->type = ANY_STRING;
     a->number = 0;
     a->ptr = manifast_intern_string(str);
     return a;
@@ -108,7 +166,7 @@ MF_API Any* manifast_create_string(const char* str) {
 
 MF_API Any* manifast_create_boolean(bool val) {
     Any* a = (Any*)mf_malloc(sizeof(Any));
-    a->type = 2; // Boolean
+    a->type = ANY_BOOLEAN;
     a->number = val ? 1.0 : 0.0;
     a->ptr = nullptr;
     return a;
@@ -116,7 +174,7 @@ MF_API Any* manifast_create_boolean(bool val) {
 
 MF_API Any* manifast_create_nil() {
     Any* a = (Any*)mf_malloc(sizeof(Any));
-    a->type = 3; // Nil
+    a->type = ANY_NIL;
     a->number = 0;
     a->ptr = nullptr;
     return a;
@@ -124,7 +182,7 @@ MF_API Any* manifast_create_nil() {
 
 MF_API Any* manifast_create_array(uint32_t initial_size) {
     Any* a = (Any*)mf_malloc(sizeof(Any));
-    a->type = 6; // Array
+    a->type = ANY_ARRAY;
     a->number = 0;
     
     ManifastArray* arr = (ManifastArray*)mf_malloc(sizeof(ManifastArray));
@@ -134,7 +192,7 @@ MF_API Any* manifast_create_array(uint32_t initial_size) {
     
     // Initialize elements to 0
     for(uint32_t i = 0; i < arr->size; ++i) {
-        arr->elements[i].type = 0;
+        arr->elements[i].type = ANY_NUMBER;
         arr->elements[i].number = 0;
         arr->elements[i].ptr = nullptr;
     }
@@ -145,7 +203,7 @@ MF_API Any* manifast_create_array(uint32_t initial_size) {
 
 MF_API Any* manifast_create_object() {
     Any* a = (Any*)mf_malloc(sizeof(Any));
-    a->type = 7; // Object
+    a->type = ANY_OBJECT;
     a->number = 0;
     
     ManifastObject* obj = (ManifastObject*)mf_malloc(sizeof(ManifastObject));
@@ -159,7 +217,7 @@ MF_API Any* manifast_create_object() {
 
 MF_API Any* manifast_create_class(const char* name) {
     Any* a = (Any*)mf_malloc(sizeof(Any));
-    a->type = 8; // Class
+    a->type = ANY_CLASS;
     a->number = 0;
     
     ManifastClass* klass = (ManifastClass*)mf_malloc(sizeof(ManifastClass));
@@ -173,20 +231,20 @@ MF_API Any* manifast_create_class(const char* name) {
 }
 
 MF_API void manifast_class_add_method(Any* class_any, const char* name, ManifastNativeFn fn) {
-    if (class_any->type != 8) return;
+    if (class_any->type != ANY_CLASS) return;
     ManifastClass* klass = (ManifastClass*)class_any->ptr;
     Any fn_any;
-    fn_any.type = 4; // Native
+    fn_any.type = ANY_NATIVE;
     fn_any.number = 0;
     fn_any.ptr = (void*)fn;
     manifast_object_set_raw(klass->methods, name, &fn_any);
 }
 
 MF_API Any* manifast_create_instance(Any* class_any) {
-    if (class_any->type != 8) return nullptr;
+    if (class_any->type != ANY_CLASS) return nullptr;
     
     Any* a = (Any*)mf_malloc(sizeof(Any));
-    a->type = 9; // Instance
+    a->type = ANY_INSTANCE;
     a->number = 0;
     
     ManifastInstance* inst = (ManifastInstance*)mf_malloc(sizeof(ManifastInstance));
@@ -585,116 +643,187 @@ MF_API Any* manifast_impor(const char* name) {
     else if (strcmp(name, "plot") == 0) {
         Any* obj = manifast_create_object();
 
-        // Shared plot state (static so it persists across calls)
-        static manifast::plot::PlotBackend g_plot;
-        static bool g_plot_initialized = false;
-
         auto plot_reset = [](void* vm, Any* args, int nargs) {
             g_plot = manifast::plot::PlotBackend();
             g_plot_initialized = false;
-            args[-1] = {3, 0.0, nullptr};
+            args[-1] = {ANY_NIL, 0.0, nullptr};
         };
 
-        static auto extract_config = [](Any* args, int argIdx, int nargs) {
+        auto plot_for = [](void* vm, Any* args, int nargs) {
+             if (nargs < 1) return;
+             int offset = 0;
+             // Skip self if first arg is the plot module object
+             if (args[0].type == ANY_OBJECT && nargs > 1 && args[1].type == ANY_ARRAY) {
+                 offset = 1;
+                 nargs--;
+             }
+             Any* y = &args[offset];
+             Any* x = (nargs >= 2 && args[offset+1].type == ANY_ARRAY) ? &args[offset+1] : nullptr;
+             Any* cfg = (nargs >= 3) ? &args[offset+2] : (nargs >= 2 && args[offset+1].type == ANY_OBJECT) ? &args[offset+1] : nullptr;
+             
+             plot_for_impl(y, x, cfg);
+             args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
+        };
+
+        static auto extract_config_local = [](Any* args, int argIdx, int nargs) {
             manifast::plot::ChartConfig cfg;
             int remaining = nargs - argIdx;
-            if (remaining >= 3 && args[argIdx+2].type == 7) {
+            if (remaining >= 3 && args[argIdx+2].type == ANY_OBJECT) {
                 ManifastObject* cobj = (ManifastObject*)args[argIdx+2].ptr;
                 Any* t = manifast_object_get_raw(cobj, "title");
-                if (t && t->type == 1 && t->ptr) cfg.title = (char*)t->ptr;
+                if (t && t->type == ANY_STRING) cfg.title = (char*)t->ptr;
                 Any* xl = manifast_object_get_raw(cobj, "xlabel");
-                if (xl && xl->type == 1 && xl->ptr) cfg.xlabel = (char*)xl->ptr;
+                if (xl && xl->type == ANY_STRING) cfg.xlabel = (char*)xl->ptr;
                 Any* yl = manifast_object_get_raw(cobj, "ylabel");
-                if (yl && yl->type == 1 && yl->ptr) cfg.ylabel = (char*)yl->ptr;
+                if (yl && yl->type == ANY_STRING) cfg.ylabel = (char*)yl->ptr;
                 Any* w = manifast_object_get_raw(cobj, "width");
-                if (w && w->type == 0) cfg.width = (int)w->number;
+                if (w && w->type == ANY_NUMBER) cfg.width = (int)w->number;
                 Any* h = manifast_object_get_raw(cobj, "height");
-                if (h && h->type == 0) cfg.height = (int)h->number;
+                if (h && h->type == ANY_NUMBER) cfg.height = (int)h->number;
+            } else if (remaining >= 2 && args[argIdx+1].type == ANY_OBJECT) {
+                ManifastObject* cobj = (ManifastObject*)args[argIdx+1].ptr;
+                Any* t = manifast_object_get_raw(cobj, "title");
+                if (t && t->type == ANY_STRING) cfg.title = (char*)t->ptr;
+                // ... same for others if needed, but usually 3rd arg for (x, y, config)
+                // and 2nd arg for (y, config)
+                Any* xl = manifast_object_get_raw(cobj, "xlabel");
+                if (xl && xl->type == ANY_STRING) cfg.xlabel = (char*)xl->ptr;
+                Any* yl = manifast_object_get_raw(cobj, "ylabel");
+                if (yl && yl->type == ANY_STRING) cfg.ylabel = (char*)yl->ptr;
+                Any* w = manifast_object_get_raw(cobj, "width");
+                if (w && w->type == ANY_NUMBER) cfg.width = (int)w->number;
+                Any* h = manifast_object_get_raw(cobj, "height");
+                if (h && h->type == ANY_NUMBER) cfg.height = (int)h->number;
             }
             return cfg;
         };
 
-        static auto extract_series = [](Any* args, int argIdx) {
-            manifast::plot::Series s;
-            s.color = 0;
-            if (args[argIdx].type == 6 && args[argIdx+1].type == 6) {
-                ManifastArray* xa = (ManifastArray*)args[argIdx].ptr;
-                ManifastArray* ya = (ManifastArray*)args[argIdx+1].ptr;
-                for (uint32_t i = 0; i < xa->size; i++)
-                    s.x.push_back(xa->elements[i].type == 0 ? xa->elements[i].number : 0);
-                for (uint32_t i = 0; i < ya->size; i++)
-                    s.y.push_back(ya->elements[i].type == 0 ? ya->elements[i].number : 0);
-            }
-            return s;
-        };
-
         auto plot_line = [](void* vm, Any* args, int nargs) {
-            int idx = 0; if (nargs >= 1 && args[0].type != 6) idx++;
-            if (nargs - idx < 2) { args[-1] = {3, 0.0, nullptr}; return; }
-            auto cfg = extract_config(args, idx, nargs);
-            g_plot.setConfig(cfg);
-            g_plot.addSeries(extract_series(args, idx));
-            g_plot_initialized = true;
-            args[-1] = {2, 1.0, nullptr};
+            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
+            int actual_nargs = nargs - offset;
+            if (actual_nargs >= 1) {
+                manifast::plot::Series s;
+                if (actual_nargs >= 2 && args[offset].type == ANY_ARRAY && args[offset+1].type == ANY_ARRAY) {
+                    ManifastArray* xa = (ManifastArray*)args[offset].ptr;
+                    ManifastArray* ya = (ManifastArray*)args[offset+1].ptr;
+                    for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
+                    for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
+                    if (actual_nargs >= 3) g_plot.setConfig(extract_config_local(args, offset, nargs));
+                } else if (args[offset].type == ANY_ARRAY) {
+                    ManifastArray* ya = (ManifastArray*)args[offset].ptr;
+                    for (uint32_t i = 0; i < ya->size; i++) {
+                        s.x.push_back((double)(i + 1));
+                        s.y.push_back(ya->elements[i].number);
+                    }
+                    if (actual_nargs >= 2) g_plot.setConfig(extract_config_local(args, offset, nargs));
+                }
+                g_plot.addSeries(s);
+                g_plot.setChartType(manifast::plot::ChartType::Line);
+            }
         };
 
         auto plot_scatter = [](void* vm, Any* args, int nargs) {
-            int idx = 0; if (nargs >= 1 && args[0].type != 6) idx++;
-            if (nargs - idx < 2) { args[-1] = {3, 0.0, nullptr}; return; }
-            auto cfg = extract_config(args, idx, nargs);
-            g_plot.setConfig(cfg);
-            g_plot.addSeries(extract_series(args, idx));
-            g_plot_initialized = true;
-            args[-1] = {2, 1.0, nullptr};
+            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
+            int actual_nargs = nargs - offset;
+            if (actual_nargs >= 1) {
+                manifast::plot::Series s;
+                if (actual_nargs >= 2 && args[offset].type == ANY_ARRAY && args[offset+1].type == ANY_ARRAY) {
+                    ManifastArray* xa = (ManifastArray*)args[offset].ptr;
+                    ManifastArray* ya = (ManifastArray*)args[offset+1].ptr;
+                    for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
+                    for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
+                    if (actual_nargs >= 3) g_plot.setConfig(extract_config_local(args, offset, nargs));
+                } else if (args[offset].type == ANY_ARRAY) {
+                    ManifastArray* ya = (ManifastArray*)args[offset].ptr;
+                    for (uint32_t i = 0; i < ya->size; i++) {
+                        s.x.push_back((double)(i + 1));
+                        s.y.push_back(ya->elements[i].number);
+                    }
+                    if (actual_nargs >= 2) g_plot.setConfig(extract_config_local(args, offset, nargs));
+                }
+                g_plot.addSeries(s);
+                g_plot.setChartType(manifast::plot::ChartType::Scatter);
+            }
         };
 
         auto plot_bar = [](void* vm, Any* args, int nargs) {
-            int idx = 0; if (nargs >= 1 && args[0].type != 6) idx++;
-            if (nargs - idx < 2) { args[-1] = {3, 0.0, nullptr}; return; }
-            auto cfg = extract_config(args, idx, nargs);
-            g_plot.setConfig(cfg);
-            g_plot.addSeries(extract_series(args, idx));
-            g_plot_initialized = true;
-            args[-1] = {2, 1.0, nullptr};
+            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
+            int actual_nargs = nargs - offset;
+            if (actual_nargs >= 1) {
+                manifast::plot::Series s;
+                ManifastArray* ya = (ManifastArray*)args[offset].ptr;
+                for (uint32_t i = 0; i < ya->size; i++) {
+                    s.x.push_back((double)(i + 1));
+                    s.y.push_back(ya->elements[i].number);
+                }
+                if (actual_nargs >= 2) g_plot.setConfig(extract_config_local(args, offset, nargs));
+                g_plot.addSeries(s);
+                g_plot.setChartType(manifast::plot::ChartType::Bar);
+            }
         };
 
         auto plot_save = [](void* vm, Any* args, int nargs) {
-            int idx = 0; if (nargs >= 1 && args[0].type != 1) idx++;
-            if (nargs - idx < 1 || args[idx].type != 1 || !args[idx].ptr) {
-                args[-1] = {2, 0.0, nullptr}; return;
+            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
+            if (nargs - offset >= 1 && args[offset].type == ANY_STRING) {
+                std::string path = (char*)args[offset].ptr;
+                bool ok = g_plot.saveToFile(path, g_plot.getChartType());
+                args[-1] = {ANY_BOOLEAN, ok ? 1.0 : 0.0, nullptr};
             }
-            std::string path = (char*)args[idx].ptr;
-            bool ok = g_plot.saveToFile(path, manifast::plot::ChartType::Line);
-            args[-1] = {2, ok ? 1.0 : 0.0, nullptr};
         };
 
         auto plot_show = [](void* vm, Any* args, int nargs) {
-            g_plot.renderChart(manifast::plot::ChartType::Line);
+            g_plot.renderChart(g_plot.getChartType());
             if (g_plot_show_callback) {
                 const auto& fb = g_plot.getFramebuffer();
                 g_plot_show_callback(fb.data(), g_plot.getWidth(), g_plot.getHeight());
-                args[-1] = {2, 1.0, nullptr};
             } else {
-                bool ok = g_plot.showWindow(manifast::plot::ChartType::Line);
-                args[-1] = {2, ok ? 1.0 : 0.0, nullptr};
+                g_plot.showWindow(g_plot.getChartType());
             }
+            args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
         };
 
-        Any fn_line = {4, 0.0, (void*)+plot_line};
-        Any fn_scatter = {4, 0.0, (void*)+plot_scatter};
-        Any fn_bar = {4, 0.0, (void*)+plot_bar};
-        Any fn_save = {4, 0.0, (void*)+plot_save};
-        Any fn_show = {4, 0.0, (void*)+plot_show};
-        Any fn_reset = {4, 0.0, (void*)+plot_reset};
+        Any fn_for = {ANY_NATIVE, 0.0, (void*)+plot_for};
+        Any fn_reset = {ANY_NATIVE, 0.0, (void*)+plot_reset};
+        Any fn_line = {ANY_NATIVE, 0.0, (void*)+plot_line};
+        Any fn_scatter = {ANY_NATIVE, 0.0, (void*)+plot_scatter};
+        Any fn_bar = {ANY_NATIVE, 0.0, (void*)+plot_bar};
+        Any fn_save = {ANY_NATIVE, 0.0, (void*)+plot_save};
+        Any fn_show = {ANY_NATIVE, 0.0, (void*)+plot_show};
+
+        manifast_object_set(obj, "plotFor", &fn_for);
+        manifast_object_set(obj, "reset", &fn_reset);
         manifast_object_set(obj, "line", &fn_line);
         manifast_object_set(obj, "scatter", &fn_scatter);
         manifast_object_set(obj, "bar", &fn_bar);
         manifast_object_set(obj, "save", &fn_save);
         manifast_object_set(obj, "show", &fn_show);
-        manifast_object_set(obj, "reset", &fn_reset);
+
         return obj;
     }
     return manifast_create_nil();
+}
+
+MF_API void manifast_type_check(Any* val, int expected_type) {
+    if (expected_type == -1 || !val) return;
+    
+    bool ok = (val->type == expected_type);
+    
+    // Cross-compatible number types
+    if (!ok) {
+        bool is_val_num = (val->type == ANY_NUMBER || (val->type >= ANY_INT8 && val->type <= ANY_FLOAT64) || val->type == ANY_CHAR);
+        bool is_exp_num = (expected_type == ANY_NUMBER || (expected_type >= ANY_INT8 && expected_type <= ANY_FLOAT64) || expected_type == ANY_CHAR);
+        if (is_val_num && is_exp_num) ok = true;
+    }
+    
+    if (!ok) {
+        const char* names[] = {
+            "angka", "string", "boolean", "nil", "fungsi_native", "fungsi_bytecode",
+            "array", "objek", "kelas", "instansi", "i8", "i16", "i32", "i64", "f32", "f64", "char"
+        };
+        std::string eName = (expected_type >= 0 && expected_type < 17) ? names[expected_type] : "unknown";
+        std::string gName = (val->type >= 0 && val->type < 17) ? names[val->type] : "unknown";
+        MANIFAST_THROW("TypeError: Diharapkan tipe " + eName + ", tapi mendapat tipe " + gName);
+    }
 }
 
 MF_API Any* manifast_call_dynamic(Any* callee, Any* args, int nargs) {
@@ -842,5 +971,9 @@ MF_API void manifast_assert(Any* cond, Any* msg) {
     }
 }
 #endif // !__EMSCRIPTEN__
+
+MF_API void manifast_plot_for(Any* y_arr, Any* x_arr, Any* config) {
+    plot_for_impl(y_arr, x_arr, config);
+}
 
 } // extern "C"

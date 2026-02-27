@@ -132,6 +132,7 @@ Token Lexer::nextToken() {
         case '^': return makeToken(TokenType::Caret);
         case '~': return makeToken(TokenType::Tilde);
         case '"': return string();
+        case '\'': return character();
         
         case '!': return makeToken(match('=') ? TokenType::BangEqual : TokenType::Bang);
         case '=': return makeToken(match('=') ? TokenType::EqualEqual : TokenType::Equal);
@@ -210,6 +211,19 @@ Token Lexer::string() {
 
     advance(); // Closing quote
     return makeToken(TokenType::String);
+}
+
+Token Lexer::character() {
+    if (peek() == '\'') {
+        advance(); // Empty char ''
+        return makeToken(TokenType::Character);
+    }
+    advance(); // Consume the character (or \ escaping? standard char for now)
+    if (peek() == '\'') {
+        advance(); // Closing quote
+        return makeToken(TokenType::Character);
+    }
+    return errorToken("Unterminated character literal.");
 }
 
 } // namespace manifast

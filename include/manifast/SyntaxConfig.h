@@ -45,7 +45,16 @@ public:
         // Types
         keywords["string"] = TokenType::K_String;
         keywords["boolean"] = TokenType::K_Boolean;
+        keywords["i8"] = TokenType::K_Int8;
+        keywords["i16"] = TokenType::K_Int16;
+        keywords["i32"] = TokenType::K_Int32;
         keywords["int32"] = TokenType::K_Int32;
+        keywords["i64"] = TokenType::K_Int64;
+        keywords["f32"] = TokenType::K_Float32;
+        keywords["f64"] = TokenType::K_Float64;
+        keywords["char"] = TokenType::K_Char;
+        keywords["tipe"] = TokenType::K_Type;
+        keywords["angka"] = TokenType::K_Float64;
         
         keywords["bukan"] = TokenType::Bang; // Logic NOT
     }
