@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(manifast
-  VERSION 0.0.12
+  VERSION 0.0.13
   LANGUAGES CXX C
 )
 
