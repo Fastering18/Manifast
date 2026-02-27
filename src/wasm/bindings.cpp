@@ -338,6 +338,51 @@ const char* mf_run_script_tier(const char* source, int tier) {
         if (chunk.code.size() > 0) chunk.free();
     }
     
+    // If event callback is set, emit events by parsing markers
+    if (g_event_callback) {
+        std::string& out = g_wasm_output;
+        size_t pos = 0;
+        while (pos < out.size()) {
+            size_t clr = out.find("[CLR]", pos);
+            size_t dly = out.find("[DLY:", pos);
+            size_t img = out.find("[IMG:", pos);
+            
+            size_t next = std::string::npos;
+            if (clr != std::string::npos) next = clr;
+            if (dly != std::string::npos && (next == std::string::npos || dly < next)) next = dly;
+            if (img != std::string::npos && (next == std::string::npos || img < next)) next = img;
+
+            if (next == std::string::npos) {
+                if (pos < out.size()) {
+                    g_event_output = out.substr(pos);
+                    g_event_callback(0, g_event_output.c_str());
+                }
+                break;
+            }
+            
+            if (next > pos) {
+                g_event_output = out.substr(pos, next - pos);
+                g_event_callback(0, g_event_output.c_str());
+            }
+            
+            if (next == clr) {
+                g_event_callback(3, "");
+                pos = next + 5;
+            } else if (next == dly) {
+                size_t end = out.find(']', next);
+                g_event_output = out.substr(next + 5, end - next - 5);
+                g_event_callback(5, g_event_output.c_str()); // 5 = delay
+                pos = end + 1;
+            } else if (next == img) {
+                size_t end = out.find(']', next);
+                g_event_output = out.substr(next + 5, end - next - 5);
+                g_event_callback(2, g_event_output.c_str());
+                pos = end + 1;
+            }
+        }
+        g_event_callback(4, ""); // done
+    }
+    
     static std::string last_output;
     last_output = g_wasm_output;
     return last_output.c_str();
