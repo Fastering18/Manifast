@@ -102,6 +102,12 @@ void Compiler::compile(Stmt* stmt) {
             } else {
                  emit(createABC(OpCode::LOADNIL, reg, 1, 0), s->line, s->offset);
             }
+            
+            // Emit TYPE_CHECK if annotation is present
+            if (s->typeAnnotation.kind != TypeKind::Any) {
+                emitTypeCheck(reg, s->typeAnnotation, s->line, s->offset);
+            }
+            
             locals.push_back({s->name, scopeDepth, reg});
         }
     }
@@ -125,7 +131,7 @@ void Compiler::compile(Stmt* stmt) {
         
         if (s->elseBranch) {
             // Need to jump over else branch
-            int outJmpIdx = emit(createAsBx(OpCode::JMP, 0, 0));
+            int outJmpIdx = emit(createAsBx(OpCode::JMP, 0, 0), s->line, s->offset);
             
             // Patch first jump to else branch
             int elsePos = (int)currentChunk->code.size();
@@ -181,9 +187,9 @@ void Compiler::compile(Stmt* stmt) {
         int loopTop = (int)currentChunk->code.size();
         
         // condition: var <= end
-        emit(createABC(OpCode::LE, 1, rVar, rEnd));
-        emit(createAsBx(OpCode::JMP, 0, 1)); // Skip body jump if false
-        int jmpEndIdx = emit(createAsBx(OpCode::JMP, 0, 0));
+        emit(createABC(OpCode::LE, 1, rVar, rEnd), s->line, s->offset);
+        emit(createAsBx(OpCode::JMP, 0, 1), s->line, s->offset); // Skip body jump if false
+        int jmpEndIdx = emit(createAsBx(OpCode::JMP, 0, 0), s->line, s->offset);
         int bodyStart = (int)currentChunk->code.size();
         
         compile(s->body.get());
@@ -191,12 +197,12 @@ void Compiler::compile(Stmt* stmt) {
         // increment: i = i + 1
         int k1 = makeConstant({0, 1.0, nullptr});
         int r1 = allocReg();
-        emit(createABx(OpCode::LOADK, r1, k1));
-        emit(createABC(OpCode::ADD, rVar, rVar, r1));
+        emit(createABx(OpCode::LOADK, r1, k1), s->line, s->offset);
+        emit(createABC(OpCode::ADD, rVar, rVar, r1), s->line, s->offset);
         freeReg(); 
         
         int loopBottom = (int)currentChunk->code.size();
-        emit(createAsBx(OpCode::JMP, 0, loopTop - loopBottom - 1));
+        emit(createAsBx(OpCode::JMP, 0, loopTop - loopBottom - 1), s->line, s->offset);
         
         int endPos = (int)currentChunk->code.size();
         currentChunk->code[jmpEndIdx] = createAsBx(OpCode::JMP, 0, endPos - bodyStart);
@@ -228,7 +234,8 @@ void Compiler::compile(Stmt* stmt) {
         // Actually, classes are usually stored in a variable by the identifier name.
     }
     else if (auto* s = dynamic_cast<TypeAliasStmt*>(stmt)) {
-        // Type aliases are compile-time only; no bytecode emitted.
+        // Register the type alias for compile-time resolution
+        typeAliases[s->name] = s->type;
     }
     else if (auto* s = dynamic_cast<ReturnStmt*>(stmt)) {
         if (s->value) {
@@ -241,19 +248,23 @@ void Compiler::compile(Stmt* stmt) {
     }
 }
 
-Chunk* Compiler::compileFunctionBody(const std::vector<std::pair<std::string, Type>>& params, Stmt* body, const std::string& name) {
+Chunk* Compiler::compileFunctionBody(const std::vector<Parameter>& params, Stmt* body, const std::string& name) {
     Chunk* chunk = new Chunk();
     chunk->name = name; 
     
     Compiler sub;
     sub.currentChunk = chunk;
+    sub.typeAliases = this->typeAliases; // Inherit parent's type aliases
     sub.beginScope(); // Parameters at depth 1
     
     for (const auto& p : params) {
         int r = sub.allocReg();
-        sub.locals.push_back({p.first, sub.scopeDepth, r});
+        sub.locals.push_back({p.name, sub.scopeDepth, r});
     }
-    
+    // Emit TYPE_CHECK for typed parameters
+    for (int pi = 0; pi < (int)params.size(); pi++) {
+        sub.emitTypeCheck(pi, params[pi].type, params[pi].line, params[pi].offset);
+    }
     if (auto* b = dynamic_cast<BlockStmt*>(body)) {
         for (const auto& s : b->statements) {
             sub.compile(s.get());
@@ -265,7 +276,7 @@ Chunk* Compiler::compileFunctionBody(const std::vector<std::pair<std::string, Ty
     
     // Ensure return if not present
     if (chunk->code.empty() || GET_OP(chunk->code.back()) != OpCode::RETURN) {
-        chunk->write(createABC(OpCode::RETURN, 0, 1, 0), 0, -1);
+        chunk->write(createABC(OpCode::RETURN, 0, 1, 0), body->line, body->offset);
     }
     
     return chunk;
@@ -276,8 +287,14 @@ int Compiler::compileClass(ClassStmt* stmt) {
     int kName = makeConstant({1, 0.0, mf_strdup(stmt->name.c_str())});
     emit(createABx(OpCode::NEWCLASS, r, kName));
     
+    // Current approach: classes are just collections of functions
     for (auto& method : stmt->methods) {
-        Chunk* mChunk = compileFunctionBody(method->params, method->body.get(), method->name); // Pass method name
+        // Collect Parameter struct from method->params
+        std::vector<Parameter> params;
+        for (auto& p : method->params) {
+            params.push_back(p);
+        }
+        Chunk* mChunk = compileFunctionBody(params, method->body.get(), stmt->name + "." + method->name);
         int kMethod = makeConstant({5, 0.0, mChunk}); // 5=Bytecode/Function
         int kMethodName = makeConstant({1, 0.0, mf_strdup(method->name.c_str())});
         
@@ -336,12 +353,12 @@ int Compiler::compile(Expr* expr) {
         int right = compile(e->right.get());
         OpCode op = OpCode::NOT;
         if (e->op == TokenType::Minus) {
-             emit(createABC(OpCode::UNM, right, right, 0));
+             emit(createABC(OpCode::UNM, right, right, 0), e->line, e->offset);
              return right;
         } else if (e->op == TokenType::Tilde) {
              // Bitwise NOT, assume we have it or use XOR with -1
         }
-        emit(createABC(op, right, right, 0));
+        emit(createABC(op, right, right, 0), e->line, e->offset);
         return right;
     }
     else if (auto* e = dynamic_cast<BinaryExpr*>(expr)) {
@@ -410,10 +427,10 @@ int Compiler::compile(Expr* expr) {
                 // Compound assignment: a += b => a = a + b
                 int targetReg = allocReg();
                 if (local != -1) {
-                    emit(createABC(OpCode::MOVE, targetReg, local, 0));
+                    emit(createABC(OpCode::MOVE, targetReg, local, 0), e->line, e->offset);
                 } else {
                     int k = makeConstant({1, 0.0, mf_strdup(v->name.c_str())});
-                    emit(createABx(OpCode::GETGLOBAL, targetReg, k));
+                    emit(createABx(OpCode::GETGLOBAL, targetReg, k), e->line, e->offset);
                 }
                 
                 OpCode op = OpCode::ADD;
@@ -425,18 +442,18 @@ int Compiler::compile(Expr* expr) {
                     case TokenType::PercentEqual: op = OpCode::MOD; break;
                     default: break;
                 }
-                emit(createABC(op, targetReg, targetReg, valReg));
+                emit(createABC(op, targetReg, targetReg, valReg), e->line, e->offset);
                 freeReg(); // Free valReg
                 valReg = targetReg;
             }
 
             if (local != -1) {
-                emit(createABC(OpCode::MOVE, local, valReg, 0));
+                emit(createABC(OpCode::MOVE, local, valReg, 0), e->line, e->offset);
                 freeReg();
                 return local;
             } else {
                 int k = makeConstant({1, 0.0, mf_strdup(v->name.c_str())});
-                emit(createABx(OpCode::SETGLOBAL, valReg, k));
+                emit(createABx(OpCode::SETGLOBAL, valReg, k), e->line, e->offset);
                 return valReg;
             }
         } else if (auto* idx = dynamic_cast<IndexExpr*>(e->target.get())) {
@@ -471,7 +488,7 @@ int Compiler::compile(Expr* expr) {
             
             if (e->op != TokenType::Equal) {
                 int targetReg = allocReg();
-                emit(createABC(OpCode::GETTABLE, targetReg, objReg, kKey + 256));
+                emit(createABC(OpCode::GETTABLE, targetReg, objReg, kKey + 256), e->line, e->offset);
                 OpCode op = OpCode::ADD;
                 switch (e->op) {
                     case TokenType::PlusEqual: op = OpCode::ADD; break;
@@ -481,12 +498,12 @@ int Compiler::compile(Expr* expr) {
                     case TokenType::PercentEqual: op = OpCode::MOD; break;
                     default: break;
                 }
-                emit(createABC(op, targetReg, targetReg, valReg));
+                emit(createABC(op, targetReg, targetReg, valReg), e->line, e->offset);
                 freeReg();
                 valReg = targetReg;
             }
             
-            emit(createABC(OpCode::SETTABLE, objReg, kKey + 256, valReg));
+            emit(createABC(OpCode::SETTABLE, objReg, kKey + 256, valReg), e->line, e->offset);
             freeReg(); // free value
             return valReg;
         }
@@ -618,6 +635,67 @@ int Compiler::compile(Expr* expr) {
     }
 
     return allocReg(); // Fallback
+}
+
+Type Compiler::resolveType(const Type& t) {
+    if (t.kind != TypeKind::Alias) return t;
+    auto it = typeAliases.find(t.aliasName);
+    if (it != typeAliases.end()) {
+        return resolveType(it->second);
+    }
+    return t; // Unresolved alias treated as Any
+}
+
+void Compiler::emitTypeCheck(int reg, const Type& type, int line, int offset) {
+    Type t = resolveType(type);
+    if (t.kind == TypeKind::Any) return;
+
+    int runtimeType = 11; // 11 = Any (skip)
+
+    switch (t.kind) {
+        case TypeKind::Int8: case TypeKind::Int16:
+        case TypeKind::Int32: case TypeKind::Int64:
+        case TypeKind::Float32: case TypeKind::Float64:
+            runtimeType = 0; break; // ANY_NUMBER
+        case TypeKind::String: runtimeType = 1; break;
+        case TypeKind::Bool: runtimeType = 2; break;
+        case TypeKind::Char: runtimeType = 0; break; 
+        case TypeKind::Function: runtimeType = 5; break;
+        case TypeKind::Array: runtimeType = 6; break;
+        case TypeKind::Struct: {
+            Any* schemaObj = manifast_create_object();
+            for (const auto& field : t.fields) {
+                int ft = 11;
+                if (field.type) {
+                    Type ft_res = resolveType(*field.type);
+                    switch (ft_res.kind) {
+                        case TypeKind::Int8: case TypeKind::Int16:
+                        case TypeKind::Int32: case TypeKind::Int64:
+                        case TypeKind::Float32: case TypeKind::Float64:
+                            ft = 0; break;
+                        case TypeKind::String: ft = 1; break;
+                        case TypeKind::Bool: ft = 2; break;
+                        case TypeKind::Function: ft = 5; break;
+                        case TypeKind::Array: ft = 6; break;
+                        default: ft = 11; break;
+                    }
+                }
+                Any fieldType = {0, (double)ft, nullptr};
+                manifast_object_set(schemaObj, field.name.c_str(), &fieldType);
+            }
+            Any typeConst = {0, 10.0, schemaObj->ptr}; // 10 = struct
+            int k = makeConstant(typeConst);
+            emit(createABx(OpCode::TYPE_CHECK, reg, k), line, offset);
+            return;
+        }
+        default: runtimeType = 11; break;
+    }
+
+    if (runtimeType != 11) {
+        Any typeConst = {0, (double)runtimeType, nullptr};
+        int k = makeConstant(typeConst);
+        emit(createABx(OpCode::TYPE_CHECK, reg, k), line, offset);
+    }
 }
 
 } // namespace vm

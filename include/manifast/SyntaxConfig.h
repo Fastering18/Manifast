@@ -55,6 +55,7 @@ public:
         keywords["char"] = TokenType::K_Char;
         keywords["tipe"] = TokenType::K_Type;
         keywords["angka"] = TokenType::K_Float64;
+        keywords["bilangan"] = TokenType::K_Float64;
         
         keywords["bukan"] = TokenType::Bang; // Logic NOT
     }

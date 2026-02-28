@@ -14,6 +14,7 @@ show_help() {
     echo "  run-vm      Run manifast file in vm tier"
     echo "  test        Run the test suite"
     echo "  install     Install binaries to system and add to PATH"
+    echo "  uninstall   Remove binaries and revert PATH changes"
     echo "  clean       Remove the build directory"
     echo "  build-wasm  Build for WebAssembly (requires Emscripten)"
     echo "  help        Show this help message"
@@ -110,6 +111,10 @@ if [ "$COMMAND" == "install" ]; then
     fi
     
     INSTALL_DIR="$HOME/.local"
+    # Support Termux
+    if [ -n "$PREFIX" ]; then
+        INSTALL_DIR="$PREFIX"
+    fi
     INSTALL_BIN="$INSTALL_DIR/bin"
     INSTALL_LIB="$INSTALL_DIR/lib"
     
@@ -132,6 +137,30 @@ if [ "$COMMAND" == "install" ]; then
     fi
     
     echo "Manifast installed successfully!"
+    exit 0
+fi
+
+if [ "$COMMAND" == "uninstall" ]; then
+    INSTALL_DIR="$HOME/.local"
+    if [ -n "$PREFIX" ]; then
+        INSTALL_DIR="$PREFIX"
+    fi
+    INSTALL_BIN="$INSTALL_DIR/bin"
+    
+    # Remove binaries
+    rm -f "$INSTALL_BIN/mifast" "$INSTALL_BIN/mifastc"
+    
+    # Remove from shell rc
+    SHELL_RC="$HOME/.bashrc"
+    [ -n "$ZSH_VERSION" ] && SHELL_RC="$HOME/.zshrc"
+    
+    if [ -f "$SHELL_RC" ]; then
+        # Use a temporary file to filter out the PATH line
+        grep -v "export PATH=\"$INSTALL_BIN:\$PATH\"" "$SHELL_RC" > "$SHELL_RC.tmp" && mv "$SHELL_RC.tmp" "$SHELL_RC"
+        echo "Removed Manifast PATH entry from $SHELL_RC"
+    fi
+    
+    echo "Manifast uninstalled successfully."
     exit 0
 fi
 

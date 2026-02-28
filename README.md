@@ -52,12 +52,12 @@ Get Manifast up and running instantly on your machine.
 
 ### Linux / macOS
 ```bash
-curl -fsSL https://manifast.dev/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Fastering18/Manifast/master/install.sh | bash
 ```
 
 ### Windows (PowerShell)
 ```powershell
-iwr -useb https://manifast.dev/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/Fastering18/Manifast/master/install.ps1 | iex
 ```
 
 ---

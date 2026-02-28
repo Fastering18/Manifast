@@ -1,0 +1,8 @@
+tipe tes = {
+   a: bilangan
+}
+fungsi a(x: tes) print(x.a) tutup
+lokal d: string = "a"
+a({a: "sos"})
+
+print(d)

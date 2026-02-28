@@ -297,7 +297,10 @@ void VM::runtimeError(const std::string& message) {
     int line = (pc < (int)frame.chunk->lines.size()) ? frame.chunk->lines[pc] : -1;
     int offset = (pc < (int)frame.chunk->offsets.size()) ? frame.chunk->offsets[pc] : -1;
 
-    fprintf(stderr, "\nRuntime Error: Baris %d\n", line);
+    bool isTypeError = (message.find("TypeError") != std::string::npos);
+    const char* errorCategory = isTypeError ? "TypeError" : "Runtime Error";
+
+    fprintf(stderr, "\n%s: Baris %d\n", errorCategory, line);
     
     // Print source context with caret if available
     if (offset != -1 && !source.empty()) {
@@ -327,23 +330,23 @@ void VM::runtimeError(const std::string& message) {
     fprintf(stderr, "-> %s\n", message.c_str());
     
     // Debug: Print OpCode that failed
-    if (pc < (int)frame.chunk->code.size()) {
+    if (debugMode && pc < (int)frame.chunk->code.size()) {
         Instruction i = frame.chunk->code[pc];
         OpCode op = (OpCode)(i & 0x3F);
         fprintf(stderr, "OpCode Gagal: %d (A=%d, B=%d, C=%d)\n", (int)op, (i>>6)&0xFF, (i>>14)&0x1FF, (i>>23)&0x1FF);
     
-    int base = frame.baseSlot;
-    fprintf(stderr, "\nRegister Dump (base=%d):\n", base);
-    for (int j = 0; j < 16; j++) {
-        Any v = stack[base + j];
-        fprintf(stderr, "  R(%d): tipe=%d, val=%g", j, v.type, v.number);
-        if (v.type == 1 && v.ptr) fprintf(stderr, " s=\"%s\"", (char*)v.ptr);
-        fprintf(stderr, "\n");
-    }
+        int base = frame.baseSlot;
+        fprintf(stderr, "\nRegister Dump (base=%d):\n", base);
+        for (int j = 0; j < 16; j++) {
+            Any v = stack[base + j];
+            fprintf(stderr, "  R(%d): tipe=%d, val=%g", j, v.type, v.number);
+            if (v.type == 1 && v.ptr) fprintf(stderr, " s=\"%s\"", (char*)v.ptr);
+            fprintf(stderr, "\n");
+        }
     }
 
     // Vertical Stack Trace
-    fprintf(stderr, "\nJejak tumpukan (Stack Trace):\n");
+    fprintf(stderr, "\nJejak (Stack Trace):\n");
     for (int i = (int)frames.size() - 1; i >= 0; i--) {
         CallFrame& f = frames[i];
         int fpc = f.pc - 1;
@@ -775,6 +778,67 @@ void VM::run(int entryFrameDepth) {
                 Any& arr = LR(a);
                 for (int j = 1; j <= n; j++) {
                     manifast_array_set(&arr, (double)((c-1)*50 + j), &LR(a + j));
+                }
+                break;
+            }
+            case OpCode::TYPE_CHECK: {
+                int a = GET_A(i);
+                int bx = GET_Bx(i);
+                Any& val = LR(a);
+                Any& typeInfo = LK(bx);
+                int expectedType = (int)typeInfo.number;
+
+                // Type mapping: 0=angka, 1=string, 2=bool, 3=nil, 4=native, 5=fungsi, 6=array, 7=object
+                // Extended: 10=struct (check fields), 11=any (skip)
+                if (expectedType == 11) break; // Any type, skip
+
+                const char* expectedName = "unknown";
+                bool ok = false;
+
+                if (expectedType == 10 && typeInfo.ptr) {
+                    // Struct check: typeInfo.ptr points to a ManifastObject with field names
+                    expectedName = "struct";
+                    if (val.type == 7 && val.ptr) {
+                        ok = true;
+                        ManifastObject* schema = (ManifastObject*)typeInfo.ptr;
+                        ManifastObject* obj = (ManifastObject*)val.ptr;
+                        for (uint32_t fi = 0; fi < schema->size; fi++) {
+                            const char* fieldName = schema->entries[fi].key;
+                            Any* found = manifast_object_get(&val, fieldName);
+                            if (!found || found->type == 3) {
+                                std::string msg = "TypeError: field '" + std::string(fieldName) + "' tidak ditemukan pada objek";
+                                RUNTIME_ERROR(msg);
+                                return;
+                            }
+                            int expectedFieldType = (int)schema->entries[fi].value.number;
+                            if (expectedFieldType != 11 && found->type != expectedFieldType) {
+                                const char* fn[] = {"angka","string","boolean","nil","native","fungsi","array","objek"};
+                                std::string msg = "TypeError: field '" + std::string(fieldName) + "' harus bertipe " +
+                                    fn[expectedFieldType < 8 ? expectedFieldType : 0] + ", dapat " +
+                                    fn[found->type < 8 ? found->type : 0];
+                                RUNTIME_ERROR(msg);
+                                return;
+                            }
+                        }
+                    } else {
+                        ok = false;
+                    }
+                } else {
+                    ok = (val.type == expectedType);
+                    const char* names[] = {"angka","string","boolean","nil","native","fungsi","array","objek"};
+                    expectedName = (expectedType >= 0 && expectedType < 8) ? names[expectedType] : "unknown";
+                    // Numbers: i8/i16/i32/i64/f32/f64 all map to ANY_NUMBER (0)
+                    if (expectedType == 0 && val.type == 0) ok = true;
+                    // Function type: accept both native(4) and bytecode(5)
+                    if ((expectedType == 4 || expectedType == 5) && (val.type == 4 || val.type == 5)) ok = true;
+                }
+
+                if (!ok) {
+                    const char* fn[] = {"angka","string","boolean","nil","native","fungsi","array","objek"};
+                    std::string msg = "TypeError: harus bertipe " + std::string(expectedName) + 
+                                     ", dapat " + std::string(val.type < 8 ? fn[val.type] : "unknown");
+                    RUNTIME_ERROR(msg);
+                    return;
                 }
                 break;
             }

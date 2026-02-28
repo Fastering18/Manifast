@@ -118,14 +118,14 @@ bool runTestInProcess(const std::string& source, std::string& outputLog, bool us
                     if (reusableVM) reusableVM->interpret(&chunk);
                     else {
                         manifast::vm::VM vm;
-                        vm.interpret(&chunk);
+                        vm.interpret(&chunk, source);
                     }
                     chunk.free();
                     finalSuccess = true;
                 } else finalSuccess = false;
             } else {
 #ifdef MANIFAST_HAS_LLVM
-                manifast::CodeGen codegen;
+                manifast::CodeGen codegen(source);
                 codegen.compile(statements);
                 finalSuccess = codegen.run();
 #else
@@ -151,9 +151,9 @@ void printUsage() {
     fmt::print(fmt::emphasis::bold, "Manifast Management Tool (mifast) v0.0.12\n");
     fmt::print("Usage: mifast <command> [args]\n\n");
     fmt::print("Commands:\n");
-    fmt::print("  run <file> [--vm] [--stack-size MB]  Compile and run a Manifast file\n");
-    fmt::print("  test [--vm]                          Run the project test suite (In-Process)\n");
-    fmt::print("  build <file> [-o output]             Compile a Manifast wrapper to native executable (AOT)\n");
+    fmt::print("  run <file> [--vm] [--verbose] [--stack-size MB]  Compile and run a Manifast file\n");
+    fmt::print("  test [--vm] [--verbose]                          Run the project test suite (In-Process)\n");
+    fmt::print("  build <file> [-o output] [--verbose]             Compile a Manifast wrapper to native executable (AOT)\n");
 }
 
 void runTestRunner(bool useVM) {
@@ -285,11 +285,11 @@ int main(int argc, char* argv[]) {
     std::string filePath;
     std::string outputPath;
     
-    // Check for --vm in any position after command
+    // Check for --vm or --verbose in any position after command
     for(int i = 2; i < argc; i++) {
         std::string arg = argv[i];
         if(arg == "--vm") useVM = true;
-        else if(arg == "--debugdev") debugDev = true;
+        else if(arg == "--verbose" || arg == "--debugdev") debugDev = true;
         else if(arg == "--stack-size" && i + 1 < argc) {
             stackSizeMB = std::stoull(argv[++i]);
         }
@@ -332,7 +332,7 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             
-            manifast::CodeGen codegen;
+            manifast::CodeGen codegen(source);
             codegen.compile(statements);
             
             fs::path out(outputPath);
@@ -433,7 +433,7 @@ int main(int argc, char* argv[]) {
                     size_t numSlots = (stackSizeMB * 1024 * 1024) / sizeof(Any);
                     vm.setStackSize(numSlots);
                     
-                    vm.interpret(&chunk);
+                    vm.interpret(&chunk, source);
                     chunk.free();
                 } else {
                      fmt::print(fg(fmt::color::red), "Compilation failed.\n");
@@ -441,7 +441,7 @@ int main(int argc, char* argv[]) {
                 }
             } else {
 #ifdef MANIFAST_HAS_LLVM
-                manifast::CodeGen codegen;
+                manifast::CodeGen codegen(source);
                 codegen.compile(statements);
                 if (!codegen.run()) return 1;
 #else

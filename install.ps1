@@ -1,8 +1,7 @@
-# Manifast One-Liner Installer for Windows
-# Usage: iwr -useb https://manifast.dev/install.ps1 | iex
+# Manifast Installer for Windows
+# Usage: iwr -useb https://raw.githubusercontent.com/Fastering18/Manifast/master/install.ps1 | iex
 
 $repo = "Fastering18/Manifast"
-$platform = "windows"
 
 Write-Host "--- Manifast Installer ---" -ForegroundColor Cyan
 
@@ -15,7 +14,9 @@ try {
     return
 }
 
-$filename = "manifast-$platform-x64.zip"
+# Strip 'v' prefix for filename (CPack naming)
+$version = $tag -replace '^v', ''
+$filename = "manifast-$version-win64.zip"
 $url = "https://github.com/$repo/releases/download/$tag/$filename"
 
 Write-Host "Downloading $filename ($tag)..."
@@ -48,4 +49,4 @@ Remove-Item $tempDir -Recurse -Force
 
 Write-Host "Success! Manifast installed to $installDir" -ForegroundColor Green
 Write-Host "Please restart your terminal or run: `$env:Path = [System.Environment]::GetEnvironmentVariable('Path','User')`"
-Write-Host "Try running: mifast version"
+Write-Host "Try running: mifast --help"

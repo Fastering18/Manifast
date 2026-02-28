@@ -13,7 +13,7 @@ namespace manifast {
 
 class CodeGen {
 public:
-    CodeGen();
+    CodeGen(std::string_view source = "");
     void compile(const std::vector<std::unique_ptr<Stmt>>& statements);
     void printIR(); 
     bool run(); // JIT Execution entry
@@ -42,6 +42,9 @@ private:
     VarInfo lookupVariable(const std::string& name);
     int mapTypeToRuntime(const Type& type);
     Type resolveType(const Type& type);
+    void enforceStaticType(const Expr* expr, const Type& expected, const std::string& context = "");
+    void reportError(const ASTNode* node, const std::string& category, const std::string& message);
+    std::string source;
 
     llvm::Value* generateExpr(const Expr* expr);
     void generateStmt(const Stmt* stmt);

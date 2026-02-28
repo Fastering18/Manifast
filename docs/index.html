@@ -559,7 +559,7 @@
             },
             plot: {
                 name: "Plot Chart",
-                code: `lokal plot = impor("plot")\nlokal x = []\nlokal y = []\n\nuntuk i = 0 ke 20 lakukan\n  x.push(i)\n  y.push(sin(i/2))\ntutup\n\n-- Direct module methods (Now centered & persisted)\nplot.line(x, y, { title: "Sine Wave Demo", xlabel: "Radians", ylabel: "Magnitude" })\nplot.show()\nprintln("Plot rendered successfully!")`
+                code: `lokal plot = impor("plot")\nlokal x = []\nlokal y = []\n\nuntuk i = 0 ke 20 lakukan\n  x.push(i)\n  y.push(sin(i/2))\ntutup\n\nplot.line(x, y, { title: "Sine Wave Demo", xlabel: "Radians", ylabel: "Magnitude" })\nplot.show()\nprintln("Plot rendered successfully!")`
             },
             newton: {
                 name: "Newton-Raphson",
@@ -596,50 +596,6 @@
             });
         }
 
-        // --- WASM Module Integration ---
-        window.Module = {
-            onRuntimeInitialized: function () {
-                console.log("[Manifast] WASM VM loaded successfully");
-                document.getElementById('loader').style.opacity = '0';
-                setTimeout(() => document.getElementById('loader').remove(), 500);
-
-                // Register event callback
-                // 0=log, 1=error, 2=plot, 3=clear, 4=done, 5=delay
-                const eventCallback = Module.addFunction((type, dataPtr) => {
-                    const data = Module.UTF8ToString(dataPtr);
-                    const outputEl = document.getElementById('output');
-
-                    if (type === 0) { // Log
-                        const span = document.createElement('span');
-                        span.textContent = data;
-                        outputEl.appendChild(span);
-                    } else if (type === 1) { // Error
-                        const span = document.createElement('span');
-                        span.style.color = 'var(--error)';
-                        span.textContent = "\n[ERROR] " + data + "\n";
-                        outputEl.appendChild(span);
-                    } else if (type === 2) { // Plot (Image)
-                        const img = document.createElement('img');
-                        img.src = data;
-                        outputEl.appendChild(img);
-                    } else if (type === 3) { // Clear
-                        outputEl.innerHTML = '';
-                    } else if (type === 5) { // Delay/Sleep (Visual only for now)
-                        // This can be used for animations if the runner handles yielding
-                    }
-                    outputEl.scrollTop = outputEl.scrollHeight;
-                }, 'vpp');
-
-                if (Module._mf_set_event_callback) {
-                    Module._mf_set_event_callback(eventCallback);
-                }
-
-                initSidebar();
-            },
-            print: (text) => console.log("[MF stdout]", text),
-            printErr: (text) => console.warn("[MF stderr]", text)
-        };
-
         // --- Playback Engine ---
         let playbackId = 0;
         let isRunning = false;
@@ -657,7 +613,7 @@
         }
 
         async function runCode() {
-            if (!window.Module._mf_run_script_tier) {
+            if (!window.Module || !window.Module.ccall) {
                 alert("WASM not loaded yet!");
                 return;
             }
@@ -669,20 +625,19 @@
             playbackId++;
             const currentId = playbackId;
             setRunning(true);
-            outputEl.innerHTML = '<span style="color: hsla(200, 100%, 70%, 0.8)">> Executing...</span>\n';
+            outputEl.innerHTML = '<span style="color: hsla(200, 100%, 70%, 0.8)"> > Executing...</span>\n';
             timingEl.innerText = '';
 
             console.log("[Manifast] Running script...");
             const startTime = performance.now();
 
             try {
-                // Execute and get raw output with markers
                 const rawOutput = window.Module.ccall('mf_run_script_tier', 'string', ['string', 'number'], [code, 0]);
 
                 const endTime = performance.now();
                 timingEl.innerText = `${((endTime - startTime) / 1000).toFixed(3)}s`;
 
-                // Asynchronously parse markers to support os.tunggu
+                // Async marker replay for os.tunggu support
                 let pos = 0;
                 while (pos < rawOutput.length && currentId === playbackId) {
                     let clr = rawOutput.indexOf("[CLR]", pos);
@@ -693,17 +648,15 @@
                     let next = indices.length > 0 ? Math.min(...indices) : -1;
 
                     if (next === -1) {
-                        const text = rawOutput.substring(pos);
                         const span = document.createElement('span');
-                        span.textContent = text;
+                        span.textContent = rawOutput.substring(pos);
                         outputEl.appendChild(span);
                         break;
                     }
 
                     if (next > pos) {
-                        const text = rawOutput.substring(pos, next);
                         const span = document.createElement('span');
-                        span.textContent = text;
+                        span.textContent = rawOutput.substring(pos, next);
                         outputEl.appendChild(span);
                     }
 
@@ -750,6 +703,49 @@
         }
     </script>
     <script src="manifast.js"></script>
+    <script>
+        // MODULARIZE=1 requires calling the factory function
+        ManifastModule({
+            print: (text) => console.log("[MF stdout]", text),
+            printErr: (text) => console.warn("[MF stderr]", text)
+        }).then(function (Module) {
+            window.Module = Module;
+            console.log("[Manifast] WASM VM loaded successfully");
+            document.getElementById('loader').style.opacity = '0';
+            setTimeout(() => document.getElementById('loader').remove(), 500);
+
+            // Register event callback (vii = void, int, int/ptr)
+            try {
+                const eventCallback = Module.addFunction((type, dataPtr) => {
+                    const data = Module.UTF8ToString(dataPtr);
+                    const outputEl = document.getElementById('output');
+                    if (type === 0) {
+                        const span = document.createElement('span');
+                        span.textContent = data;
+                        outputEl.appendChild(span);
+                    } else if (type === 2) {
+                        const img = document.createElement('img');
+                        img.src = data;
+                        outputEl.appendChild(img);
+                    } else if (type === 3) {
+                        outputEl.innerHTML = '';
+                    }
+                    outputEl.scrollTop = outputEl.scrollHeight;
+                }, 'vii');
+                if (Module._mf_set_event_callback) {
+                    Module._mf_set_event_callback(eventCallback);
+                }
+            } catch (e) {
+                console.warn("[Manifast] addFunction not available, using return-string mode", e);
+            }
+
+            initSidebar();
+        }).catch(function (err) {
+            console.error("[Manifast] Failed to initialize WASM:", err);
+            document.querySelector('#loader p').textContent = 'Failed to load WASM: ' + err.message;
+            document.querySelector('#loader p').style.color = 'var(--error)';
+        });
+    </script>
 </body>
 
 </html>

@@ -1,6 +1,6 @@
 param (
     [Parameter(Mandatory=$true, Position=0)]
-    [ValidateSet("build", "run", "run-vm", "test", "clean", "help", "build-wasm", "install")]
+    [ValidateSet("build", "run", "run-vm", "test", "clean", "help", "build-wasm", "install", "uninstall")]
     [string]$Command,
 
     [switch]$Fast,
@@ -22,6 +22,7 @@ function Show-Help {
     Write-Host "  run-vm        Run manifast file in vm tier"
     Write-Host "  test          Run the test suite"
     Write-Host "  install       Install binaries to system and add to PATH"
+    Write-Host "  uninstall     Remove binaries from system and clear from PATH"
     Write-Host "  clean         Remove the build directory"
     Write-Host "  build-wasm    Build for WebAssembly (requires Emscripten)"
     Write-Host "  help          Show this help message"
@@ -233,6 +234,30 @@ if ($Command -eq "install") {
     
     Write-Host "Manifast installed successfully!" -ForegroundColor Green
     Write-Host "Run 'mifast --help' in a new terminal to verify." -ForegroundColor Gray
+    exit 0
+}
+
+if ($Command -eq "uninstall") {
+    $InstallDir = "$env:LOCALAPPDATA\Manifast"
+    $InstallBin = "$InstallDir\bin"
+    
+    Write-Host "Uninstalling Manifast..." -ForegroundColor Cyan
+    
+    # Remove from PATH
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -like "*$InstallBin*") {
+        $NewPath = ($UserPath -split ";" | Where-Object { $_ -ne $InstallBin }) -join ";"
+        [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
+        Write-Host "Removed $InstallBin from user PATH." -ForegroundColor Green
+    }
+    
+    # Remove binaries
+    if (Test-Path $InstallDir) {
+        Write-Host "Removing installed binaries in $InstallDir..." -ForegroundColor Yellow
+        Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    
+    Write-Host "Manifast uninstalled successfully." -ForegroundColor Green
     exit 0
 }
 

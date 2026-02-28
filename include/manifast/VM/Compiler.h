@@ -4,6 +4,7 @@
 #include "../AST.h"
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <string>
 
 namespace manifast {
@@ -31,6 +32,10 @@ private:
     std::vector<Local> locals;
     int scopeDepth;
     
+    // Type alias registry (resolved at compile time)
+    std::unordered_map<std::string, Type> typeAliases;
+    Type resolveType(const Type& t);
+    
     // Dispatch
     void compile(Stmt* stmt);
     int compile(Expr* expr); // Returns register index containing result
@@ -41,8 +46,9 @@ private:
     int resolveLocal(const std::string& name);
     int allocReg();
     void freeReg(); // Pop last reg
+    void emitTypeCheck(int reg, const Type& type, int line = 0, int offset = -1);
     
-    Chunk* compileFunctionBody(const std::vector<std::pair<std::string, Type>>& params, Stmt* body, const std::string& name = "<lambda>");
+    Chunk* compileFunctionBody(const std::vector<Parameter>& params, Stmt* body, const std::string& name = "<lambda>");
     int compileClass(ClassStmt* stmt);
     
     void beginScope();

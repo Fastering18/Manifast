@@ -16,7 +16,7 @@
 
 namespace manifast {
 
-CodeGen::CodeGen() {
+CodeGen::CodeGen(std::string_view source) : source(source) {
     context = std::make_unique<llvm::LLVMContext>();
     module = std::make_unique<llvm::Module>("ManifastModule", *context);
     builder = std::make_unique<llvm::IRBuilder<>>(*context);
@@ -972,8 +972,16 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
     }
 
     std::string funcName = var->name;
-    
     VarInfo varInfo = lookupVariable(funcName);
+
+    // Static Type Checking for Arguments if function signature is known
+    Type ft = resolveType(varInfo.type);
+    if (ft.kind == TypeKind::Function) {
+        for (size_t i = 0; i < expr->args.size() && i < ft.params.size(); i++) {
+            enforceStaticType(expr->args[i].get(), ft.params[i], "argumen " + std::to_string(i+1));
+        }
+    }
+
     if (varInfo.value) {
         // Treat as dynamic call
         llvm::Value* calleeVal = varInfo.value; // Already Any*
@@ -1080,9 +1088,11 @@ void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
                                              llvm::GlobalValue::InternalLinkage,
                                              llvm::ConstantAggregateZero::get(anyType),
                                              stmt->name);
-        scopes.back()[stmt->name] = VarInfo(gVar, stmt->typeAnnotation);
         
+        Type resolved = resolveType(stmt->typeAnnotation);
+
         if (stmt->initializer) {
+            enforceStaticType(stmt->initializer.get(), resolved, "variabel '" + stmt->name + "'");
             llvm::Value* initVal = generateExpr(stmt->initializer.get());
             if (initVal) {
                 // Type Check
@@ -1094,6 +1104,7 @@ void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
                 builder->CreateStore(builder->CreateLoad(anyType, initVal), gVar);
             }
         }
+        scopes.back()[stmt->name] = VarInfo(gVar, stmt->typeAnnotation);
     } else {
         llvm::Function* func = builder->GetInsertBlock()->getParent();
         llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
@@ -1102,6 +1113,7 @@ void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
         scopes.back()[stmt->name] = VarInfo(alloca, stmt->typeAnnotation);
         
         if (stmt->initializer) {
+            enforceStaticType(stmt->initializer.get(), resolveType(stmt->typeAnnotation), "variabel '" + stmt->name + "'");
             llvm::Value* initVal = generateExpr(stmt->initializer.get());
             if (initVal) {
                 // Type Check
@@ -1188,13 +1200,13 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
     
     for (size_t i = 0; i < stmt->params.size(); i++) {
         llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
-        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->params[i].first); // Name
+        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, stmt->params[i].name); 
         
         llvm::Value* slot = builder->CreateGEP(anyType, argsPtr, {builder->getInt32(i)});
         llvm::Value* loadedArg = builder->CreateLoad(anyType, slot);
         builder->CreateStore(loadedArg, alloca);
         
-        scopes.back()[stmt->params[i].first] = VarInfo(alloca, stmt->params[i].second); // Name, Type
+        scopes.back()[stmt->params[i].name] = VarInfo(alloca, stmt->params[i].type); 
     }
 
     // Body
@@ -1233,7 +1245,10 @@ void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
         llvm::Value* funcPtr = builder->CreateBitOrPointerCast(func, builder->getPtrTy());
         builder->CreateStore(funcPtr, ptrSlot);
 
-        scopes.back()[stmt->name] = VarInfo(alloca, Type(TypeKind::Function));
+        Type funcType(TypeKind::Function);
+        for (const auto& p : stmt->params) funcType.params.push_back(p.type);
+        funcType.returnType = std::make_shared<Type>(stmt->returnType);
+        scopes.back()[stmt->name] = VarInfo(alloca, std::move(funcType));
     }
 }
 
@@ -1257,13 +1272,13 @@ llvm::Value* CodeGen::visitFunctionExpr(const FunctionExpr* expr) {
     
     for (size_t i = 0; i < expr->params.size(); i++) {
         llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
-        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, expr->params[i].first); 
+        llvm::AllocaInst* alloca = tmpBuilder.CreateAlloca(anyType, nullptr, expr->params[i].name); 
         
         llvm::Value* slot = builder->CreateGEP(anyType, argsPtr, {builder->getInt32(i)});
         llvm::Value* loadedArg = builder->CreateLoad(anyType, slot);
         builder->CreateStore(loadedArg, alloca);
         
-        scopes.back()[expr->params[i].first] = VarInfo(alloca, expr->params[i].second);
+        scopes.back()[expr->params[i].name] = VarInfo(alloca, expr->params[i].type);
     }
 
     generateStmt(expr->body.get());
@@ -1427,6 +1442,92 @@ Type CodeGen::resolveType(const Type& type) {
     
     // Default to any if not found? Or keep as alias (unresolved)
     return type; 
+}
+
+void CodeGen::enforceStaticType(const Expr* expr, const Type& expected, const std::string& context) {
+    Type resolved = resolveType(expected);
+    if (resolved.kind == TypeKind::Any) return;
+
+    auto typeNameIndo = [](TypeKind kind) -> std::string {
+        switch (kind) {
+            case TypeKind::Int8: case TypeKind::Int16: case TypeKind::Int32: case TypeKind::Int64:
+            case TypeKind::Float32: case TypeKind::Float64: return "angka";
+            case TypeKind::String: return "string";
+            case TypeKind::Bool: return "boolean";
+            case TypeKind::Char: return "karakter";
+            case TypeKind::Array: return "array";
+            case TypeKind::Struct: return "objek";
+            case TypeKind::Function: return "fungsi";
+            default: return "unknown";
+        }
+    };
+
+    std::string expectedName = typeNameIndo(resolved.kind);
+    std::string prefix = context.empty() ? "" : (context + " ");
+
+    if (resolved.kind == TypeKind::Struct) {
+        if (auto* objExpr = dynamic_cast<const ObjectExpr*>(expr)) {
+            for (const auto& field : resolved.fields) {
+                bool found = false;
+                for (const auto& prop : objExpr->entries) {
+                    if (prop.first == field.name) {
+                        found = true;
+                        if (field.type) {
+                            enforceStaticType(prop.second.get(), *field.type, "field '" + field.name + "'");
+                        }
+                        break;
+                    }
+                }
+                if (!found) {
+                    reportError(objExpr, "TypeError", "field '" + field.name + "' tidak ditemukan pada objek");
+                }
+            }
+        }
+    } else {
+        std::string actualName = "";
+
+        if (dynamic_cast<const NumberExpr*>(expr)) actualName = "angka";
+        else if (dynamic_cast<const StringExpr*>(expr)) actualName = "string";
+        else if (dynamic_cast<const BoolExpr*>(expr)) actualName = "boolean";
+        else if (dynamic_cast<const ArrayExpr*>(expr)) actualName = "array";
+        else if (dynamic_cast<const ObjectExpr*>(expr)) actualName = "objek";
+
+        if (!actualName.empty()) {
+            if (actualName != expectedName) {
+                // Special case: char is char but can be number? user wants 'angka' anyway
+                reportError(expr, "TypeError", prefix + "harus bertipe " + expectedName + ", dapat " + actualName);
+            }
+        }
+    }
+}
+
+void CodeGen::reportError(const ASTNode* node, const std::string& category, const std::string& message) {
+    int line = node ? node->line : 0;
+    int offset = node ? node->offset : -1;
+
+    fprintf(stderr, "\n%s: Baris %d\n", category.c_str(), line);
+
+    if (offset != -1 && !source.empty()) {
+        int start = offset;
+        while (start > 0 && source[start-1] != '\n') start--;
+        int end = offset;
+        while (end < (int)source.length() && source[end] != '\n') end++;
+        
+        std::string lineStr = std::string(source.substr(start, end - start));
+        fprintf(stderr, "  %s\n", lineStr.c_str());
+        
+        std::string caret = "  ";
+        int col = offset - start;
+        for (int j = 0; j < col; j++) {
+            if (lineStr[j] == '\t') caret += '\t';
+            else caret += ' ';
+        }
+        caret += '^';
+        fprintf(stderr, "%s\n", caret.c_str());
+    }
+
+    fprintf(stderr, "-> %s\n", message.c_str());
+    throw manifast::RuntimeError(category + ": " + message);
 }
 
 } // namespace manifast

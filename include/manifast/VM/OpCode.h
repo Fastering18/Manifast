@@ -45,6 +45,9 @@ enum class OpCode : uint8_t {
     SETTABLE,   // R(A)[RK(B)] := RK(C)
     GETTABLE,   // R(A) := R(B)[RK(C)]
     GETSLICE,   // R(A) := R(B)[RK(C):RK(D)]
+
+    // Type Checking
+    TYPE_CHECK, // if R(A).type != K(Bx).number then TypeError
     
     COUNT
 };

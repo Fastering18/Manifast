@@ -34,7 +34,7 @@ private:
     std::unique_ptr<Stmt> parseTryStatement();
     std::unique_ptr<Stmt> parseReturnStatement();
     std::unique_ptr<Stmt> parseTypeDeclaration();
-    std::vector<std::unique_ptr<Stmt>> parseBlock(); 
+    std::vector<std::unique_ptr<Stmt>> parseBlock(Token* firstToken = nullptr); 
 
     // Expression Parsers 
     std::unique_ptr<Expr> parseExpression();
@@ -51,7 +51,7 @@ private:
     std::unique_ptr<Expr> parseFactor();
     std::unique_ptr<Expr> parseUnary();
     std::unique_ptr<Expr> parseCall();  
-    std::unique_ptr<Expr> parseFunctionExpression();
+    std::unique_ptr<Expr> parseFunctionExpression(const Token& keyword);
     std::unique_ptr<Expr> parsePrimary();
     Type parseType();
 

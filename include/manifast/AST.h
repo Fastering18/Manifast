@@ -207,13 +207,20 @@ public:
         : elements(std::move(elements)) {}
 };
 
+struct Parameter {
+    std::string name;
+    Type type;
+    int line = 0;
+    int offset = -1;
+};
+
 class FunctionExpr : public Expr {
 public:
-    std::vector<std::pair<std::string, Type>> params; // Name, Type
+    std::vector<Parameter> params;
     Type returnType;
     std::unique_ptr<Stmt> body;
     
-    FunctionExpr(std::vector<std::pair<std::string, Type>> params, Type returnType, std::unique_ptr<Stmt> body)
+    FunctionExpr(std::vector<Parameter> params, Type returnType, std::unique_ptr<Stmt> body)
         : params(std::move(params)), returnType(std::move(returnType)), body(std::move(body)) {}
 };
 
@@ -311,11 +318,11 @@ public:
 class FunctionStmt : public Stmt {
 public:
     std::string name;
-    std::vector<std::pair<std::string, Type>> params; // Name, Type
+    std::vector<Parameter> params;
     Type returnType;
     std::unique_ptr<Stmt> body;
 
-    FunctionStmt(std::string name, std::vector<std::pair<std::string, Type>> params, Type returnType, std::unique_ptr<Stmt> body)
+    FunctionStmt(std::string name, std::vector<Parameter> params, Type returnType, std::unique_ptr<Stmt> body)
         : name(std::move(name)), params(std::move(params)), returnType(std::move(returnType)), body(std::move(body)) {}
 };
 

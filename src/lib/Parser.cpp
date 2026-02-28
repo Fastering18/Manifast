@@ -226,7 +226,7 @@ std::unique_ptr<Stmt> Parser::parseFunctionStatement() {
     Token name = consume(TokenType::Identifier, "Diharapkan nama fungsi");
     consume(TokenType::LParen, "Diharapkan '(' setelah nama fungsi");
     
-    std::vector<std::pair<std::string, Type>> params;
+    std::vector<Parameter> params;
     if (!check(TokenType::RParen)) {
         do {
             Token param = consume(TokenType::Identifier, "Diharapkan nama parameter");
@@ -234,7 +234,7 @@ std::unique_ptr<Stmt> Parser::parseFunctionStatement() {
             if (match(TokenType::Colon)) {
                 paramType = parseType();
             }
-            params.push_back({std::string(param.lexeme), std::move(paramType)});
+            params.push_back({std::string(param.lexeme), std::move(paramType), param.location.line, param.location.offset});
         } while (match(TokenType::Comma));
     }
     consume(TokenType::RParen, "Diharapkan ')' setelah parameter");
@@ -244,8 +244,8 @@ std::unique_ptr<Stmt> Parser::parseFunctionStatement() {
         returnType = parseType();
     }
     
-    Token body_start = currentToken;
-    std::vector<std::unique_ptr<Stmt>> body = parseBlock(); 
+    Token body_start;
+    std::vector<std::unique_ptr<Stmt>> body = parseBlock(&body_start); 
     consume(TokenType::K_End, "Diharapkan 'tutup' setelah isi fungsi");
     
     return makeNode<FunctionStmt>(keyword, std::string(name.lexeme), std::move(params), std::move(returnType), makeNode<BlockStmt>(body_start, std::move(body)));
@@ -375,10 +375,11 @@ std::unique_ptr<Stmt> Parser::parseVarDeclaration() {
         initializer = parseExpression();
     }
     match(TokenType::Semicolon);
-    return std::make_unique<VarDeclStmt>(std::string(name.lexeme), std::move(typeAnnotation), std::move(initializer), false);
+    return makeNode<VarDeclStmt>(name, std::string(name.lexeme), std::move(typeAnnotation), std::move(initializer), false);
 }
 
-std::vector<std::unique_ptr<Stmt>> Parser::parseBlock() {
+std::vector<std::unique_ptr<Stmt>> Parser::parseBlock(Token* firstToken) {
+    if (firstToken) *firstToken = currentToken;
     std::vector<std::unique_ptr<Stmt>> statements;
     while (!check(TokenType::K_End) && !check(TokenType::K_Else) && !check(TokenType::K_ElseIf) && !check(TokenType::K_Catch) && 
            !check(TokenType::EndOfFile)) {
@@ -581,10 +582,10 @@ std::unique_ptr<Expr> Parser::parseCall() {
     return expr;
 }
 
-std::unique_ptr<Expr> Parser::parseFunctionExpression() {
+std::unique_ptr<Expr> Parser::parseFunctionExpression(const Token& keyword) {
     consume(TokenType::LParen, "Expect '(' after 'fungsi'");
     
-    std::vector<std::pair<std::string, Type>> params;
+    std::vector<Parameter> params;
     if (!check(TokenType::RParen)) {
         do {
             Token param = consume(TokenType::Identifier, "Expect parameter name");
@@ -592,7 +593,7 @@ std::unique_ptr<Expr> Parser::parseFunctionExpression() {
             if (match(TokenType::Colon)) {
                 paramType = parseType();
             }
-            params.push_back({std::string(param.lexeme), std::move(paramType)});
+            params.push_back({std::string(param.lexeme), std::move(paramType), param.location.line, param.location.offset});
         } while (match(TokenType::Comma));
     }
     consume(TokenType::RParen, "Expect ')' after parameters");
@@ -602,10 +603,11 @@ std::unique_ptr<Expr> Parser::parseFunctionExpression() {
         returnType = parseType();
     }
     
-    std::vector<std::unique_ptr<Stmt>> body = parseBlock(); 
+    Token bodyToken;
+    std::vector<std::unique_ptr<Stmt>> body = parseBlock(&bodyToken); 
     consume(TokenType::K_End, "Expect 'tutup' after function body");
     
-    return std::make_unique<FunctionExpr>(std::move(params), std::move(returnType), std::make_unique<BlockStmt>(std::move(body)));
+    return makeNode<FunctionExpr>(keyword, std::move(params), std::move(returnType), makeNode<BlockStmt>(bodyToken, std::move(body)));
 }
 
 Type Parser::parseType() {
@@ -720,6 +722,7 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
     
     // Array Literal
     if (match(TokenType::LBracket)) {
+        Token open = previous();
         std::vector<std::unique_ptr<Expr>> elements;
         if (!check(TokenType::RBracket)) {
             do {
@@ -727,11 +730,12 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
             } while (match(TokenType::Comma));
         }
         consume(TokenType::RBracket, "Diharapkan ']' setelah elemen array");
-        return std::make_unique<ArrayExpr>(std::move(elements));
+        return makeNode<ArrayExpr>(open, std::move(elements));
     }
     
     // Object Literal { key: value, key2: value2 }
     if (match(TokenType::LBrace)) {
+        Token open = previous();
         std::vector<std::pair<std::string, std::unique_ptr<Expr>>> entries;
         if (!check(TokenType::RBrace)) {
             do {
@@ -742,11 +746,11 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
             } while (match(TokenType::Comma));
         }
         consume(TokenType::RBrace, "Diharapkan '}' setelah isi objek");
-        return std::make_unique<ObjectExpr>(std::move(entries));
+        return makeNode<ObjectExpr>(open, std::move(entries));
     }
     
     if (match(TokenType::K_Function)) {
-        return parseFunctionExpression();
+        return parseFunctionExpression(previous());
     }
     
     return nullptr;
