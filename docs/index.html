@@ -355,7 +355,7 @@
         }
 
         .cm-s-one-dark .cm-variable {
-            color: #e06c75;
+            color: #ffffff;
         }
 
         .cm-s-one-dark .cm-property {
@@ -389,6 +389,7 @@
             font-family: 'JetBrains Mono', 'Consolas', monospace !important;
             font-size: 14px;
             background: transparent !important;
+            color: white !important;
         }
 
         .CodeMirror-gutters {
@@ -478,7 +479,14 @@
 
     <div class="workspace">
         <aside class="sidebar">
-            <div class="sidebar-header">Examples</div>
+            <div class="sidebar-header">
+                <span>Examples</span>
+                <div style="display: flex; gap: 4px;">
+                    <button class="btn-sm" onclick="createNewExample()" title="New Example">+</button>
+                    <button class="btn-sm" id="btnDeleteExample" onclick="deleteCurrentExample()" title="Delete Example"
+                        style="display: none; color: var(--error); border-color: var(--error);">–</button>
+                </div>
+            </div>
             <div class="example-list" id="example-list"></div>
         </aside>
 
@@ -548,7 +556,7 @@
             }
         });
 
-        const examples = {
+        const defaultExamples = {
             fib: {
                 name: "Fibonacci",
                 code: `-- Fibonacci Recursion\nlokal os = impor("os")\n\nfungsi fib(n)\n  jika n < 2 maka kembali n tutup\n  kembali fib(n-1) + fib(n-2)\ntutup\n\nlokal t0 = os.waktuNano()\nlokal h = fib(20)\nlokal t1 = os.waktuNano()\n\nprintln("fib(20) =", h)\nprintln("Waktu:", (t1 - t0) / 1000000, "ms")`
@@ -563,36 +571,98 @@
             },
             newton: {
                 name: "Newton-Raphson",
-                code: `-- Newton-Raphson Method\n-- x_{n+1} = x_n - f(x_n)/f'(x_n)\n\nfungsi nr(xn: angka, f: fungsi, fd: fungsi): angka\n  kembali xn - f(xn)/fd(xn)\ntutup\n\n-- target: y = x^2 + 7x + 6\n-- derivative: dy/dx = 2x + 7\nlokal f = fungsi(x) kembali x*x + 7*x + 6 tutup\nlokal fd = fungsi(x) kembali 2*x + 7 tutup\n\nprintln("# Finding roots with xn = 1")\nlokal xn = 1.0\nprintln("i", "xn")\nuntuk i = 1 ke 6 lakukan\n  println(i, xn)\n  xn = nr(xn, f, fd)\ntutup\n\nprintln("\\nFinal Root: ", xn)`
+                code: `-- Newton-Raphson Method\n-- x_{n+1} = x_n - f(x_n)/f'(x_n)\n\ntipe fnAngka = fungsi(angka): angka\nfungsi nr(xn: angka, f: fnAngka, fd: fnAngka): angka\n  kembali xn - f(xn)/fd(xn)\ntutup\n\n-- target: y = x^2 + 7x + 6\n-- derivative: dy/dx = 2x + 7\nlokal f = fungsi(x) kembali x*x + 7*x + 6 tutup\nlokal fd = fungsi(x) kembali 2*x + 7 tutup\n\nprintln("# Finding roots with xn = 1")\nlokal xn = 1.0\nprintln("i", "xn")\nuntuk i = 1 ke 6 lakukan\n  println(i, xn)\n  xn = nr(xn, f, fd)\ntutup\n\nprintln("\\nFinal Root: ", xn)`
             },
             error_calc: {
                 name: "Numerical Error",
-                code: `-- Numerical Error Function example\n\nfungsi hitung_error(v_true: angka, v_approx: angka): angka\n  jika v_true == 0 maka kembali abs(v_approx) tutup\n  kembali abs((v_true - v_approx) / v_true) * 100\ntutup\n\nlokal t = 3.14159265\nlokal a = 3.14\n\nlokal err = hitung_error(t, a)\nprintln("Nilai Sebenarnya: ", t)\nprintln("Nilai Aproksimasi: ", a)\nprintln("Relative Error: ", err, "%")`
+                code: `-- Numerical Error Function example\nlokal math = impor("math")\n\nfungsi hitung_error(v_true: angka, v_approx: angka): angka\n  jika v_true == 0 maka kembali math.abs(v_approx) tutup\n  kembali math.abs((v_true - v_approx) / v_true) * 100\ntutup\n\nlokal t = math.pi\nlokal a = 3.14\n\nlokal err = hitung_error(t, a)\nprintln("Nilai Sebenarnya: ", t)\nprintln("Nilai Aproksimasi: ", a)\nprintln("Relative Error: ", err, "%")`
             },
             oop: {
                 name: "Class & Objects",
                 code: `kelas Mobil maka\n  fungsi inisiasi(merk, thn)\n    self.merk = merk\n    self.thn = thn\n  tutup\n\n  fungsi info()\n    println("Mobil: " + self.merk + " (" + self.thn + ")")\n  tutup\ntutup\n\nlokal m1 = Mobil("Toyota", 2022)\nm1.info()`
             },
-            mandelbrot: {
-                name: "Mandelbrot Animated",
-                code: `lokal os = impor("os")\n\nfungsi gambar(iterasi)\n  os.clearOutput()\n  println("Mandelbrot [Depth: " + iterasi + "]")\n  untuk y = 0 ke 20 lakukan\n    lokal cy = (y/20)*2 - 1\n    untuk x = 0 ke 60 lakukan\n      lokal cx = (x/60)*2.5 - 1.75\n      lokal zx = 0; lokal zy = 0; lokal i = 0\n      selama (zx*zx + zy*zy < 4) dan (i < iterasi) lakukan\n        lokal t = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = t\n        i = i + 1\n      tutup\n      jika i == iterasi maka print("#") sebaliknya print(" ") tutup\n    tutup\n    println("")\n  tutup\ntutup\n\nuntuk i = 1 ke 24 lakukan\n  gambar(i)\n  os.tunggu(30)\ntutup\nprintln("Done!")`
+            ascii_heart: {
+                name: "Heart ASCII Art",
+                code: `-- Heart ASCII Art\nlokal math = impor("math")\n\nuntuk y = 1.5 ke -1.5 langkah -0.1 lakukan\n  untuk x = -1.5 ke 1.5 langkah 0.05 lakukan\n    lokal a = x*x + y*y - 1\n    jika a*a*a - x*x*y*y*y <= 0 maka\n      print("*")\n    sebaliknya\n      print(" ")\n    tutup\n  tutup\n  println("")\ntutup\nprintln("\\nManifast ❤️ ASCII")`
             }
         };
 
+        const STORAGE_KEY = 'manifast_playground_custom_v1';
+        let customExamples = {};
+        let currentExampleKey = 'fib';
+
+        function loadCustom() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                if (data) customExamples = JSON.parse(data);
+            } catch (e) {
+                console.error("Failed to load custom examples", e);
+            }
+        }
+
+        function saveCustom() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(customExamples));
+        }
+
+        function createNewExample() {
+            const name = prompt("Enter name for new example:", "Custom Script");
+            if (!name) return;
+            const key = 'custom_' + Date.now();
+            customExamples[key] = {
+                name: name,
+                code: window.editor.getValue() || "-- Start coding here..."
+            };
+            saveCustom();
+            initSidebar();
+            selectExample(key);
+        }
+
+        function deleteCurrentExample() {
+            if (!currentExampleKey.startsWith('custom_')) return;
+            if (!confirm(`Delete example "${customExamples[currentExampleKey].name}"?`)) return;
+            delete customExamples[currentExampleKey];
+            saveCustom();
+            initSidebar();
+            selectExample('fib');
+        }
+
+        function selectExample(key) {
+            currentExampleKey = key;
+            const all = { ...defaultExamples, ...customExamples };
+            const ex = all[key];
+            if (!ex) return;
+
+            window.editor.setValue(ex.code);
+            document.querySelectorAll('.example-item').forEach(i => {
+                i.classList.toggle('active', i.dataset.key === key);
+            });
+
+            // Toggle delete button
+            document.getElementById('btnDeleteExample').style.display = key.startsWith('custom_') ? 'inline-block' : 'none';
+        }
+
         function initSidebar() {
             const list = document.getElementById('example-list');
-            Object.keys(examples).forEach(key => {
+            list.innerHTML = '';
+            const all = { ...defaultExamples, ...customExamples };
+
+            Object.keys(all).forEach(key => {
                 const item = document.createElement('div');
                 item.className = 'example-item';
                 item.dataset.key = key;
-                item.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg> ${examples[key].name}`;
-                item.onclick = () => {
-                    document.querySelectorAll('.example-item').forEach(i => i.classList.remove('active'));
-                    item.classList.add('active');
-                    window.editor.setValue(examples[key].code);
-                };
+                if (key === currentExampleKey) item.classList.add('active');
+
+                const isCustom = key.startsWith('custom_');
+                item.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                        <polyline points="13 2 13 9 20 9"/>
+                    </svg> 
+                    ${all[key].name}
+                    ${isCustom ? '<span style="font-size: 10px; opacity: 0.5; margin-left: auto;">User</span>' : ''}
+                `;
+                item.onclick = () => selectExample(key);
                 list.appendChild(item);
-                if (key === 'fib') item.click();
             });
         }
 
@@ -632,53 +702,10 @@
             const startTime = performance.now();
 
             try {
-                const rawOutput = window.Module.ccall('mf_run_script_tier', 'string', ['string', 'number'], [code, 0]);
+                window.Module.ccall('mf_run_script_tier', 'string', ['string', 'number'], [code, 0]);
 
                 const endTime = performance.now();
                 timingEl.innerText = `${((endTime - startTime) / 1000).toFixed(3)}s`;
-
-                // Async marker replay for os.tunggu support
-                let pos = 0;
-                while (pos < rawOutput.length && currentId === playbackId) {
-                    let clr = rawOutput.indexOf("[CLR]", pos);
-                    let dly = rawOutput.indexOf("[DLY:", pos);
-                    let img = rawOutput.indexOf("[IMG:", pos);
-
-                    let indices = [clr, dly, img].filter(i => i !== -1);
-                    let next = indices.length > 0 ? Math.min(...indices) : -1;
-
-                    if (next === -1) {
-                        const span = document.createElement('span');
-                        span.textContent = rawOutput.substring(pos);
-                        outputEl.appendChild(span);
-                        break;
-                    }
-
-                    if (next > pos) {
-                        const span = document.createElement('span');
-                        span.textContent = rawOutput.substring(pos, next);
-                        outputEl.appendChild(span);
-                    }
-
-                    if (next === clr) {
-                        outputEl.innerHTML = '';
-                        pos = next + 5;
-                    } else if (next === dly) {
-                        let end = rawOutput.indexOf(']', next);
-                        let ms = parseInt(rawOutput.substring(next + 5, end));
-                        await new Promise(r => setTimeout(r, ms));
-                        pos = end + 1;
-                    } else if (next === img) {
-                        let end = rawOutput.indexOf(']', next);
-                        let data = rawOutput.substring(next + 5, end);
-                        const imgEl = document.createElement('img');
-                        imgEl.src = data;
-                        outputEl.appendChild(imgEl);
-                        pos = end + 1;
-                    }
-                    outputEl.scrollTop = outputEl.scrollHeight;
-                }
-
             } catch (err) {
                 console.error("[Manifast] Execution error:", err);
                 const span = document.createElement('span');
@@ -739,7 +766,9 @@
                 console.warn("[Manifast] addFunction not available, using return-string mode", e);
             }
 
+            loadCustom();
             initSidebar();
+            selectExample('fib');
         }).catch(function (err) {
             console.error("[Manifast] Failed to initialize WASM:", err);
             document.querySelector('#loader p').textContent = 'Failed to load WASM: ' + err.message;

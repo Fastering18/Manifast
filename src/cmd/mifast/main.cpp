@@ -148,7 +148,7 @@ bool runTestInProcess(const std::string& source, std::string& outputLog, bool us
 
 
 void printUsage() {
-    fmt::print(fmt::emphasis::bold, "Manifast Management Tool (mifast) v0.0.12\n");
+    fmt::print(fmt::emphasis::bold, "Manifast Management Tool (mifast) v0.0.13\n");
     fmt::print("Usage: mifast <command> [args]\n\n");
     fmt::print("Commands:\n");
     fmt::print("  run <file> [--vm] [--verbose] [--stack-size MB]  Compile and run a Manifast file\n");
