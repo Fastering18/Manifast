@@ -71,6 +71,10 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 add_subdirectory(src/lib)
 add_subdirectory(src/cmd)
 
+# --- Tests ---
+enable_testing()
+add_subdirectory(tests/core/plot)
+
 
 # --- CPack Configuration ---
 set(CPACK_PACKAGE_NAME "manifast")
