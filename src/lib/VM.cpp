@@ -652,8 +652,10 @@ void VM::run(int entryFrameDepth) {
                     return; 
                 }
                 
+                // Sync to restore caller's frame state (frame, base, stack_data).
+                // Necessary because the `frames` or `stack` vectors could have reallocated
+                // during callee execution (e.g., deep recursion or native module execution).
                 sync();
-                // If returning from internal nativeImpor frame, stack_data might be reset? No sync fixes it.
                 if (retReg >= 0) {
                     LR(retReg) = result;
                 }
