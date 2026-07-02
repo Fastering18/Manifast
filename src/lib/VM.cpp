@@ -58,8 +58,8 @@ static std::string anyToString(const Any& a) {
     if (a.type == 1 && a.ptr) return (char*)a.ptr;
     if (a.type == 0) {
         char buf[64];
-        if (a.number == (long long)a.number) sprintf(buf, "%lld", (long long)a.number);
-        else sprintf(buf, "%g", a.number);
+        if (a.number == (long long)a.number) snprintf(buf, sizeof(buf), "%lld", (long long)a.number);
+        else snprintf(buf, sizeof(buf), "%g", a.number);
         return buf;
     }
     if (a.type == 2) return a.number ? "true" : "false";
@@ -632,7 +632,7 @@ void VM::run(int entryFrameDepth) {
                     }
                 } else {
                      char buf[128];
-                     sprintf(buf, "Panggilan ke non-fungsi (tipe %d)", callee.type);
+                     snprintf(buf, sizeof(buf), "Panggilan ke non-fungsi (tipe %d)", callee.type);
                      RUNTIME_ERROR(buf);
                 }
                 break;

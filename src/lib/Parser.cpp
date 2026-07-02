@@ -82,7 +82,7 @@ void Parser::error(Token token, const std::string& message) {
     for (int j = 0; j < (token.location.length > 0 ? token.location.length : 1); j++) caret += '^';
     
     char finalMsg[512];
-    sprintf(finalMsg, "-> %s, ditemukan %s", message.c_str(), found.c_str());
+    snprintf(finalMsg, sizeof(finalMsg), "-> %s, ditemukan %s", message.c_str(), found.c_str());
 
     if (m_errorCallback) {
         std::string full;
