@@ -213,12 +213,16 @@ void PlotBackend::render(ChartType type) {
     uint8_t br = (config_.bg_color >> 24) & 0xFF;
     uint8_t bg = (config_.bg_color >> 16) & 0xFF;
     uint8_t bb = (config_.bg_color >> 8) & 0xFF;
-    for (int i = 0; i < w * h; i++) {
-        framebuffer_[i*4] = br;
-        framebuffer_[i*4+1] = bg;
-        framebuffer_[i*4+2] = bb;
-        framebuffer_[i*4+3] = 0xFF;
-    }
+
+    uint32_t bg_pixel;
+    uint8_t* p = reinterpret_cast<uint8_t*>(&bg_pixel);
+    p[0] = br;
+    p[1] = bg;
+    p[2] = bb;
+    p[3] = 0xFF;
+
+    uint32_t* ptr = reinterpret_cast<uint32_t*>(framebuffer_.data());
+    std::fill(ptr, ptr + (w * h), bg_pixel);
 
     double xmin, xmax, ymin, ymax;
     computeAxes(xmin, xmax, ymin, ymax);
