@@ -1,0 +1,4 @@
+add_executable(test_plot_backend test_plot_backend.cpp)
+target_link_libraries(test_plot_backend PRIVATE manifast_core)
+target_include_directories(test_plot_backend PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_test(NAME PlotBackendEdgeCases COMMAND test_plot_backend)
