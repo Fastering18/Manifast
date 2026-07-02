@@ -12,3 +12,23 @@ lokal b = a.pop()
 println("b setelah pop", b)
 assert(b == 4, "pop() harus 4")
 assert(len(a) == 3, "len(a) harus 3 kembali")
+-- Test manifast_array_set
+lokal set_arr = [10, 20]
+set_arr[1] = 100
+assert(set_arr[1] == 100, "set_arr[1] should be updated to 100")
+assert(len(set_arr) == 2, "len(set_arr) should still be 2")
+
+-- Test out-of-bounds auto-expansion (within limit)
+set_arr[5] = 500
+assert(len(set_arr) == 5, "len(set_arr) should expand to 5")
+assert(set_arr[5] == 500, "set_arr[5] should be 500")
+assert(set_arr[3] == nil, "set_arr[3] should be nil (auto-initialized)")
+assert(set_arr[4] == nil, "set_arr[4] should be nil (auto-initialized)")
+
+-- Test invalid index 0
+set_arr[0] = 999
+assert(len(set_arr) == 5, "len(set_arr) should remain 5 after invalid set")
+
+-- Test out-of-bounds index >= 1000000
+set_arr[1000001] = 999
+assert(len(set_arr) == 5, "len(set_arr) should remain 5 after out-of-bounds set")
