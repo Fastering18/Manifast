@@ -621,7 +621,7 @@ Type Parser::parseType() {
         else if (name == "i32") type = Type(TypeKind::Int32);
         else if (name == "i64") type = Type(TypeKind::Int64);
         else if (name == "f32") type = Type(TypeKind::Float32);
-        else if (name == "f64") type = Type(TypeKind::Float64);
+        else if (name == "f64" || name == "angka" || name == "bilangan") type = Type(TypeKind::Float64);
         else if (name == "char") type = Type(TypeKind::Char);
         else if (name == "boolean") type = Type(TypeKind::Bool);
         else if (name == "string") type = Type(TypeKind::String);
