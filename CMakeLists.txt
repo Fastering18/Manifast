@@ -71,6 +71,11 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 add_subdirectory(src/lib)
 add_subdirectory(src/cmd)
 
+# --- Tests ---
+add_executable(manifast_cpp_tests tests/cpp/RuntimeTest.cpp)
+target_include_directories(manifast_cpp_tests PRIVATE include)
+target_link_libraries(manifast_cpp_tests PRIVATE manifast_core)
+
 
 # --- CPack Configuration ---
 set(CPACK_PACKAGE_NAME "manifast")
