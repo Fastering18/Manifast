@@ -107,3 +107,9 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/Fastering18/Manifast")
 
 include(CPack)
+
+# --- Tests ---
+enable_testing()
+add_executable(test_manifast_object_set_raw tests/cpp/test_manifast_object_set_raw.cpp)
+target_link_libraries(test_manifast_object_set_raw PRIVATE manifast_core fmt::fmt)
+add_test(NAME test_manifast_object_set_raw COMMAND test_manifast_object_set_raw)
