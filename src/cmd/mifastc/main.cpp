@@ -14,6 +14,16 @@
 
 namespace fs = std::filesystem;
 
+bool isSafePath(const std::string& path) {
+    for (char c : path) {
+        bool isAlphaNum = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+        if (!(isAlphaNum || c == '.' || c == '/' || c == '\\' || c == '_' || c == '-' || c == ' ' || c == ':')) {
+            return false;
+        }
+    }
+    return true;
+}
+
 struct TestResult {
     std::string path;
     bool success;
@@ -180,6 +190,11 @@ void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
         fs::path out(outputPath);
         std::string ext = out.extension().string();
         
+        if (!isSafePath(outputPath)) {
+            std::cerr << "Error: Invalid characters in output path.\n";
+            return;
+        }
+
         if (ext == ".ll") {
             codegen.emitIR(outputPath);
             std::cout << "Emitted IR: " << outputPath << "\n";
@@ -202,7 +217,7 @@ void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
             // Invoke GCC for linking (fallback/legacy)
             // Assumes libmanifast_core.a is in library path or current directory
             // and fmt is available.
-            std::string cmd = "g++ " + objPath + " -o " + actualOut + " -L. -lmanifast_core -lfmt -static";
+            std::string cmd = "g++ \"" + objPath + "\" -o \"" + actualOut + "\" -L. -lmanifast_core -lfmt -static";
             std::cout << "Linking executable (External g++): " << cmd << "\n";
             int ret = std::system(cmd.c_str());
             

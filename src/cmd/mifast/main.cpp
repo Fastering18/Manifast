@@ -39,6 +39,16 @@
 
 namespace fs = std::filesystem;
 
+bool isSafePath(const std::string& path) {
+    for (char c : path) {
+        bool isAlphaNum = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+        if (!(isAlphaNum || c == '.' || c == '/' || c == '\\' || c == '_' || c == '-' || c == ' ' || c == ':')) {
+            return false;
+        }
+    }
+    return true;
+}
+
 struct TestResult {
     std::string name;
     double durationMs;
@@ -338,6 +348,11 @@ int main(int argc, char* argv[]) {
             fs::path out(outputPath);
             std::string ext = out.extension().string();
             
+            if (!isSafePath(outputPath)) {
+                fmt::print(fg(fmt::color::red), "Error: Invalid characters in output path.\n");
+                return 1;
+            }
+
             if (ext == ".ll") {
                 codegen.emitIR(outputPath);
                 fmt::print("Emitted IR: {}\n", outputPath);
@@ -377,7 +392,7 @@ int main(int argc, char* argv[]) {
                 }
 #endif
                 
-                std::string cmdStr = gpp + " " + objPath + " -o " + actualOut + " -L\"" + libDir + "\"";
+                std::string cmdStr = gpp + " \"" + objPath + "\" -o \"" + actualOut + "\" -L\"" + libDir + "\"";
 #ifdef _WIN32
                 if (!msysLibDir.empty()) cmdStr += " -L\"" + msysLibDir + "\"";
 #endif
