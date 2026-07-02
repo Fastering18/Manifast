@@ -217,11 +217,17 @@ void runTestRunner(bool useVM) {
         if (!fstream) continue;
         std::string source((std::istreambuf_iterator<char>(fstream)), std::istreambuf_iterator<char>());
 
+        bool expectError = (source.find("-- EXPECT_ERROR") != std::string::npos);
+
         auto start = std::chrono::high_resolution_clock::now();
         
         std::string logOutput;
         bool success = runTestInProcess(source, logOutput, useVM, sharedCompiler.get(), sharedVM.get());
         
+        if (expectError) {
+            success = !success;
+        }
+
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = end - start;
 

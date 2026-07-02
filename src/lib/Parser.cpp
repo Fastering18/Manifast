@@ -74,15 +74,16 @@ void Parser::error(Token token, const std::string& message) {
 
     // Caret
     std::string caret = "  ";
-    int col = token.location.offset - start;
+    int col = std::max(0, token.location.offset - start);
+    caret.reserve(2 + col + (token.location.length > 0 ? token.location.length : 1));
     for (int j = 0; j < col; j++) {
         if (lineStr[j] == '\t') caret += '\t';
         else caret += ' ';
     }
-    for (int j = 0; j < (token.location.length > 0 ? token.location.length : 1); j++) caret += '^';
+    caret.append((token.location.length > 0 ? token.location.length : 1), '^');
     
     char finalMsg[512];
-    sprintf(finalMsg, "-> %s, ditemukan %s", message.c_str(), found.c_str());
+    snprintf(finalMsg, sizeof(finalMsg), "-> %s, ditemukan %s", message.c_str(), found.c_str());
 
     if (m_errorCallback) {
         std::string full;
