@@ -417,7 +417,14 @@ void VM::run(int entryFrameDepth) {
             case OpCode::LOADNIL: {
                 int a = GET_A(i);
                 int b = GET_B(i);
-                for (int j = 0; j <= b; j++) LR(a + j) = {3, 0.0, nullptr};
+                if (b == 0) {
+                    LR(a) = {3, 0.0, nullptr};
+                } else if (b == 1) {
+                    LR(a) = {3, 0.0, nullptr};
+                    LR(a + 1) = {3, 0.0, nullptr};
+                } else {
+                    std::fill_n(&LR(a), b + 1, Any{3, 0.0, nullptr});
+                }
                 break;
             }
             case OpCode::ADD: 
