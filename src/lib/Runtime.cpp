@@ -106,20 +106,17 @@ MF_API void manifast_set_clear_output_callback(ManifastClearOutputCallback cb) {
 
 MF_API void* mf_malloc(size_t size) {
     if (size > 256 * 1024 * 1024) { // Hard cap 256MB
-        fprintf(stderr, "Error: Insane allocation size requested: %zu bytes\n", size);
-        exit(1);
+        MANIFAST_THROW("Error: Insane allocation size requested: " + std::to_string(size) + " bytes");
     }
     if (size > 10 * 1024 * 1024) {
         fprintf(stderr, "Warning: Large allocation: %zu bytes\n", size);
     }
     if (g_allocated_memory + size > MANIFAST_MEM_LIMIT) {
-        fprintf(stderr, "Error: Manifast memory limit exceeded (%zu bytes requested, %zu allocated)\n", size, g_allocated_memory);
-        exit(1);
+        MANIFAST_THROW("Error: Manifast memory limit exceeded (" + std::to_string(size) + " bytes requested, " + std::to_string(g_allocated_memory) + " allocated)");
     }
     void* ptr = malloc(size);
     if (!ptr) {
-        fprintf(stderr, "Error: Out of memory (malloc failed for %zu bytes)\n", size);
-        exit(1);
+        MANIFAST_THROW("Error: Out of memory (malloc failed for " + std::to_string(size) + " bytes)");
     }
     g_allocated_memory += size;
     return ptr;
@@ -134,13 +131,11 @@ MF_API char* mf_strdup(const char* s) {
     size++; // include null terminator
 
     if (g_allocated_memory + size > MANIFAST_MEM_LIMIT) {
-        fprintf(stderr, "Error: Manifast memory limit exceeded (strdup: %zu bytes)\n", size);
-        exit(1);
+        MANIFAST_THROW("Error: Manifast memory limit exceeded (strdup: " + std::to_string(size) + " bytes)");
     }
     char* ptr = (char*)malloc(size);
     if (!ptr) {
-        fprintf(stderr, "Error: Out of memory (strdup failed for %zu bytes)\n", size);
-        exit(1);
+        MANIFAST_THROW("Error: Out of memory (strdup failed for " + std::to_string(size) + " bytes)");
     }
     memcpy(ptr, s, size);
     ptr[size-1] = '\0'; // Ensure terminator
