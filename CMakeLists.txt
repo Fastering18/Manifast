@@ -76,6 +76,13 @@ enable_testing()
 add_subdirectory(tests/core/plot)
 
 
+# --- Testing ---
+enable_testing()
+find_package(GTest REQUIRED)
+add_executable(manifast_cpp_tests tests/cpp/vm_test.cpp)
+target_link_libraries(manifast_cpp_tests PRIVATE manifast_core GTest::gtest_main)
+add_test(NAME VmTests COMMAND manifast_cpp_tests)
+
 # --- CPack Configuration ---
 set(CPACK_PACKAGE_NAME "manifast")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
