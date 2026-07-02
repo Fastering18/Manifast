@@ -15,6 +15,7 @@
 #include "manifast/Parser.h"
 #include "manifast/VM/Compiler.h"
 #include "manifast/VM/VM.h"
+#include "manifast/Utils/Path.h"
 #ifdef MANIFAST_HAS_LLVM
 #include "manifast/CodeGen.h" 
 #endif
@@ -38,16 +39,6 @@
 #endif
 
 namespace fs = std::filesystem;
-
-bool isSafePath(const std::string& path) {
-    for (char c : path) {
-        bool isAlphaNum = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
-        if (!(isAlphaNum || c == '.' || c == '/' || c == '\\' || c == '_' || c == '-' || c == ' ' || c == ':')) {
-            return false;
-        }
-    }
-    return true;
-}
 
 struct TestResult {
     std::string name;
@@ -348,7 +339,7 @@ int main(int argc, char* argv[]) {
             fs::path out(outputPath);
             std::string ext = out.extension().string();
             
-            if (!isSafePath(outputPath)) {
+            if (!manifast::utils::isSafePath(outputPath)) {
                 fmt::print(fg(fmt::color::red), "Error: Invalid characters in output path.\n");
                 return 1;
             }
@@ -369,6 +360,12 @@ int main(int argc, char* argv[]) {
                 codegen.addMainEntry();
                 
                 std::string objPath = actualOut + ".obj";
+
+                if (!manifast::utils::isSafePath(objPath)) {
+                    fmt::print(fg(fmt::color::red), "Error: Invalid characters in obj path.\n");
+                    return 1;
+                }
+
                 codegen.emitObject(objPath);
                 
                 fs::path exePath = fs::weakly_canonical(fs::path(argv[0]));

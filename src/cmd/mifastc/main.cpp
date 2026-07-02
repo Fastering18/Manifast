@@ -11,18 +11,9 @@
 #include "manifast/Parser.h"
 #include "manifast/AST.h"
 #include "manifast/CodeGen.h"
+#include "manifast/Utils/Path.h"
 
 namespace fs = std::filesystem;
-
-bool isSafePath(const std::string& path) {
-    for (char c : path) {
-        bool isAlphaNum = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
-        if (!(isAlphaNum || c == '.' || c == '/' || c == '\\' || c == '_' || c == '-' || c == ' ' || c == ':')) {
-            return false;
-        }
-    }
-    return true;
-}
 
 struct TestResult {
     std::string path;
@@ -190,7 +181,7 @@ void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
         fs::path out(outputPath);
         std::string ext = out.extension().string();
         
-        if (!isSafePath(outputPath)) {
+        if (!manifast::utils::isSafePath(outputPath)) {
             std::cerr << "Error: Invalid characters in output path.\n";
             return;
         }
@@ -212,6 +203,10 @@ void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
             codegen.addMainEntry(); // Add main() only for executable
             
             std::string objPath = actualOut + ".obj";
+            if (!manifast::utils::isSafePath(objPath)) {
+                std::cerr << "Error: Invalid characters in obj path.\n";
+                return;
+            }
             codegen.emitObject(objPath);
             
             // Invoke GCC for linking (fallback/legacy)
