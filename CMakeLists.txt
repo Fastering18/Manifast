@@ -107,3 +107,6 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/Fastering18/Manifast")
 
 include(CPack)
+
+enable_testing()
+add_subdirectory(tests/cpp)

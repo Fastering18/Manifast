@@ -5,6 +5,10 @@
 #include <string>
 #include <vector>
 #include "manifast/Runtime.h"
+#ifdef MANIFAST_HAS_LLVM
+#include "manifast/CodeGen.h"
+#endif
+#include <cstring>
 
 extern "C" {
 
@@ -171,6 +175,7 @@ void wasm_assert(manifast::vm::VM* vm, ::Any* args, int nargs) {
     }
 }
 
+#if defined(__EMSCRIPTEN__)
 // Overrides for CodeGen/JIT
 void manifast_print_any(::Any* val) {
     wasm_print_any(val);
@@ -196,6 +201,7 @@ void manifast_assert(::Any* cond, ::Any* msg) {
         g_wasm_output += "\n[ASSERT GAGAL] " + errMsg + "\n";
     }
 }
+#endif
 
 void wasm_len(manifast::vm::VM* vm, ::Any* args, int nargs) {
     if (nargs < 1) {
@@ -312,6 +318,7 @@ const char* mf_run_script_tier(const char* source, int tier) {
     vm.defineNative("plot_save", wasm_plot_save);
     
 #ifndef __EMSCRIPTEN__
+#ifdef MANIFAST_HAS_LLVM
     if (tier > 0) {
         manifast::CodeGen codegen;
         codegen.compile(statements);
@@ -320,6 +327,7 @@ const char* mf_run_script_tier(const char* source, int tier) {
             g_wasm_output = "JIT/AOT Execution Failed";
         }
     } else {
+#endif
 #endif
         manifast::vm::Chunk chunk;
         manifast::vm::Compiler compiler;
@@ -331,12 +339,17 @@ const char* mf_run_script_tier(const char* source, int tier) {
             } else {
                 g_wasm_output += "\n[ERROR] Compilation Failed\n";
             }
-    } catch (const std::exception& e) {
-        g_wasm_output += "\n[ERROR RUNTIME] ";
-        g_wasm_output += e.what();
-        g_wasm_output += "\n";
-        if (chunk.code.size() > 0) chunk.free();
+        } catch (const std::exception& e) {
+            g_wasm_output += "\n[ERROR RUNTIME] ";
+            g_wasm_output += e.what();
+            g_wasm_output += "\n";
+            if (chunk.code.size() > 0) chunk.free();
+        }
+#ifndef __EMSCRIPTEN__
+#ifdef MANIFAST_HAS_LLVM
     }
+#endif
+#endif
     
     // If event callback is set, emit events by parsing markers
     if (g_event_callback) {
