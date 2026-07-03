@@ -72,6 +72,10 @@ add_subdirectory(src/lib)
 add_subdirectory(src/cmd)
 
 # --- Tests ---
+enable_testing()
+add_subdirectory(tests/core/plot)
+
+# --- Testing ---
 include(FetchContent)
 FetchContent_Declare(
   googletest
@@ -82,19 +86,12 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
-add_executable(manifast_tests
-  tests/lib/RuntimeTest.cpp
-)
-target_link_libraries(manifast_tests PRIVATE
-  manifast_core
-  gtest_main
-  fmt::fmt
-)
+add_executable(manifast_cpp_tests tests/cpp/vm_test.cpp tests/lib/RuntimeTest.cpp)
+target_link_libraries(manifast_cpp_tests PRIVATE manifast_core GTest::gtest_main fmt::fmt)
 if (MANIFAST_ENABLE_LLVM)
-  target_link_libraries(manifast_tests PRIVATE manifast_jit)
+  target_link_libraries(manifast_cpp_tests PRIVATE manifast_jit)
 endif()
-add_test(NAME ManifastRuntimeTests COMMAND manifast_tests)
-
+add_test(NAME VmTests COMMAND manifast_cpp_tests)
 
 # --- CPack Configuration ---
 set(CPACK_PACKAGE_NAME "manifast")
@@ -131,3 +128,9 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/Fastering18/Manifast")
 
 include(CPack)
+
+# --- Tests ---
+enable_testing()
+add_executable(test_manifast_object_set_raw tests/cpp/test_manifast_object_set_raw.cpp)
+target_link_libraries(test_manifast_object_set_raw PRIVATE manifast_core fmt::fmt)
+add_test(NAME test_manifast_object_set_raw COMMAND test_manifast_object_set_raw)

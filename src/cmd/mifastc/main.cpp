@@ -11,6 +11,7 @@
 #include "manifast/Parser.h"
 #include "manifast/AST.h"
 #include "manifast/CodeGen.h"
+#include "manifast/Utils/Path.h"
 
 namespace fs = std::filesystem;
 
@@ -180,6 +181,11 @@ void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
         fs::path out(outputPath);
         std::string ext = out.extension().string();
         
+        if (!manifast::utils::isSafePath(outputPath)) {
+            std::cerr << "Error: Invalid characters in output path.\n";
+            return;
+        }
+
         if (ext == ".ll") {
             codegen.emitIR(outputPath);
             std::cout << "Emitted IR: " << outputPath << "\n";
@@ -197,12 +203,16 @@ void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
             codegen.addMainEntry(); // Add main() only for executable
             
             std::string objPath = actualOut + ".obj";
+            if (!manifast::utils::isSafePath(objPath)) {
+                std::cerr << "Error: Invalid characters in obj path.\n";
+                return;
+            }
             codegen.emitObject(objPath);
             
             // Invoke GCC for linking (fallback/legacy)
             // Assumes libmanifast_core.a is in library path or current directory
             // and fmt is available.
-            std::string cmd = "g++ " + objPath + " -o " + actualOut + " -L. -lmanifast_core -lfmt -static";
+            std::string cmd = "g++ \"" + objPath + "\" -o \"" + actualOut + "\" -L. -lmanifast_core -lfmt -static";
             std::cout << "Linking executable (External g++): " << cmd << "\n";
             int ret = std::system(cmd.c_str());
             

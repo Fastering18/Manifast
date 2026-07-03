@@ -1,0 +1,25 @@
+--- src/lib/VM.cpp
++++ src/lib/VM.cpp
+@@ -179,15 +179,16 @@
+ }
+
+ static void nativeImpor(VM* vm, Any* args, int nargs) {
+-    args[-1] = {3, 0.0, nullptr}; // Default to nil
+-    if (nargs < 1 || args[0].type != 1) return;
++    args[-1] = {ANY_NIL, 0.0, nullptr}; // Default to nil
++    if (nargs < 1 || args[0].type != ANY_STRING) return;
+     std::string path = (char*)args[0].ptr;
+
+     // Trim any trailing whitespace (including \r from Windows files)
+     while(!path.empty() && isspace(path.back())) path.pop_back();
+
+     Any* res = manifast_impor(path.c_str());
+-    if (res && res->type != 3) {
++    if (res && res->type != ANY_NIL) {
+         args[-1] = *res;
++        free(res);
+         return;
+     }
++    if (res) free(res);
+
+     std::ifstream file(path);
