@@ -94,8 +94,8 @@ void wasm_print_any(::Any* val, int depth = 0) {
 
     if (val->type == 0) {
         char buf[64];
-        if (val->number == (long long)val->number) sprintf(buf, "%lld", (long long)val->number);
-        else sprintf(buf, "%g", val->number);
+        if (val->number == (long long)val->number) snprintf(buf, sizeof(buf), "%lld", (long long)val->number);
+        else snprintf(buf, sizeof(buf), "%g", val->number);
         g_wasm_output += buf;
     }
     else if (val->type == 1 && val->ptr) g_wasm_output += (char*)val->ptr;
@@ -202,7 +202,11 @@ void wasm_len(manifast::vm::VM* vm, ::Any* args, int nargs) {
         args[-1] = {ANY_NIL, 0, nullptr};
         return;
     }
-    args[-1] = {ANY_NUMBER, (double)manifast_array_len(&args[0]), nullptr};
+    if (args[0].type == ANY_STRING && args[0].ptr != nullptr) {
+        args[-1] = {ANY_NUMBER, (double)strlen((char*)args[0].ptr), nullptr};
+    } else {
+        args[-1] = {ANY_NUMBER, (double)manifast_array_len(&args[0]), nullptr};
+    }
 }
 
 void wasm_plot_for(manifast::vm::VM* vm, ::Any* args, int nargs) {
