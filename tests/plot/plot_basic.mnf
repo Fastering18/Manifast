@@ -16,6 +16,10 @@ plot.line(x, y, config)
 lokal saved = plot.save("test_plot_output.bmp")
 assert(saved, "plot.save harusnya berhasil")
 
+-- Test invalid path (simulated failure for test purposes)
+lokal saved_invalid = plot.save("/root/bad.bmp")
+assert(saved_invalid == salah, "plot.save ke /root/bad.bmp harusnya gagal")
+
 -- Reset and test scatter
 plot.reset()
 lokal sx = [1, 2, 3, 4, 5]

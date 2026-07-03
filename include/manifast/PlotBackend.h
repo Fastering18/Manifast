@@ -50,8 +50,11 @@ private:
     std::vector<uint8_t> framebuffer_;
     ChartType current_type_ = ChartType::Line;
 
-    void render(ChartType type);
+public:
     void drawLine(int x0, int y0, int x1, int y1, uint32_t color);
+
+private:
+    void render(ChartType type);
     void drawRect(int x, int y, int w, int h, uint32_t color);
     void drawCircle(int cx, int cy, int r, uint32_t color);
     void setPixel(int x, int y, uint32_t color);
