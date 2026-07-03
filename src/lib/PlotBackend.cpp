@@ -9,10 +9,10 @@
 // For production, consider stb_image_write.h
 namespace {
 
-static void writePNG(const char* path, const uint8_t* data, int w, int h) {
+static bool writePNG(const char* path, const uint8_t* data, int w, int h) {
     // Write raw BMP instead (simpler, no zlib dependency)
     FILE* f = fopen(path, "wb");
-    if (!f) return;
+    if (!f) return false;
 
     int row_stride = w * 3;
     int padding = (4 - (row_stride % 4)) % 4;
@@ -43,6 +43,7 @@ static void writePNG(const char* path, const uint8_t* data, int w, int h) {
         if (padding > 0) fwrite(pad_bytes, 1, padding, f);
     }
     fclose(f);
+    return true;
 }
 
 // Minimal 5x7 Font (Subset: 0-9, A-Z, a-z, space, - , . , : )
@@ -212,12 +213,16 @@ void PlotBackend::render(ChartType type) {
     uint8_t br = (config_.bg_color >> 24) & 0xFF;
     uint8_t bg = (config_.bg_color >> 16) & 0xFF;
     uint8_t bb = (config_.bg_color >> 8) & 0xFF;
-    for (int i = 0; i < w * h; i++) {
-        framebuffer_[i*4] = br;
-        framebuffer_[i*4+1] = bg;
-        framebuffer_[i*4+2] = bb;
-        framebuffer_[i*4+3] = 0xFF;
-    }
+
+    uint32_t bg_pixel;
+    uint8_t* p = reinterpret_cast<uint8_t*>(&bg_pixel);
+    p[0] = br;
+    p[1] = bg;
+    p[2] = bb;
+    p[3] = 0xFF;
+
+    uint32_t* ptr = reinterpret_cast<uint32_t*>(framebuffer_.data());
+    std::fill(ptr, ptr + (w * h), bg_pixel);
 
     double xmin, xmax, ymin, ymax;
     computeAxes(xmin, xmax, ymin, ymax);
@@ -308,8 +313,7 @@ void PlotBackend::renderChart(ChartType type) {
 
 bool PlotBackend::saveToFile(const std::string& path, ChartType type) {
     render(type);
-    writePNG(path.c_str(), framebuffer_.data(), config_.width, config_.height);
-    return true;
+    return writePNG(path.c_str(), framebuffer_.data(), config_.width, config_.height);
 }
 
 bool PlotBackend::showWindow(ChartType type) {
