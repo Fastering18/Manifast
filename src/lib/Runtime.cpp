@@ -59,9 +59,13 @@ static void plot_for_impl(Any* y_arr, Any* x_arr, Any* config) {
          ManifastArray* ya = (ManifastArray*)y_arr->ptr;
          if (x_arr && x_arr->type == ANY_ARRAY) {
              ManifastArray* xa = (ManifastArray*)x_arr->ptr;
+             s.x.reserve(xa->size);
+             s.y.reserve(ya->size);
              for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
              for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
          } else {
+             s.x.reserve(ya->size);
+             s.y.reserve(ya->size);
              for (uint32_t i = 0; i < ya->size; i++) {
                  s.x.push_back((double)(i + 1));
                  s.y.push_back(ya->elements[i].number);
@@ -701,11 +705,15 @@ MF_API Any* manifast_impor(const char* name) {
                 if (actual_nargs >= 2 && args[offset].type == ANY_ARRAY && args[offset+1].type == ANY_ARRAY) {
                     ManifastArray* xa = (ManifastArray*)args[offset].ptr;
                     ManifastArray* ya = (ManifastArray*)args[offset+1].ptr;
+                    s.x.reserve(xa->size);
+                    s.y.reserve(ya->size);
                     for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
                     for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
                     if (actual_nargs >= 3) g_plot.setConfig(extract_config_local(args, offset, nargs));
                 } else if (args[offset].type == ANY_ARRAY) {
                     ManifastArray* ya = (ManifastArray*)args[offset].ptr;
+                    s.x.reserve(ya->size);
+                    s.y.reserve(ya->size);
                     for (uint32_t i = 0; i < ya->size; i++) {
                         s.x.push_back((double)(i + 1));
                         s.y.push_back(ya->elements[i].number);
@@ -725,11 +733,15 @@ MF_API Any* manifast_impor(const char* name) {
                 if (actual_nargs >= 2 && args[offset].type == ANY_ARRAY && args[offset+1].type == ANY_ARRAY) {
                     ManifastArray* xa = (ManifastArray*)args[offset].ptr;
                     ManifastArray* ya = (ManifastArray*)args[offset+1].ptr;
+                    s.x.reserve(xa->size);
+                    s.y.reserve(ya->size);
                     for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
                     for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
                     if (actual_nargs >= 3) g_plot.setConfig(extract_config_local(args, offset, nargs));
                 } else if (args[offset].type == ANY_ARRAY) {
                     ManifastArray* ya = (ManifastArray*)args[offset].ptr;
+                    s.x.reserve(ya->size);
+                    s.y.reserve(ya->size);
                     for (uint32_t i = 0; i < ya->size; i++) {
                         s.x.push_back((double)(i + 1));
                         s.y.push_back(ya->elements[i].number);
@@ -747,6 +759,8 @@ MF_API Any* manifast_impor(const char* name) {
             if (actual_nargs >= 1) {
                 manifast::plot::Series s;
                 ManifastArray* ya = (ManifastArray*)args[offset].ptr;
+                s.x.reserve(ya->size);
+                s.y.reserve(ya->size);
                 for (uint32_t i = 0; i < ya->size; i++) {
                     s.x.push_back((double)(i + 1));
                     s.y.push_back(ya->elements[i].number);
