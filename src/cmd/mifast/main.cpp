@@ -15,6 +15,7 @@
 #include "manifast/Parser.h"
 #include "manifast/VM/Compiler.h"
 #include "manifast/VM/VM.h"
+#include "manifast/Utils/Path.h"
 #ifdef MANIFAST_HAS_LLVM
 #include "manifast/CodeGen.h" 
 #endif
@@ -217,11 +218,17 @@ void runTestRunner(bool useVM) {
         if (!fstream) continue;
         std::string source((std::istreambuf_iterator<char>(fstream)), std::istreambuf_iterator<char>());
 
+        bool expectError = (source.find("-- EXPECT_ERROR") != std::string::npos);
+
         auto start = std::chrono::high_resolution_clock::now();
         
         std::string logOutput;
         bool success = runTestInProcess(source, logOutput, useVM, sharedCompiler.get(), sharedVM.get());
         
+        if (expectError) {
+            success = !success;
+        }
+
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = end - start;
 
@@ -338,6 +345,11 @@ int main(int argc, char* argv[]) {
             fs::path out(outputPath);
             std::string ext = out.extension().string();
             
+            if (!manifast::utils::isSafePath(outputPath)) {
+                fmt::print(fg(fmt::color::red), "Error: Invalid characters in output path.\n");
+                return 1;
+            }
+
             if (ext == ".ll") {
                 codegen.emitIR(outputPath);
                 fmt::print("Emitted IR: {}\n", outputPath);
@@ -354,6 +366,12 @@ int main(int argc, char* argv[]) {
                 codegen.addMainEntry();
                 
                 std::string objPath = actualOut + ".obj";
+
+                if (!manifast::utils::isSafePath(objPath)) {
+                    fmt::print(fg(fmt::color::red), "Error: Invalid characters in obj path.\n");
+                    return 1;
+                }
+
                 codegen.emitObject(objPath);
                 
                 fs::path exePath = fs::weakly_canonical(fs::path(argv[0]));
@@ -377,7 +395,7 @@ int main(int argc, char* argv[]) {
                 }
 #endif
                 
-                std::string cmdStr = gpp + " " + objPath + " -o " + actualOut + " -L\"" + libDir + "\"";
+                std::string cmdStr = gpp + " \"" + objPath + "\" -o \"" + actualOut + "\" -L\"" + libDir + "\"";
 #ifdef _WIN32
                 if (!msysLibDir.empty()) cmdStr += " -L\"" + msysLibDir + "\"";
 #endif

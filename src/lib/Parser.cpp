@@ -74,15 +74,16 @@ void Parser::error(Token token, const std::string& message) {
 
     // Caret
     std::string caret = "  ";
-    int col = token.location.offset - start;
+    int col = std::max(0, token.location.offset - start);
+    caret.reserve(2 + col + (token.location.length > 0 ? token.location.length : 1));
     for (int j = 0; j < col; j++) {
         if (lineStr[j] == '\t') caret += '\t';
         else caret += ' ';
     }
-    for (int j = 0; j < (token.location.length > 0 ? token.location.length : 1); j++) caret += '^';
+    caret.append((token.location.length > 0 ? token.location.length : 1), '^');
     
     char finalMsg[512];
-    sprintf(finalMsg, "-> %s, ditemukan %s", message.c_str(), found.c_str());
+    snprintf(finalMsg, sizeof(finalMsg), "-> %s, ditemukan %s", message.c_str(), found.c_str());
 
     if (m_errorCallback) {
         std::string full;
@@ -621,7 +622,7 @@ Type Parser::parseType() {
         else if (name == "i32") type = Type(TypeKind::Int32);
         else if (name == "i64") type = Type(TypeKind::Int64);
         else if (name == "f32") type = Type(TypeKind::Float32);
-        else if (name == "f64") type = Type(TypeKind::Float64);
+        else if (name == "f64" || name == "angka" || name == "bilangan") type = Type(TypeKind::Float64);
         else if (name == "char") type = Type(TypeKind::Char);
         else if (name == "boolean") type = Type(TypeKind::Bool);
         else if (name == "string") type = Type(TypeKind::String);

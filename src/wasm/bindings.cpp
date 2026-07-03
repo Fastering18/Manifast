@@ -94,8 +94,8 @@ void wasm_print_any(::Any* val, int depth = 0) {
 
     if (val->type == 0) {
         char buf[64];
-        if (val->number == (long long)val->number) sprintf(buf, "%lld", (long long)val->number);
-        else sprintf(buf, "%g", val->number);
+        if (val->number == (long long)val->number) snprintf(buf, sizeof(buf), "%lld", (long long)val->number);
+        else snprintf(buf, sizeof(buf), "%g", val->number);
         g_wasm_output += buf;
     }
     else if (val->type == 1 && val->ptr) g_wasm_output += (char*)val->ptr;

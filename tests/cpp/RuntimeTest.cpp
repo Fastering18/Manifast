@@ -44,6 +44,7 @@ void test_manifast_set_clear_output_callback() {
     std::cout << "test_manifast_set_clear_output_callback passed!" << std::endl;
 }
 
+#ifndef RUNTIME_TEST_NO_MAIN
 int main() {
     std::cout << "Running C++ Tests..." << std::endl;
 
@@ -52,3 +53,4 @@ int main() {
     std::cout << "All tests passed!" << std::endl;
     return 0;
 }
+#endif
