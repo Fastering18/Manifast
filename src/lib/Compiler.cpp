@@ -320,6 +320,7 @@ int Compiler::compile(Expr* expr) {
         int r = allocReg();
         std::string val = e->value;
         std::string processed;
+        processed.reserve(val.length());
         for (size_t i = 0; i < val.length(); i++) {
             if (val[i] == '\\' && i + 1 < val.length()) {
                 i++;
