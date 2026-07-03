@@ -73,8 +73,8 @@ add_subdirectory(src/cmd)
 
 # --- Tests ---
 enable_testing()
+add_subdirectory(tests/core/capi)
 add_subdirectory(tests/core/plot)
-
 
 # --- Testing ---
 enable_testing()
