@@ -2,3 +2,5 @@ lokal strings = impor("string")
 lokal a = "amoguso"
 assert(strings.substring(a, 2, 3) == "mog", "substring gagal")
 print(strings.substring(a, 2, 3))
+assert(len("abc") == 3, "len string harus 3")
+assert(len("") == 0, "len string kosong harus 0")

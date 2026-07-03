@@ -4,6 +4,7 @@
 #include "manifast/Parser.h"
 #include <string>
 #include <vector>
+#include <cstring>
 #include "manifast/Runtime.h"
 
 extern "C" {
