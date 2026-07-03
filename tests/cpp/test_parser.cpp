@@ -1,9 +1,9 @@
+#include <gtest/gtest.h>
 #include "manifast/Parser.h"
 #include "manifast/Lexer.h"
-#include <iostream>
 #include <string>
 
-void test_error_callback() {
+TEST(ParserTest, CustomErrorCallback) {
     std::string source = "lokal x = )"; // Invalid syntax
     manifast::SyntaxConfig config;
     manifast::Lexer lexer(source, config);
@@ -16,19 +16,7 @@ void test_error_callback() {
 
     auto stmts = parser.parse();
 
-    if (parser.hadError() && !captured_error.empty() && captured_error.find("[ERROR SINTAKS]") != std::string::npos) {
-        std::cout << "Test passed: Error callback captured expected syntax error.\n";
-    } else {
-        std::cerr << "Test failed: Error callback did not capture the expected error.\n";
-        std::cerr << "Had error flag: " << parser.hadError() << "\n";
-        std::cerr << "Captured error message: '" << captured_error << "'\n";
-        exit(1);
-    }
-}
-
-int main() {
-    std::cout << "Running Parser Tests...\n";
-    test_error_callback();
-    std::cout << "All tests passed!\n";
-    return 0;
+    EXPECT_TRUE(parser.hadError());
+    EXPECT_FALSE(captured_error.empty());
+    EXPECT_NE(captured_error.find("[ERROR SINTAKS]"), std::string::npos);
 }
