@@ -356,6 +356,9 @@ int Compiler::compile(Expr* expr) {
         if (e->op == TokenType::Minus) {
              emit(createABC(OpCode::UNM, right, right, 0), e->line, e->offset);
              return right;
+        } else if (e->op == TokenType::K_Type) {
+             emit(createABC(OpCode::TYPE, right, right, 0), e->line, e->offset);
+             return right;
         } else if (e->op == TokenType::Tilde) {
              // Bitwise NOT, assume we have it or use XOR with -1
         }
