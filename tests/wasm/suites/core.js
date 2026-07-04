@@ -9,4 +9,9 @@ assert(str.substring("ManifastLuarBiasa", 1, 8) == "Manifast", "substring gagal"
 lokal p = str.split("Luar,Biasa", ",")
 assert(p[1] == "Luar", "split gagal indeks 1")
 assert(p[2] == "Biasa", "split gagal indeks 2")
+
+
+assert(len([1, 2, 3]) == 3, "len([1,2,3]) harusnya 3")
+assert(len([]) == 0, "len([]) harusnya 0")
+assert(len("abc") == 3, "len('abc') harusnya 3")
 `;

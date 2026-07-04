@@ -144,7 +144,11 @@ static void nativeLen(VM* vm, Any* args, int nargs) {
         args[-1] = {0, 0, nullptr};
         return;
     }
-    args[-1] = {0, manifast_array_len(&args[0]), nullptr};
+    if (args[0].type == 1 && args[0].ptr != nullptr) { // 1 is ANY_STRING
+        args[-1] = {0, (double)strlen((char*)args[0].ptr), nullptr};
+    } else {
+        args[-1] = {0, manifast_array_len(&args[0]), nullptr};
+    }
 }
 
 static void nativeArrayPush(VM* vm, Any* args, int nargs) {
