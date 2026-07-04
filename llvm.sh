@@ -46,6 +46,7 @@ VERSION_CODENAME=$(lsb_release -cs)
 VERSION=$(lsb_release -sr)
 UBUNTU_CODENAME=""
 CODENAME_FROM_ARGUMENTS=""
+CODENAME=""
 # Obtain VERSION_CODENAME and UBUNTU_CODENAME (for Ubuntu and its derivatives)
 source /etc/os-release
 DISTRO=${DISTRO,,}
@@ -166,6 +167,9 @@ while getopts ":hm:n:" arg; do
             LINKNAME=-${CODENAME}
         fi
         CODENAME_FROM_ARGUMENTS="true"
+        ;;
+    *|?)
+        usage
         ;;
     esac
 done

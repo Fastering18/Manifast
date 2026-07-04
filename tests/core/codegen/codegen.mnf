@@ -1,1 +1,2 @@
 lokal x = 1
+assert(x == 1, "x harusnya 1")

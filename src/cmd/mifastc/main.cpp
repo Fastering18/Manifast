@@ -212,10 +212,25 @@ void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
             // Invoke GCC for linking (fallback/legacy)
             // Assumes libmanifast_core.a is in library path or current directory
             // and fmt is available.
+            std::cout << "Linking executable (External g++)...\n";
+#ifdef _WIN32
             std::string cmd = "g++ \"" + objPath + "\" -o \"" + actualOut + "\" -L. -lmanifast_core -lfmt -static";
-            std::cout << "Linking executable (External g++): " << cmd << "\n";
             int ret = std::system(cmd.c_str());
-            
+#else
+            pid_t pid = fork();
+            int ret = -1;
+            if (pid == 0) {
+                execlp("g++", "g++", objPath.c_str(), "-o", actualOut.c_str(), "-L.", "-lmanifast_core", "-lfmt", "-static", nullptr);
+                std::cerr << "Failed to execute g++\n";
+                exit(1);
+            } else if (pid > 0) {
+                int status;
+                waitpid(pid, &status, 0);
+                if (WIFEXITED(status)) {
+                    ret = WEXITSTATUS(status);
+                }
+            }
+#endif
             if (ret == 0) {
                 std::cout << "Created Executable: " << actualOut << "\n";
                 fs::remove(objPath); // Clean up temp obj

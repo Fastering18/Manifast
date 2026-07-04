@@ -13,8 +13,14 @@ int main() {
     manifast_object_set_raw(obj, "test_key", &val);
 
     Any* result = manifast_object_get_raw(obj, "test_key");
-    assert(result->type == ANY_NUMBER);
-    assert(result->number == 42.0);
+    if (result->type != ANY_NUMBER) {
+        std::cerr << "Fail: result type is " << result->type << std::endl;
+        return 1;
+    }
+    if (result->number != 42.0) {
+        std::cerr << "Fail: result number is " << result->number << std::endl;
+        return 1;
+    }
 
     // Update value test
     Any val_update;
@@ -23,8 +29,14 @@ int main() {
     manifast_object_set_raw(obj, "test_key", &val_update);
 
     Any* result_update = manifast_object_get_raw(obj, "test_key");
-    assert(result_update->type == ANY_NUMBER);
-    assert(result_update->number == 99.0);
+    if (result_update->type != ANY_NUMBER) {
+        std::cerr << "Fail: result_update type is " << result_update->type << std::endl;
+        return 1;
+    }
+    if (result_update->number != 99.0) {
+        std::cerr << "Fail: result_update number is " << result_update->number << std::endl;
+        return 1;
+    }
 
     std::cout << "test_manifast_object_set_raw passed" << std::endl;
     return 0;

@@ -44,3 +44,4 @@ build-llvm/
 vcpkg_installed/
 vendor/
 *.obj
+*.orig

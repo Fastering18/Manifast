@@ -263,11 +263,42 @@ void CodeGen::addMainEntry() {
     // Add standard 'main' entry point for AOT (calls manifast_main)
     llvm::FunctionType* stdMainFT = llvm::FunctionType::get(llvm::Type::getInt32Ty(*context), {}, false);
     llvm::Function* stdMainFunc = llvm::Function::Create(stdMainFT, llvm::Function::ExternalLinkage, "main", module.get());
+
     llvm::BasicBlock* stdMainEntry = llvm::BasicBlock::Create(*context, "entry", stdMainFunc);
+    llvm::BasicBlock* invokeCont = llvm::BasicBlock::Create(*context, "invoke.cont", stdMainFunc);
+    llvm::BasicBlock* lpadBlock = llvm::BasicBlock::Create(*context, "lpad", stdMainFunc);
     
     llvm::IRBuilder<> mainBuilder(stdMainEntry);
-    mainBuilder.CreateCall(mainFunc, {});
+
+    // We create an invoke instead of a call so we can catch C++ exceptions (RuntimeError)
+    // We assume the native compiler / ABI supports C++ exceptions here.
+    // If not, it will just abort.
+    mainBuilder.CreateInvoke(mainFunc, invokeCont, lpadBlock, {});
+
+    // Normal continuation
+    mainBuilder.SetInsertPoint(invokeCont);
     mainBuilder.CreateRet(mainBuilder.getInt32(0));
+
+    // Landing pad for exceptions
+    mainBuilder.SetInsertPoint(lpadBlock);
+    // C++ landing pad requires an opaque personality function, so we'll just catch everything
+    // using a minimal landing pad setup, or simply abort for safety if exception is thrown.
+    // For full C++ exception handling in LLVM IR we need a personality function (e.g. __gxx_personality_v0).
+    // As a simple fallback to prevent escaping and undefined behavior, we can call abort or exit(1).
+    llvm::FunctionType* abortFT = llvm::FunctionType::get(llvm::Type::getVoidTy(*context), false);
+    llvm::FunctionCallee abortFunc = module->getOrInsertFunction("abort", abortFT);
+
+    llvm::StructType* lpadType = llvm::StructType::get(*context, {mainBuilder.getPtrTy(), mainBuilder.getInt32Ty()});
+    llvm::LandingPadInst* lpad = mainBuilder.CreateLandingPad(lpadType, 1);
+    lpad->setCleanup(true); // Always cleanup and then we'll abort
+
+    mainBuilder.CreateCall(abortFunc, {});
+    mainBuilder.CreateUnreachable();
+
+    // Set personality function (needed for invoke to work)
+    llvm::FunctionType* persFT = llvm::FunctionType::get(llvm::Type::getInt32Ty(*context), true);
+    llvm::FunctionCallee persFunc = module->getOrInsertFunction("__gxx_personality_v0", persFT);
+    stdMainFunc->setPersonalityFn(llvm::cast<llvm::Function>(persFunc.getCallee()));
 }
 
 void CodeGen::printIR() {

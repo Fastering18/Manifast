@@ -757,6 +757,7 @@ MF_API Any* manifast_impor(const char* name) {
             int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
             int actual_nargs = nargs - offset;
             if (actual_nargs >= 1) {
+                if (args[offset].type != ANY_ARRAY) return;
                 manifast::plot::Series s;
                 ManifastArray* ya = (ManifastArray*)args[offset].ptr;
                 s.x.reserve(ya->size);

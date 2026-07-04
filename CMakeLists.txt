@@ -76,8 +76,6 @@ enable_testing()
 add_subdirectory(tests/core/capi)
 add_subdirectory(tests/core/plot)
 
-# --- Testing ---
-enable_testing()
 find_package(GTest REQUIRED)
 add_executable(manifast_cpp_tests tests/cpp/vm_test.cpp tests/cpp/RuntimeTest.cpp)
 target_include_directories(manifast_cpp_tests PRIVATE include)
@@ -121,8 +119,10 @@ set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/Fastering18/Manifast")
 
 include(CPack)
 
-# --- Tests ---
-enable_testing()
 add_executable(test_manifast_object_set_raw tests/cpp/test_manifast_object_set_raw.cpp)
 target_link_libraries(test_manifast_object_set_raw PRIVATE manifast_core fmt::fmt)
 add_test(NAME test_manifast_object_set_raw COMMAND test_manifast_object_set_raw)
+
+add_executable(test_runtime tests/cpp/test_runtime.cpp)
+target_link_libraries(test_runtime PRIVATE manifast_core)
+add_test(NAME RuntimeTest COMMAND test_runtime)

@@ -42,30 +42,42 @@ std::string captureStdout(void (*func)(Any*, Any*), Any* arg1, Any* arg2) {
 
 void test_manifast_printfmt() {
     Any fmt;
-    fmt.type = 1; // String type in Manifast Any
+    fmt.type = ANY_STRING;
     fmt.ptr = (void*)"%d";
 
     Any val;
-    val.type = 0; // Number type
+    val.type = ANY_NUMBER;
     val.number = 42;
 
     std::string out = captureStdout(manifast_printfmt, &fmt, &val);
-    assert(out == "42" && "Expected output 42 for number type");
+    if (out != "42") {
+        std::cerr << "Fail: Expected output 42 for number type, got: " << out << std::endl;
+        exit(1);
+    }
 
-    val.type = 1; // String
+    val.type = ANY_STRING;
     val.ptr = (void*)"hello";
     fmt.ptr = (void*)"%s";
     out = captureStdout(manifast_printfmt, &fmt, &val);
-    assert(out == "hello" && "Expected output hello for string type");
+    if (out != "hello") {
+        std::cerr << "Fail: Expected output hello for string type, got: " << out << std::endl;
+        exit(1);
+    }
 
-    val.type = 2; // Bool
+    val.type = ANY_BOOLEAN;
     val.number = 1;
     out = captureStdout(manifast_printfmt, &fmt, &val);
-    assert(out == "benar" && "Expected output benar for boolean true");
+    if (out != "benar") {
+        std::cerr << "Fail: Expected output benar for boolean true, got: " << out << std::endl;
+        exit(1);
+    }
 
-    val.type = 3; // Nil
+    val.type = ANY_NIL;
     out = captureStdout(manifast_printfmt, &fmt, &val);
-    assert(out == "nil" && "Expected output nil for nil type");
+    if (out != "nil") {
+        std::cerr << "Fail: Expected output nil for nil type, got: " << out << std::endl;
+        exit(1);
+    }
 
     std::cout << "test_manifast_printfmt passed!" << std::endl;
 }

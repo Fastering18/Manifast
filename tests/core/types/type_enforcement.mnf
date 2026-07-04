@@ -1,1 +1,2 @@
 lokal x: i32 = 10
+assert(x == 10, "x harusnya 10")
