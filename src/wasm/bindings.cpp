@@ -151,21 +151,21 @@ void wasm_println(manifast::vm::VM* vm, ::Any* args, int nargs) {
 }
 
 void wasm_assert(manifast::vm::VM* vm, ::Any* args, int nargs) {
-    int idx = 0; if (nargs >= 1 && args[0].type != ANY_NIL) idx = 0; // Fix arg index
-    if (nargs < 1) {
+    int idx = 0; if (nargs >= 1 && args[0].type == ANY_OBJECT) idx++;
+    if (nargs - idx < 1) {
         MANIFAST_THROW("Runtime Error: assert() membutuhkan minimal 1 argumen");
     }
     
     bool truth = false;
-    if (args[0].type == ANY_BOOLEAN) truth = (args[0].number != 0);
-    else if (args[0].type == ANY_NIL) truth = false;
-    else if (args[0].type == ANY_NUMBER) truth = (args[0].number != 0);
+    if (args[idx].type == ANY_BOOLEAN) truth = (args[idx].number != 0);
+    else if (args[idx].type == ANY_NIL) truth = false;
+    else if (args[idx].type == ANY_NUMBER) truth = (args[idx].number != 0);
     else truth = true;
 
     if (!truth) {
         std::string msg = "Assertion Gagal";
-        if (nargs >= 2 && args[1].type == ANY_STRING) {
-            msg = (char*)args[1].ptr;
+        if (nargs - idx >= 2 && args[idx+1].type == ANY_STRING) {
+            msg = (char*)args[idx+1].ptr;
         }
         MANIFAST_THROW("Runtime Error: [ASSERT GAGAL] " + msg);
     }
