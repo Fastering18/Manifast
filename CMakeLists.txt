@@ -72,10 +72,6 @@ add_subdirectory(src/lib)
 add_subdirectory(src/cmd)
 
 # --- Tests ---
-enable_testing()
-add_subdirectory(tests/core/plot)
-
-# --- Testing ---
 include(FetchContent)
 FetchContent_Declare(
   googletest
@@ -86,8 +82,12 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
+add_subdirectory(tests/core/capi)
+add_subdirectory(tests/core/plot)
+
+# --- Testing ---
 add_executable(manifast_cpp_tests tests/cpp/vm_test.cpp tests/lib/RuntimeTest.cpp)
-target_link_libraries(manifast_cpp_tests PRIVATE manifast_core GTest::gtest_main fmt::fmt)
+target_link_libraries(manifast_cpp_tests PRIVATE manifast_core gtest_main fmt::fmt)
 if (MANIFAST_ENABLE_LLVM)
   target_link_libraries(manifast_cpp_tests PRIVATE manifast_jit)
 endif()

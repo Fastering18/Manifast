@@ -202,7 +202,11 @@ void wasm_len(manifast::vm::VM* vm, ::Any* args, int nargs) {
         args[-1] = {ANY_NIL, 0, nullptr};
         return;
     }
-    args[-1] = {ANY_NUMBER, (double)manifast_array_len(&args[0]), nullptr};
+    if (args[0].type == ANY_STRING && args[0].ptr != nullptr) {
+        args[-1] = {ANY_NUMBER, (double)strlen((char*)args[0].ptr), nullptr};
+    } else {
+        args[-1] = {ANY_NUMBER, (double)manifast_array_len(&args[0]), nullptr};
+    }
 }
 
 void wasm_plot_for(manifast::vm::VM* vm, ::Any* args, int nargs) {

@@ -10,7 +10,9 @@
 #include <fstream>
 #include <fmt/core.h>
 #include <fmt/color.h>
+#include <cassert>
 
+#include "manifast/Runtime.h"
 #include "manifast/Lexer.h"
 #include "manifast/Parser.h"
 #include "manifast/VM/Compiler.h"
@@ -90,6 +92,33 @@ public:
     }
 };
 
+void dummy_native_fn(void* vm, Any* args, int nargs) {
+    // Dummy function for testing
+}
+
+void test_manifast_class_add_method() {
+    Any* class_any = manifast_create_class("TestClass");
+    ManifastClass* klass = (ManifastClass*)class_any->ptr;
+
+    manifast_class_add_method(class_any, "my_method", dummy_native_fn);
+
+    Any* method_any = manifast_object_get_raw(klass->methods, "my_method");
+    assert(method_any != nullptr && "Method should be added");
+    assert(method_any->type == ANY_NATIVE && "Method type should be ANY_NATIVE");
+    assert(method_any->ptr == (void*)dummy_native_fn && "Method pointer should match");
+
+    // Edge case: test with non-class Any
+    Any non_class_any;
+    non_class_any.type = ANY_NUMBER; // Number
+    manifast_class_add_method(&non_class_any, "my_method", dummy_native_fn);
+
+    fmt::print(fg(fmt::color::green), "test_manifast_class_add_method passed\n");
+}
+
+void runCppTests() {
+    test_manifast_class_add_method();
+}
+
 bool runTestInProcess(const std::string& source, std::string& outputLog, bool useVM, manifast::vm::Compiler* reusableCompiler = nullptr, manifast::vm::VM* reusableVM = nullptr) {
     const std::string tempLog = "test_run.tmp";
     OutputSilencer silencer(tempLog);
@@ -158,6 +187,8 @@ void printUsage() {
 }
 
 void runTestRunner(bool useVM) {
+    runCppTests();
+
     if (g_isInteractive) {
         fmt::print(fmt::emphasis::bold | fg(fmt::color::cyan), "🚀 Starting Manifast Test Suite ({}) ...\n\n", useVM ? "Bytecode VM" : "LLVM JIT");
     } else {
