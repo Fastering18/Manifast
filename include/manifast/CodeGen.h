@@ -86,8 +86,16 @@ private:
     llvm::StructType* arrayType;
     llvm::StructType* objectType;
 
+    // Exception Handling State
+    struct ExceptionBlock {
+        llvm::BasicBlock* catchBB;
+        llvm::BasicBlock* contBB;
+    };
+    std::vector<ExceptionBlock> exceptionBlocks;
+
     // Helpers
     void initializeTypes();
+    llvm::CallBase* createCallOrInvoke(llvm::Function* callee, llvm::ArrayRef<llvm::Value*> args, const llvm::Twine& name = "");
     llvm::Value* createNumber(double value); // Literals
     llvm::Value* createString(const std::string& value);
     llvm::Value* boxDouble(llvm::Value* v);  // Runtime values

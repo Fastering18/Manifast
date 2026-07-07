@@ -122,13 +122,26 @@ void CodeGen::initializeTypes() {
     });
 }
 
+llvm::CallBase* CodeGen::createCallOrInvoke(llvm::Function* callee, llvm::ArrayRef<llvm::Value*> args, const llvm::Twine& name) {
+    if (!exceptionBlocks.empty()) {
+        llvm::BasicBlock* catchBB = exceptionBlocks.back().catchBB;
+        llvm::Function* func = builder->GetInsertBlock()->getParent();
+        llvm::BasicBlock* normalBB = llvm::BasicBlock::Create(*context, "invoke.cont", func);
+
+        llvm::InvokeInst* invoke = builder->CreateInvoke(callee->getFunctionType(), callee, normalBB, catchBB, args, name);
+        builder->SetInsertPoint(normalBB);
+        return invoke;
+    }
+    return builder->CreateCall(callee->getFunctionType(), callee, args, name);
+}
+
 llvm::Value* CodeGen::createNumber(double value) {
     llvm::Function* func = module->getFunction("manifast_create_number");
     if (!func) {
         llvm::FunctionType* ft = llvm::FunctionType::get(llvm::PointerType::getUnqual(*context), {llvm::Type::getDoubleTy(*context)}, false);
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_number", module.get());
     }
-    return builder->CreateCall(func, {llvm::ConstantFP::get(*context, llvm::APFloat(value))}, "num");
+    return createCallOrInvoke(func, {llvm::ConstantFP::get(*context, llvm::APFloat(value))}, "num");
 }
 
 llvm::Value* CodeGen::boxDouble(llvm::Value* v) {
@@ -137,7 +150,7 @@ llvm::Value* CodeGen::boxDouble(llvm::Value* v) {
         llvm::FunctionType* ft = llvm::FunctionType::get(llvm::PointerType::getUnqual(*context), {llvm::Type::getDoubleTy(*context)}, false);
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_number", module.get());
     }
-    return builder->CreateCall(func, {v}, "num_box");
+    return createCallOrInvoke(func, {v}, "num_box");
 }
 
 llvm::Value* CodeGen::createString(const std::string& value) {
@@ -147,7 +160,7 @@ llvm::Value* CodeGen::createString(const std::string& value) {
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_string", module.get());
     }
     llvm::Value* globalStr = builder->CreateGlobalString(value);
-    return builder->CreateCall(func, {globalStr}, "str");
+    return createCallOrInvoke(func, {globalStr}, "str");
 }
 
 llvm::Value* CodeGen::unboxString(llvm::Value* anyPtr) {
@@ -169,7 +182,7 @@ llvm::Value* CodeGen::createArray(const std::vector<llvm::Value*>& elements) {
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_array", module.get());
     }
     
-    llvm::Value* arrVal = builder->CreateCall(func, {builder->getInt32(elements.size())}, "arr");
+    llvm::Value* arrVal = createCallOrInvoke(func, {builder->getInt32(elements.size())}, "arr");
     
     // Set elements
     llvm::Function* setFunc = module->getFunction("manifast_array_set");
@@ -184,7 +197,7 @@ llvm::Value* CodeGen::createArray(const std::vector<llvm::Value*>& elements) {
         // We need to pass Any* to manifast_array_set
         llvm::Value* elemPtr = builder->CreateAlloca(anyType);
         builder->CreateStore(elements[i], elemPtr);
-        builder->CreateCall(setFunc, {arrVal, llvm::ConstantFP::get(*context, llvm::APFloat((double)(i + 1))), elemPtr});
+        createCallOrInvoke(setFunc, {arrVal, llvm::ConstantFP::get(*context, llvm::APFloat((double)(i + 1))), elemPtr});
     }
     
     return arrVal;
@@ -197,7 +210,7 @@ llvm::Value* CodeGen::createObject(const std::vector<std::pair<std::string, llvm
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_object", module.get());
     }
     
-    llvm::Value* objVal = builder->CreateCall(func, {}, "obj");
+    llvm::Value* objVal = createCallOrInvoke(func, {}, "obj");
     
     // Set properties
     llvm::Function* setFunc = module->getFunction("manifast_object_set");
@@ -213,7 +226,7 @@ llvm::Value* CodeGen::createObject(const std::vector<std::pair<std::string, llvm
         builder->CreateStore(pair.second, valPtr);
         
         llvm::Value* keyStr = builder->CreateGlobalString(pair.first);
-        builder->CreateCall(setFunc, {objVal, keyStr, valPtr});
+        createCallOrInvoke(setFunc, {objVal, keyStr, valPtr});
     }
     
     return objVal;
@@ -225,7 +238,7 @@ void CodeGen::printAny(llvm::Value* anyVal) {
         llvm::FunctionType* ft = llvm::FunctionType::get(builder->getVoidTy(), {llvm::PointerType::getUnqual(*context)}, false);
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_print_any", module.get());
     }
-    builder->CreateCall(func, {anyVal});
+    createCallOrInvoke(func, {anyVal});
 }
 
 void CodeGen::compile(const std::vector<std::unique_ptr<Stmt>>& statements) {
@@ -798,7 +811,7 @@ llvm::Value* CodeGen::visitBoolExpr(const BoolExpr* expr) {
         llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getInt1Ty()}, false);
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_boolean", module.get());
     }
-    return builder->CreateCall(func, {builder->getInt1(expr->value)});
+    return createCallOrInvoke(func, {builder->getInt1(expr->value)});
 }
 
 llvm::Value* CodeGen::visitNilExpr(const NilExpr* expr) {
@@ -807,7 +820,7 @@ llvm::Value* CodeGen::visitNilExpr(const NilExpr* expr) {
         llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {}, false);
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_nil", module.get());
     }
-    return builder->CreateCall(func, {});
+    return createCallOrInvoke(func, {});
 }
 
 llvm::Value* CodeGen::visitCharExpr(const CharExpr* expr) {
@@ -816,7 +829,7 @@ llvm::Value* CodeGen::visitCharExpr(const CharExpr* expr) {
         llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getDoubleTy()}, false);
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_number", module.get());
     }
-    return builder->CreateCall(func, {llvm::ConstantFP::get(*context, llvm::APFloat((double)expr->value))});
+    return createCallOrInvoke(func, {llvm::ConstantFP::get(*context, llvm::APFloat((double)expr->value))});
 }
 
 llvm::Value* CodeGen::visitUnaryExpr(const UnaryExpr* expr) {
@@ -838,7 +851,7 @@ llvm::Value* CodeGen::visitUnaryExpr(const UnaryExpr* expr) {
             llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getInt1Ty()}, false);
             func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_boolean", module.get());
         }
-        return builder->CreateCall(func, {cond});
+        return createCallOrInvoke(func, {cond});
     }
     return v;
 }
@@ -871,7 +884,7 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
         int runtimeType = mapTypeToRuntime(info.type);
         if (runtimeType != -1) {
             llvm::Function* checkFunc = module->getFunction("manifast_type_check");
-            builder->CreateCall(checkFunc, {val, builder->getInt32(runtimeType)});
+            createCallOrInvoke(checkFunc, {val, builder->getInt32(runtimeType)});
         }
 
         if (expr->op != TokenType::Equal) {
@@ -901,7 +914,7 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
              llvm::FunctionType* ft = llvm::FunctionType::get(builder->getVoidTy(), {builder->getPtrTy(), builder->getPtrTy(), builder->getPtrTy()}, false);
              func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_object_set", module.get());
         }
-        builder->CreateCall(func, {obj, keyStr, val});
+        createCallOrInvoke(func, {obj, keyStr, val});
         return val;
     } else if (auto* idx = dynamic_cast<IndexExpr*>(expr->target.get())) {
         llvm::Value* obj = generateExpr(idx->object.get());
@@ -912,7 +925,7 @@ llvm::Value* CodeGen::visitAssignExpr(const AssignExpr* expr) {
              llvm::FunctionType* ft = llvm::FunctionType::get(builder->getVoidTy(), {builder->getPtrTy(), builder->getDoubleTy(), builder->getPtrTy()}, false);
              func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_array_set", module.get());
         }
-        builder->CreateCall(func, {obj, indexVal, val});
+        createCallOrInvoke(func, {obj, indexVal, val});
         return val;
     }
 
@@ -934,10 +947,10 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
                     return nullptr;
                 }
                 llvm::Value* arg = generateExpr(expr->args[0].get()); // Any*
-                builder->CreateCall(module->getFunction("manifast_array_push"), {obj, arg});
+                createCallOrInvoke(module->getFunction("manifast_array_push"), {obj, arg});
                 return boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
             } else if (methodName == "pop") {
-                return builder->CreateCall(module->getFunction("manifast_array_pop"), {obj});
+                return createCallOrInvoke(module->getFunction("manifast_array_pop"), {obj});
             } else {
                 // Potential dynamic method call e.g. math.sin(0.5)
                 llvm::Value* calleeVal = generateExpr(get); // Evaluates to Any*
@@ -953,8 +966,7 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
                     llvm::Value* slot = builder->CreateGEP(anyType, argsArr, {builder->getInt32(i + 1)});
                     builder->CreateStore(argObj, slot);
                 }
-                return builder->CreateCall(module->getFunction("manifast_call_dynamic"), 
-                    {calleeVal, argsArr, builder->getInt32(expr->args.size() + 1)});
+                return createCallOrInvoke(module->getFunction("manifast_call_dynamic"), {calleeVal, argsArr, builder->getInt32(expr->args.size() + 1)});
             }
         }
 
@@ -967,8 +979,7 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
             llvm::Value* slot = builder->CreateGEP(anyType, argsArr, {builder->getInt32(i)});
             builder->CreateStore(argObj, slot);
         }
-        return builder->CreateCall(module->getFunction("manifast_call_dynamic"), 
-            {calleeVal, argsArr, builder->getInt32(expr->args.size())});
+        return createCallOrInvoke(module->getFunction("manifast_call_dynamic"), {calleeVal, argsArr, builder->getInt32(expr->args.size())});
     }
 
     std::string funcName = var->name;
@@ -992,8 +1003,7 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
             llvm::Value* slot = builder->CreateGEP(anyType, argsArr, {builder->getInt32(i)});
             builder->CreateStore(argObj, slot);
         }
-        return builder->CreateCall(module->getFunction("manifast_call_dynamic"), 
-            {calleeVal, argsArr, builder->getInt32(expr->args.size())});
+        return createCallOrInvoke(module->getFunction("manifast_call_dynamic"), {calleeVal, argsArr, builder->getInt32(expr->args.size())});
     }
 
     llvm::Function* func = nullptr;
@@ -1014,13 +1024,13 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
         }
         llvm::Value* argVal = generateExpr(expr->args[0].get());
         llvm::Value* strPtr = unboxString(argVal);
-        return builder->CreateCall(module->getFunction("manifast_impor"), {strPtr}, "impor_res");
+        return createCallOrInvoke(module->getFunction("manifast_impor"), {strPtr}, "impor_res");
     } else if (funcName == "len") {
         if (expr->args.size() != 1) {
             throw manifast::RuntimeError("Runtime Error: len() membutuhkan 1 argumen");
         }
         llvm::Value* arg = generateExpr(expr->args[0].get());
-        llvm::Value* lenVal = builder->CreateCall(module->getFunction("manifast_array_len"), {arg});
+        llvm::Value* lenVal = createCallOrInvoke(module->getFunction("manifast_array_len"), {arg});
         return boxDouble(lenVal);
     } else {
         func = module->getFunction(funcName);
@@ -1041,15 +1051,15 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
             for (size_t i = 0; i < expr->args.size(); ++i) {
                 if (i > 0) {
                     llvm::Value* tab = createString("\t");
-                    builder->CreateCall(module->getFunction("manifast_print_any"), {tab});
+                    createCallOrInvoke(module->getFunction("manifast_print_any"), {tab});
                 }
                 llvm::Value* argVal = generateExpr(expr->args[i].get());
                 if (!argVal) return nullptr;
-                builder->CreateCall(module->getFunction("manifast_print_any"), {argVal});
+                createCallOrInvoke(module->getFunction("manifast_print_any"), {argVal});
             }
             if (funcName == "println") {
                 llvm::Value* nl = createString("\n");
-                builder->CreateCall(module->getFunction("manifast_print_any"), {nl});
+                createCallOrInvoke(module->getFunction("manifast_print_any"), {nl});
             }
             return boxDouble(llvm::ConstantFP::get(*context, llvm::APFloat(0.0)));
         }
@@ -1075,7 +1085,7 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
         
         llvm::Value* vmPtr = builder->CreateBitCast(builder->getInt64(0), builder->getPtrTy());
         llvm::Value* passArgsPtr = builder->CreateGEP(anyType, argsArr, {builder->getInt32(1)});
-        builder->CreateCall(func, {vmPtr, passArgsPtr, builder->getInt32(expr->args.size())});
+        createCallOrInvoke(func, {vmPtr, passArgsPtr, builder->getInt32(expr->args.size())});
         
         // Result is in argsArr[0]
         return builder->CreateGEP(anyType, argsArr, {builder->getInt32(0)});
@@ -1099,7 +1109,7 @@ void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
                 int runtimeType = mapTypeToRuntime(stmt->typeAnnotation);
                 if (runtimeType != -1) {
                     llvm::Function* checkFunc = module->getFunction("manifast_type_check");
-                    builder->CreateCall(checkFunc, {initVal, builder->getInt32(runtimeType)});
+                    createCallOrInvoke(checkFunc, {initVal, builder->getInt32(runtimeType)});
                 }
                 builder->CreateStore(builder->CreateLoad(anyType, initVal), gVar);
             }
@@ -1120,7 +1130,7 @@ void CodeGen::visitVarDeclStmt(const VarDeclStmt* stmt) {
                 int runtimeType = mapTypeToRuntime(stmt->typeAnnotation);
                 if (runtimeType != -1) {
                     llvm::Function* checkFunc = module->getFunction("manifast_type_check");
-                    builder->CreateCall(checkFunc, {initVal, builder->getInt32(runtimeType)});
+                    createCallOrInvoke(checkFunc, {initVal, builder->getInt32(runtimeType)});
                 }
                 builder->CreateStore(builder->CreateLoad(anyType, initVal), alloca);
             }
@@ -1170,11 +1180,68 @@ void CodeGen::visitBlockStmt(const BlockStmt* stmt) {
 }
 
 void CodeGen::visitTryStmt(const TryStmt* stmt) {
-    // Basic try/catch stub: just execute the try body for now.
-    // Full LLVM Exception Handling (Personality, LandingPads) is TBD.
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+
+    llvm::BasicBlock* tryBB = llvm::BasicBlock::Create(*context, "try", func);
+    llvm::BasicBlock* catchBB = llvm::BasicBlock::Create(*context, "catch", func);
+    llvm::BasicBlock* contBB = llvm::BasicBlock::Create(*context, "try.cont");
+
+    builder->CreateBr(tryBB);
+    builder->SetInsertPoint(tryBB);
+
+    exceptionBlocks.push_back({catchBB, contBB});
+
     if (stmt->tryBody) {
         generateStmt(stmt->tryBody.get());
     }
+
+    exceptionBlocks.pop_back();
+
+    if (!builder->GetInsertBlock()->getTerminator()) {
+        builder->CreateBr(contBB);
+    }
+
+    // Catch Block
+    builder->SetInsertPoint(catchBB);
+
+    // Landing pad for C++ exceptions
+    llvm::Type* int32Ty = llvm::Type::getInt32Ty(*context);
+    llvm::StructType* landingPadTy = llvm::StructType::get(*context, {builder->getPtrTy(), int32Ty});
+
+    // Get __gxx_personality_v0
+    llvm::Function* personalityFunc = module->getFunction("__gxx_personality_v0");
+    if (!personalityFunc) {
+        llvm::FunctionType* ft = llvm::FunctionType::get(int32Ty, true);
+        personalityFunc = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "__gxx_personality_v0", module.get());
+    }
+    func->setPersonalityFn(personalityFunc);
+
+    llvm::LandingPadInst* lpad = builder->CreateLandingPad(landingPadTy, 1, "lpad");
+    lpad->addClause(llvm::ConstantPointerNull::get(builder->getPtrTy())); // Catch all
+
+    pushScope();
+    // Catch variable (if any), currently just setting it to nil
+    if (!stmt->catchVar.empty()) {
+        llvm::Function* funcNil = module->getFunction("manifast_create_nil");
+        if (!funcNil) {
+            llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {}, false);
+            funcNil = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_create_nil", module.get());
+        }
+        llvm::Value* nilVal = createCallOrInvoke(funcNil, {}, "nil");
+        scopes.back()[stmt->catchVar] = VarInfo(nilVal, Type(TypeKind::Any));
+    }
+
+    if (stmt->catchBody) {
+        generateStmt(stmt->catchBody.get());
+    }
+    popScope();
+
+    if (!builder->GetInsertBlock()->getTerminator()) {
+        builder->CreateBr(contBB);
+    }
+
+    func->insert(func->end(), contBB);
+    builder->SetInsertPoint(contBB);
 }
 
 void CodeGen::visitFunctionStmt(const FunctionStmt* stmt) {
@@ -1367,7 +1434,7 @@ llvm::Value* CodeGen::visitIndexExpr(const IndexExpr* expr) {
         llvm::FunctionType* ft = llvm::FunctionType::get(builder->getPtrTy(), {builder->getPtrTy(), builder->getDoubleTy()}, false);
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_array_get", module.get());
     }
-    return builder->CreateCall(func, {obj, idxVal}, "index_res");
+    return createCallOrInvoke(func, {obj, idxVal}, "index_res");
 }
 
 llvm::Value* CodeGen::visitGetExpr(const GetExpr* expr) {
@@ -1380,7 +1447,7 @@ llvm::Value* CodeGen::visitGetExpr(const GetExpr* expr) {
         func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "manifast_object_get", module.get());
     }
     llvm::Value* keyStr = builder->CreateGlobalString(expr->name);
-    return builder->CreateCall(func, {obj, keyStr}, "get_res");
+    return createCallOrInvoke(func, {obj, keyStr}, "get_res");
 }
 
 void CodeGen::visitClassStmt(const ClassStmt* stmt) {
@@ -1391,7 +1458,7 @@ void CodeGen::visitClassStmt(const ClassStmt* stmt) {
     }
     
     llvm::Value* classNameStr = builder->CreateGlobalString(stmt->name);
-    llvm::Value* klassAny = builder->CreateCall(createClassFunc, {classNameStr});
+    llvm::Value* klassAny = createCallOrInvoke(createClassFunc, {classNameStr});
     
     // Define class in scope
     llvm::Function* currentFunc = builder->GetInsertBlock()->getParent();
@@ -1421,7 +1488,7 @@ void CodeGen::visitClassStmt(const ClassStmt* stmt) {
         llvm::Function* methodFunc = module->getFunction(mangledName);
         if (methodFunc) {
             llvm::Value* methodNameStr = builder->CreateGlobalString(originalName);
-            builder->CreateCall(addMethodFunc, {klassAny, methodNameStr, methodFunc});
+            createCallOrInvoke(addMethodFunc, {klassAny, methodNameStr, methodFunc});
         }
     }
 }
