@@ -2,10 +2,7 @@ const events = require('events');
 const manifast = require('../../build-wasm/manifast.js');
 
 async function initializeVM() {
-    await new Promise(resolve => {
-        manifast.onRuntimeInitialized = resolve;
-    });
-    return manifast;
+    return await manifast();
 }
 
 const suites = [
@@ -48,6 +45,20 @@ async function runAll() {
         // console.log("LOG:", data);
     });
 
+    // Run C++ internal Wasm tests (e.g. plot callback)
+    console.log("[SUITE] C++ Internal Tests");
+    currentOutput = "";
+    hasError = false;
+    try {
+        const test_output = vm.ccall("mf_test_plot_callback", "string", [], []);
+        const ok = test_output.includes("[PASS]");
+        console.log(ok ? "  [PASS]" : "  [FAIL]");
+        if (!ok) { process.exitCode = 1; }
+    } catch(e) {
+        console.log('  [FAIL] Exception: ' + e.message);
+    }
+    console.log('------------------------------');
+
     for (const suite of suites) {
         console.log(`[SUITE] ${suite.name}`);
         const suiteModule = require(suite.file);
@@ -60,6 +71,7 @@ async function runAll() {
             const ok = !hasError && !result.includes('[ERROR RUNTIME]') && !result.includes('Assertion Failed');
 
             console.log(ok ? '  [PASS]' : '  [FAIL]');
+            if (!ok) { process.exitCode = 1; }
         } catch (e) {
             console.log('  [FAIL] Exception: ' + e.message);
             console.log('--- Output Captured ---');

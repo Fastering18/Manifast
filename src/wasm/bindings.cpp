@@ -252,7 +252,15 @@ void wasm_plot_save(manifast::vm::VM* vm, ::Any* args, int nargs) {
 // Plot callback: receives RGBA framebuffer, encodes BMP, base64, emits to output
 static std::vector<uint8_t> g_plot_bmp_buffer;
 
+int g_wasm_plot_w = 0;
+int g_wasm_plot_h = 0;
+std::vector<uint8_t> g_wasm_plot_buffer;
+
 void wasm_plot_callback(const uint8_t* rgba, int w, int h) {
+    g_wasm_plot_w = w;
+    g_wasm_plot_h = h;
+    g_wasm_plot_buffer.assign(rgba, rgba + (w * h * 4));
+
     encode_bmp_to_buffer(rgba, w, h, g_plot_bmp_buffer);
     std::string b64 = base64_encode(g_plot_bmp_buffer.data(), g_plot_bmp_buffer.size());
     g_wasm_output += "\n[IMG:data:image/bmp;base64," + b64 + "]\n";
@@ -261,6 +269,26 @@ void wasm_plot_callback(const uint8_t* rgba, int w, int h) {
 // Exported for npm consumers
 const uint8_t* mf_get_plot_buffer() {
     return g_plot_bmp_buffer.data();
+}
+
+extern "C" {
+    const char* mf_test_plot_callback() {
+        uint8_t rgba[16] = {
+            255, 0, 0, 255,   255, 0, 0, 255,
+            255, 0, 0, 255,   255, 0, 0, 255
+        };
+        wasm_plot_callback(rgba, 2, 2);
+
+        bool w_correct = (g_wasm_plot_w == 2);
+        bool h_correct = (g_wasm_plot_h == 2);
+        bool buffer_correct = (g_wasm_plot_buffer.size() == 16 && g_wasm_plot_buffer[0] == 255);
+
+        if (!w_correct || !h_correct || !buffer_correct) {
+            return "[ERROR]";
+        } else {
+            return "[PASS]";
+        }
+    }
 }
 
 int mf_get_plot_buffer_size() {
