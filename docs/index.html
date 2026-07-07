@@ -581,6 +581,10 @@
                 name: "Class & Objects",
                 code: `kelas Mobil maka\n  fungsi inisiasi(merk, thn)\n    self.merk = merk\n    self.thn = thn\n  tutup\n\n  fungsi info()\n    println("Mobil: " + self.merk + " (" + self.thn + ")")\n  tutup\ntutup\n\nlokal m1 = Mobil("Toyota", 2022)\nm1.info()`
             },
+            mandelbrot: {
+                name: "Mandelbrot Animated",
+                code: `lokal os = impor("os")\n\nfungsi gambar(iterasi)\n  os.clearOutput()\n  println("Mandelbrot [Depth: " + iterasi + "]")\n  untuk y = 0 ke 20 lakukan\n    lokal cy = (y/20)*2 - 1\n    untuk x = 0 ke 60 lakukan\n      lokal cx = (x/60)*2.5 - 1.75\n      lokal zx = 0; lokal zy = 0; lokal i = 0\n      selama (zx*zx + zy*zy < 4) dan (i < iterasi) lakukan\n        lokal t = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = t\n        i = i + 1\n      tutup\n      jika i == iterasi maka print("#") sebaliknya print(" ") tutup\n    tutup\n    println("")\n  tutup\ntutup\n\nuntuk i = 1 ke 24 lakukan\n  gambar(i)\n  os.tunggu(30)\ntutup\nprintln("Done!")`
+            },
             ascii_heart: {
                 name: "Heart ASCII Art",
                 code: `-- Heart ASCII Art\nlokal math = impor("math")\n\nuntuk y = 1.5 ke -1.5 langkah -0.1 lakukan\n  untuk x = -1.5 ke 1.5 langkah 0.05 lakukan\n    lokal a = x*x + y*y - 1\n    jika a*a*a - x*x*y*y*y <= 0 maka\n      print("*")\n    sebaliknya\n      print(" ")\n    tutup\n  tutup\n  println("")\ntutup\nprintln("\\nManifast ❤️ ASCII")`
