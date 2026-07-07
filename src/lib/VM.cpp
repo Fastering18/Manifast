@@ -512,6 +512,27 @@ void VM::run(int entryFrameDepth) {
                 LR(GET_A(i)) = {2, isTruthy ? 0.0 : 1.0, nullptr};
                 break;
             }
+            case OpCode::TYPE: {
+                Any vb = LR(GET_B(i));
+                const char* t = "unknown";
+                switch (vb.type) {
+                    case 0: t = "angka"; break;
+                    case 1: t = "string"; break;
+                    case 2: t = "bool"; break;
+                    case 3: t = "nil"; break;
+                    case 4: t = "native"; break;
+                    case 5: t = "fungsi"; break;
+                    case 6: t = "array"; break;
+                    case 7: t = "objek"; break;
+                    case 8: t = "objek"; break;
+                    case 9: t = "objek"; break;
+                }
+                Any res;
+                res.type = 1;
+                res.ptr = (void*)mf_strdup(t);
+                LR(GET_A(i)) = res;
+                break;
+            }
             case OpCode::UNM: {
                 Any vb = LR(GET_B(i));
                 if (vb.type == 0) { // Number

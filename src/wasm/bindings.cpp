@@ -151,21 +151,21 @@ void wasm_println(manifast::vm::VM* vm, ::Any* args, int nargs) {
 }
 
 void wasm_assert(manifast::vm::VM* vm, ::Any* args, int nargs) {
-    int idx = 0; if (nargs >= 1 && args[0].type != ANY_NIL) idx = 0; // Fix arg index
-    if (nargs < 1) {
+    int idx = 0; if (nargs >= 1 && args[0].type == ANY_OBJECT) idx++;
+    if (nargs - idx < 1) {
         MANIFAST_THROW("Runtime Error: assert() membutuhkan minimal 1 argumen");
     }
     
     bool truth = false;
-    if (args[0].type == ANY_BOOLEAN) truth = (args[0].number != 0);
-    else if (args[0].type == ANY_NIL) truth = false;
-    else if (args[0].type == ANY_NUMBER) truth = (args[0].number != 0);
+    if (args[idx].type == ANY_BOOLEAN) truth = (args[idx].number != 0);
+    else if (args[idx].type == ANY_NIL) truth = false;
+    else if (args[idx].type == ANY_NUMBER) truth = (args[idx].number != 0);
     else truth = true;
 
     if (!truth) {
         std::string msg = "Assertion Gagal";
-        if (nargs >= 2 && args[1].type == ANY_STRING) {
-            msg = (char*)args[1].ptr;
+        if (nargs - idx >= 2 && args[idx+1].type == ANY_STRING) {
+            msg = (char*)args[idx+1].ptr;
         }
         MANIFAST_THROW("Runtime Error: [ASSERT GAGAL] " + msg);
     }
@@ -252,7 +252,15 @@ void wasm_plot_save(manifast::vm::VM* vm, ::Any* args, int nargs) {
 // Plot callback: receives RGBA framebuffer, encodes BMP, base64, emits to output
 static std::vector<uint8_t> g_plot_bmp_buffer;
 
+int g_wasm_plot_w = 0;
+int g_wasm_plot_h = 0;
+std::vector<uint8_t> g_wasm_plot_buffer;
+
 void wasm_plot_callback(const uint8_t* rgba, int w, int h) {
+    g_wasm_plot_w = w;
+    g_wasm_plot_h = h;
+    g_wasm_plot_buffer.assign(rgba, rgba + (w * h * 4));
+
     encode_bmp_to_buffer(rgba, w, h, g_plot_bmp_buffer);
     std::string b64 = base64_encode(g_plot_bmp_buffer.data(), g_plot_bmp_buffer.size());
     g_wasm_output += "\n[IMG:data:image/bmp;base64," + b64 + "]\n";
@@ -261,6 +269,26 @@ void wasm_plot_callback(const uint8_t* rgba, int w, int h) {
 // Exported for npm consumers
 const uint8_t* mf_get_plot_buffer() {
     return g_plot_bmp_buffer.data();
+}
+
+extern "C" {
+    const char* mf_test_plot_callback() {
+        uint8_t rgba[16] = {
+            255, 0, 0, 255,   255, 0, 0, 255,
+            255, 0, 0, 255,   255, 0, 0, 255
+        };
+        wasm_plot_callback(rgba, 2, 2);
+
+        bool w_correct = (g_wasm_plot_w == 2);
+        bool h_correct = (g_wasm_plot_h == 2);
+        bool buffer_correct = (g_wasm_plot_buffer.size() == 16 && g_wasm_plot_buffer[0] == 255);
+
+        if (!w_correct || !h_correct || !buffer_correct) {
+            return "[ERROR]";
+        } else {
+            return "[PASS]";
+        }
+    }
 }
 
 int mf_get_plot_buffer_size() {

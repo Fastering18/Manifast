@@ -526,7 +526,7 @@ std::unique_ptr<Expr> Parser::parseFactor() {
 }
 
 std::unique_ptr<Expr> Parser::parseUnary() {
-    if (match(TokenType::Bang) || match(TokenType::Minus) || match(TokenType::Tilde)) {
+    if (match(TokenType::Bang) || match(TokenType::Minus) || match(TokenType::Tilde) || match(TokenType::K_Type)) {
         Token opToken = previous();
         TokenType op = opToken.type;
         auto right = parseUnary();
