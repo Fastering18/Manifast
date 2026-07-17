@@ -3,8 +3,16 @@
 #include "Token.h"
 #include <unordered_map>
 #include <string_view>
+#include <string>
 
 namespace manifast {
+
+struct string_hash {
+    using is_transparent = void;
+    size_t operator()(std::string_view sv) const {
+        return std::hash<std::string_view>{}(sv);
+    }
+};
 
 class SyntaxConfig {
 public:
@@ -61,7 +69,7 @@ public:
     }
 
     TokenType lookupKeyword(std::string_view text) const {
-        auto it = keywords.find(std::string(text)); // string_view lookup in C++20 map is cleaner, casting to string for safety if pre-C++20 heterogenous lookup issues
+        auto it = keywords.find(text); // string_view lookup in C++20 map
         if (it != keywords.end()) {
             return it->second;
         }
@@ -69,7 +77,7 @@ public:
     }
 
 private:
-    std::unordered_map<std::string, TokenType> keywords;
+    std::unordered_map<std::string, TokenType, string_hash, std::equal_to<>> keywords;
 };
 
 } // namespace manifast
