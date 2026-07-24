@@ -2497,9 +2497,9 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
         }
         var mode = FS.flagsToPermissionString(flags);
         if (FS.isDir(node.mode)) {
+          if (flags & 2097152) mode = 'x';
           // opening for write
-          // TODO: check for O_SEARCH? (== search for dir only)
-          if (mode !== 'r' || (flags & (512 | 64))) {
+          if ((mode !== 'r' && mode !== 'x') || (flags & (512 | 64))) {
             return 31;
           }
         }
