@@ -4005,14 +4005,14 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
           return FS.ioctl(stream, op, argp);
         }
         case 21523: {
-          // TODO: in theory we should write to the winsize struct that gets
-          // passed in, but for now musl doesn't read anything on it
           if (!stream.tty) return -59;
           if (stream.tty.ops.ioctl_tiocgwinsz) {
             var winsize = stream.tty.ops.ioctl_tiocgwinsz(stream.tty);
             var argp = syscallGetVarargP();
             HEAP16[((argp)>>1)] = winsize[0];
             HEAP16[(((argp)+(2))>>1)] = winsize[1];
+            HEAP16[(((argp)+(4))>>1)] = 0;
+            HEAP16[(((argp)+(6))>>1)] = 0;
           }
           return 0;
         }
