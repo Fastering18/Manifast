@@ -10,6 +10,7 @@
 #include "manifast/Lexer.h"
 #include "manifast/Parser.h"
 #include "manifast/AST.h"
+#include "manifast/Utils/Process.h"
 #include "manifast/CodeGen.h"
 #include "manifast/Utils/Path.h"
 
@@ -212,9 +213,14 @@ void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
             // Invoke GCC for linking (fallback/legacy)
             // Assumes libmanifast_core.a is in library path or current directory
             // and fmt is available.
-            std::string cmd = "g++ \"" + objPath + "\" -o \"" + actualOut + "\" -L. -lmanifast_core -lfmt -static";
-            std::cout << "Linking executable (External g++): " << cmd << "\n";
-            int ret = std::system(cmd.c_str());
+            std::vector<std::string> args = {"g++", objPath, "-o", actualOut, "-L.", "-lmanifast_core", "-lfmt", "-static"};
+            std::string cmdStr;
+            for (size_t i = 0; i < args.size(); ++i) {
+                if (i > 0) cmdStr += " ";
+                cmdStr += args[i];
+            }
+            std::cout << "Linking executable (External g++): " << cmdStr << "\n";
+            int ret = manifast::utils::runCommand(args);
             
             if (ret == 0) {
                 std::cout << "Created Executable: " << actualOut << "\n";
