@@ -38,6 +38,7 @@ target_link_options(manifast PRIVATE
 
 # Move outputs to /docs automatically
 add_custom_command(TARGET manifast POST_BUILD
+    COMMAND node ${CMAKE_CURRENT_SOURCE_DIR}/fix_js.js "$<TARGET_FILE_DIR:manifast>/manifast.js"
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/../../docs
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:manifast> ${CMAKE_SOURCE_DIR}/../../docs/manifast.js
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/manifast.wasm ${CMAKE_SOURCE_DIR}/../../docs/manifast.wasm
