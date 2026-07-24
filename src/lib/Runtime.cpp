@@ -257,9 +257,12 @@ MF_API Any* manifast_create_instance(Any* class_any) {
 }
 
 MF_API void manifast_object_set_raw(ManifastObject* obj, const char* key, Any* val_any) {
+    // Intern the lookup key so we can use pointer equality
+    const char* interned_key = manifast_intern_string(key);
+
     // Check if exists
     for (uint32_t i = 0; i < obj->size; ++i) {
-        if (strcmp(obj->entries[i].key, key) == 0) {
+        if (obj->entries[i].key == interned_key) {
             obj->entries[i].value = *val_any;
             return;
         }
@@ -272,7 +275,7 @@ MF_API void manifast_object_set_raw(ManifastObject* obj, const char* key, Any* v
         obj->entries = (ManifastObjectEntry*)realloc(obj->entries, sizeof(ManifastObjectEntry) * obj->capacity);
     }
     
-    obj->entries[obj->size].key = manifast_intern_string(key);
+    obj->entries[obj->size].key = (char*)interned_key;
     obj->entries[obj->size].value = *val_any;
     obj->size++;
 }
