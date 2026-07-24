@@ -1,0 +1,5 @@
+lokal arr = [1, 2, 3]
+lokal val = arr[100]
+assert(val == nil, "Out of bounds array access should return nil")
+lokal val2 = arr[-1]
+assert(val2 == nil, "Negative index array access should return nil")
