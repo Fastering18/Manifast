@@ -5,3 +5,10 @@ data = data.replace(/UTF8Decoder\.decode\(heapOrArray\.subarray\(idx, endPtr\)\)
 data = data.replace(/UTF8Decoder\.decode\(HEAPU8\.subarray\(ptr, end\)\)/g, "UTF8Decoder.decode(HEAPU8.buffer.resizable ? HEAPU8.slice(ptr, end) : HEAPU8.subarray(ptr, end))");
 data = data.replace(/UTF8Decoder\.decode\(heapOrArray\.buffer \? heapOrArray\.subarray\(idx, endPtr\) : new Uint8Array\(heapOrArray\.slice\(idx, endPtr\)\)\)/g, "UTF8Decoder.decode(heapOrArray.buffer ? (heapOrArray.buffer.resizable ? heapOrArray.slice(idx, endPtr) : heapOrArray.subarray(idx, endPtr)) : new Uint8Array(heapOrArray.slice(idx, endPtr)))");
 fs.writeFileSync(file, data, 'utf8');
+const fix_str = `  // Suppress closure compiler warning here. Closure compiler's builtin extern
+  // definition for WebAssembly.RuntimeError claims it takes no arguments even
+  // though it can.
+  // TODO(https://github.com/google/closure-compiler/pull/3913): Remove if/when upstream closure gets fixed.
+  /** @suppress {checkTypes} */\n`;
+data = data.replace(fix_str, "");
+fs.writeFileSync(file, data, 'utf8');
