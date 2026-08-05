@@ -14,6 +14,17 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/TargetParser/Host.h>
 
+// Host C++ EH personality (resolved from libgcc linked into the process).
+#if defined(_WIN32) && (defined(__SEH__) || defined(__MINGW32__))
+extern "C" int __gxx_personality_seh0(...);
+#define MANIFAST_EH_PERSONALITY_SYM __gxx_personality_seh0
+#define MANIFAST_EH_PERSONALITY_NAME "__gxx_personality_seh0"
+#else
+extern "C" int __gxx_personality_v0(...);
+#define MANIFAST_EH_PERSONALITY_SYM __gxx_personality_v0
+#define MANIFAST_EH_PERSONALITY_NAME "__gxx_personality_v0"
+#endif
+
 namespace manifast {
 
 CodeGen::CodeGen(std::string_view source) : source(source) {
@@ -438,6 +449,12 @@ bool CodeGen::run() {
     REGISTER_SYM(manifast_array_pop);
     REGISTER_SYM(manifast_impor);
     REGISTER_SYM(manifast_call_dynamic);
+
+    // EH personality is required when try/catch lowers to landingpad/invoke.
+    RuntimeSymbols[Mangle(MANIFAST_EH_PERSONALITY_NAME)] = {
+        llvm::orc::ExecutorAddr::fromPtr((void*)&MANIFAST_EH_PERSONALITY_SYM),
+        llvm::JITSymbolFlags::Exported
+    };
 
     if (auto Err = JD.define(llvm::orc::absoluteSymbols(std::move(RuntimeSymbols)))) {
         std::cerr << "Error defining runtime symbols: " << llvm::toString(std::move(Err)) << "\n";
@@ -1208,11 +1225,11 @@ void CodeGen::visitTryStmt(const TryStmt* stmt) {
     llvm::Type* int32Ty = llvm::Type::getInt32Ty(*context);
     llvm::StructType* landingPadTy = llvm::StructType::get(*context, {builder->getPtrTy(), int32Ty});
 
-    // Get __gxx_personality_v0
-    llvm::Function* personalityFunc = module->getFunction("__gxx_personality_v0");
+    // Personality must match the host C++ ABI (see MANIFAST_EH_PERSONALITY_* above).
+    llvm::Function* personalityFunc = module->getFunction(MANIFAST_EH_PERSONALITY_NAME);
     if (!personalityFunc) {
         llvm::FunctionType* ft = llvm::FunctionType::get(int32Ty, true);
-        personalityFunc = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "__gxx_personality_v0", module.get());
+        personalityFunc = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, MANIFAST_EH_PERSONALITY_NAME, module.get());
     }
     func->setPersonalityFn(personalityFunc);
 

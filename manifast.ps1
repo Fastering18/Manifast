@@ -1,46 +1,112 @@
 param (
     [Parameter(Mandatory=$true, Position=0)]
-    [ValidateSet("build", "run", "run-vm", "test", "clean", "help", "build-wasm", "install", "uninstall")]
+    [ValidateSet("build", "run", "run-vm", "test", "clean", "help", "build-wasm", "install", "uninstall", "bootstrap")]
     [string]$Command,
 
     [switch]$Fast,
     [string]$LLVM_DIR = "",
+    [string]$Preset = "",
 
     [Parameter(ValueFromRemainingArguments=$true)]
     $RemainingArgs
 )
 
+$ErrorActionPreference = "Continue"
 $BuildDir = "build"
+$ScriptRoot = $PSScriptRoot
+if (-not $ScriptRoot) { $ScriptRoot = Get-Location }
 
 function Show-Help {
-    Write-Host "Manifast Build Tool" -ForegroundColor Cyan
+    Write-Host "Manifast Build Tool (Windows)" -ForegroundColor Cyan
     Write-Host "Usage: .\manifast.ps1 <command> [options]"
     Write-Host ""
     Write-Host "Commands:"
+    Write-Host "  bootstrap     Install toolchain via winget/MSYS2 (non-GUI)"
     Write-Host "  build         Configure and build the project"
     Write-Host "  run           Run manifast file in jit tier"
     Write-Host "  run-vm        Run manifast file in vm tier"
     Write-Host "  test          Run the test suite"
-    Write-Host "  install       Install binaries to system and add to PATH"
+    Write-Host "  install       Install binaries to user profile and add to PATH"
     Write-Host "  uninstall     Remove binaries from system and clear from PATH"
     Write-Host "  clean         Remove the build directory"
     Write-Host "  build-wasm    Build for WebAssembly (requires Emscripten)"
     Write-Host "  help          Show this help message"
     Write-Host ""
     Write-Host "Options:"
-    Write-Host "  --fast     Disable vcpkg LLVM download (uses system LLVM)"
+    Write-Host "  --fast              Use system/MSYS2 LLVM (skip vcpkg LLVM)"
+    Write-Host "  -Preset <name>      CMake preset (windows-msys2, no-llvm, vcpkg, ...)"
+    Write-Host "  -LLVM_DIR <path>    Explicit LLVMConfig.cmake directory"
 }
 
-# Check for --fast or -Fast in $RemainingArgs manually to support both styles
-foreach ($arg in $RemainingArgs) {
-    if ($arg -match "^--?fast$") {
-        $Fast = $true
+function Find-Msys2Ucrt {
+    if ($env:MSYSTEM_PREFIX -and (Test-Path "$env:MSYSTEM_PREFIX\bin\g++.exe")) {
+        return $env:MSYSTEM_PREFIX
     }
+    $roots = @()
+    if ($env:MSYS2_ROOT) { $roots += $env:MSYS2_ROOT }
+    $roots += @("C:\msys64", "D:\msys64", "C:\tools\msys64")
+    foreach ($root in $roots) {
+        foreach ($sub in @("ucrt64", "mingw64")) {
+            $p = Join-Path $root $sub
+            if (Test-Path (Join-Path $p "bin\g++.exe")) { return $p }
+        }
+    }
+    return $null
+}
+
+function Find-VcpkgToolchain {
+    if ($env:VCPKG_ROOT) {
+        $t = Join-Path $env:VCPKG_ROOT "scripts\buildsystems\vcpkg.cmake"
+        if (Test-Path $t) { return $t }
+    }
+    $vcpkg = Get-Command vcpkg -ErrorAction SilentlyContinue
+    if ($vcpkg) {
+        $root = Split-Path (Split-Path $vcpkg.Source)
+        $t = Join-Path $root "scripts\buildsystems\vcpkg.cmake"
+        if (Test-Path $t) { return $t }
+    }
+    foreach ($c in @("C:\vcpkg\scripts\buildsystems\vcpkg.cmake", "$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake")) {
+        if (Test-Path $c) { return $c }
+    }
+    return $null
+}
+
+function Find-EmsdkEnv {
+    if ($env:EMSDK) {
+        $bat = Join-Path $env:EMSDK "emsdk_env.bat"
+        if (Test-Path $bat) { return $bat }
+    }
+    $emcmake = Get-Command emcmake -ErrorAction SilentlyContinue
+    if ($emcmake) { return $null } # already on PATH
+    foreach ($c in @(
+        "C:\emsdk\emsdk_env.bat",
+        "D:\emsdk\emsdk_env.bat",
+        "$env:USERPROFILE\emsdk\emsdk_env.bat"
+    )) {
+        if (Test-Path $c) { return $c }
+    }
+    return $null
+}
+
+function Ensure-Cmake {
+    if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+        Write-Host "Error: cmake not found. Run: .\manifast.ps1 bootstrap" -ForegroundColor Red
+        exit 1
+    }
+}
+
+foreach ($arg in $RemainingArgs) {
+    if ($arg -match "^--?fast$") { $Fast = $true }
 }
 
 if ($Command -eq "help") {
     Show-Help
-    exit
+    exit 0
+}
+
+if ($Command -eq "bootstrap") {
+    & "$ScriptRoot\scripts\bootstrap-windows.ps1" @RemainingArgs
+    exit $LASTEXITCODE
 }
 
 if ($Command -eq "run") {
@@ -49,8 +115,7 @@ if ($Command -eq "run") {
         Write-Host "Error: Binary not found. Run 'build' first." -ForegroundColor Red
         exit 1
     }
-    
-    & $TestBin run $RemainingArgs
+    & $TestBin run @RemainingArgs
     exit $LASTEXITCODE
 }
 
@@ -60,8 +125,7 @@ if ($Command -eq "run-vm") {
         Write-Host "Error: Binary not found. Run 'build' first." -ForegroundColor Red
         exit 1
     }
-    
-    & $TestBin run $RemainingArgs --vm
+    & $TestBin run @RemainingArgs --vm
     exit $LASTEXITCODE
 }
 
@@ -71,116 +135,87 @@ if ($Command -eq "clean") {
         Remove-Item $BuildDir -Recurse -Force
     }
     Write-Host "Done." -ForegroundColor Green
-    exit
+    exit 0
 }
 
 if ($Command -eq "build") {
-    # If build directory exists but is broken (no ninja file), or if we want to be safe,
-    # we should allow re-configuration.
+    Ensure-Cmake
+
     $NeedsConfig = $true
     $ModeFile = "$BuildDir\build_mode.txt"
-    $CurrentMode = if ($Fast) { "FAST" } else { "DEFAULT" }
+    $CurrentMode = if ($Preset) { "PRESET:$Preset" } elseif ($Fast) { "FAST" } else { "DEFAULT" }
 
-    if (Test-Path "$BuildDir/build.ninja") {
-        if ($Fast) {
-            # If we want FAST (MinGW) but find Ninja, we MUST re-config
-            $NeedsConfig = $true
-        } else {
-            # Check if mode changed
-            if (Test-Path $ModeFile) {
-                $LastMode = Get-Content $ModeFile
-                if ($LastMode -eq $CurrentMode) {
-                    $NeedsConfig = $false
-                }
-            }
+    if ((Test-Path "$BuildDir\build.ninja") -or (Test-Path "$BuildDir\CMakeCache.txt")) {
+        if (Test-Path $ModeFile) {
+            $LastMode = (Get-Content $ModeFile -Raw).Trim()
+            if ($LastMode -eq $CurrentMode) { $NeedsConfig = $false }
         }
     }
 
     if ($NeedsConfig) {
-        Write-Host "  Mode change or missing config detected. Forcing clean state..." -ForegroundColor Gray
-        
-        # Kill any hung processes that might be locking the build dir
-        taskkill /F /IM ninja.exe /T 2>$null
-        taskkill /F /IM mingw32-make.exe /T 2>$null
-        taskkill /F /IM mifast.exe /T 2>$null
-        taskkill /F /IM mifastc.exe /T 2>$null
-        taskkill /F /IM manifast_tests.exe /T 2>$null
-        
-        if (-not (Test-Path $BuildDir)) {
-             New-Item -ItemType Directory -Path $BuildDir | Out-Null
-        }
-        # Only wipe if strictly necessary? user wants cache.
-        # But we killed processes. 
-        # If we re-run cmake, it handles cache usually.
-        # Removing the wipe block unless strictly needed.
-        $CurrentMode | Out-File $ModeFile
-        
         Write-Host "Configuring Project..." -ForegroundColor Cyan
-        
-        $CMakeArgs = @("-S", ".", "-B", $BuildDir, "-G", "Ninja")
-        
-        # Toolchain detection (vcpkg)
-        $VcpkgToolchain = "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-        if (-not (Test-Path $VcpkgToolchain)) {
-            $VcpkgExe = Get-Command vcpkg -ErrorAction SilentlyContinue
-            if ($VcpkgExe) {
-                $VcpkgRoot = Split-Path (Split-Path $VcpkgExe.Path)
-                $VcpkgToolchain = "$VcpkgRoot\scripts\buildsystems\vcpkg.cmake"
-            }
+        if (-not (Test-Path $BuildDir)) {
+            New-Item -ItemType Directory -Path $BuildDir | Out-Null
         }
-        if (-not (Test-Path $VcpkgToolchain)) {
-            $VcpkgToolchain = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
-        }
-        
-        # Determine build type (Fast/System LLVM vs Default/Vcpkg)
-        if ($Fast) {
-             # --- FAST MODE: Use System Libraries (MSYS2/etc) ---
-             Write-Host "  Mode: FAST (System LLVM & Libs)" -ForegroundColor Magenta
-             
-             # Force MSYS2 UCRT64 paths to avoid picking up Strawberry/Anaconda
-             $MsysPath = "D:\Program\msys64\ucrt64"
-             if (Test-Path $MsysPath) {
-                 Write-Host "  Forcing MSYS2 UCRT64 Toolchain..." -ForegroundColor Gray
-                 
-                 # Prepend MSYS2 bin to PATH for this process
-                 $env:PATH = "$MsysPath\bin;" + $env:PATH
-                 $env:CC = "$MsysPath\bin\gcc.exe"
-                 $env:CXX = "$MsysPath\bin\g++.exe"
-                 
-                 Write-Host "  Running CMake configuration (MinGW Makefiles)..." -ForegroundColor Gray
-                 
-                 # Using a flat string to avoid backtick issues
-                 $cmake_cmd = "cmake -S . -B $BuildDir -G `"MinGW Makefiles`" -DVCPKG_MANIFEST_FEATURES=`"`" -DCMAKE_C_COMPILER=`"$MsysPath\bin\gcc.exe`" -DCMAKE_CXX_COMPILER=`"$MsysPath\bin\g++.exe`" -DCMAKE_LINKER=`"$MsysPath\bin\ld.exe`" -DCMAKE_AR=`"$MsysPath\bin\ar.exe`" -DCMAKE_RANLIB=`"$MsysPath\bin\ranlib.exe`" -DCMAKE_MAKE_PROGRAM=`"$MsysPath\bin\mingw32-make.exe`" -DCMAKE_PREFIX_PATH=`"$MsysPath`" -DCMAKE_FIND_ROOT_PATH=`"$MsysPath`" -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_IGNORE_PATH=`"D:/Program/Anaconda`" -DLLVM_DIR=`"$MsysPath/lib/cmake/llvm`" -DGTest_DIR=`"$MsysPath/lib/cmake/GTest`" -Dfmt_DIR=`"$MsysPath/lib/cmake/fmt`""
-                 
-                 Invoke-Expression $cmake_cmd
-             } elseif ($LLVM_DIR) {
-                 cmake -S . -B $BuildDir -G Ninja -DLLVM_DIR=$LLVM_DIR
-             } else {
-                 cmake -S . -B $BuildDir -G Ninja
-             }
-        } else {
-             # --- DEFAULT MODE: Use Vcpkg ---
-             Write-Host "  Mode: DEFAULT (Vcpkg Bundle)" -ForegroundColor Blue
-             if (Test-Path $VcpkgToolchain) {
-                 Write-Host "  Using Toolchain: $VcpkgToolchain" -ForegroundColor Gray
-                 # Explicitly set triplet and prefix path to help CMake find vcpkg packages (like asmjit)
-                 # even if the compiler doesn't match the default triplet.
-                 $VcpkgInstalled = Join-Path $PSScriptRoot "vcpkg_installed\x64-windows"
-                 cmake -S . -B $BuildDir -G Ninja -DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_PREFIX_PATH=$VcpkgInstalled
-             } else {
-                 cmake -S . -B $BuildDir -G Ninja
-             }
-        }
+        $CurrentMode | Out-File $ModeFile -Encoding utf8 -NoNewline
 
-        if ($LASTEXITCODE -ne 0) { 
-            Write-Host "Error: CMake configuration failed with exit code $LASTEXITCODE" -ForegroundColor Red
-            exit $LASTEXITCODE 
+        if ($Preset) {
+            Write-Host "  Mode: preset $Preset" -ForegroundColor Magenta
+            cmake --preset $Preset
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        } elseif ($Fast) {
+            Write-Host "  Mode: FAST (system / MSYS2 LLVM)" -ForegroundColor Magenta
+            $MsysPrefix = Find-Msys2Ucrt
+            $cmakeArgs = @("-S", ".", "-B", $BuildDir, "-G", "Ninja", "-DVCPKG_MANIFEST_FEATURES=")
+
+            if ($MsysPrefix) {
+                Write-Host "  Using MSYS2 prefix: $MsysPrefix" -ForegroundColor Gray
+                $env:PATH = "$MsysPrefix\bin;" + $env:PATH
+                $env:CC = "$MsysPrefix\bin\gcc.exe"
+                $env:CXX = "$MsysPrefix\bin\g++.exe"
+                $cmakeArgs += @(
+                    "-DCMAKE_C_COMPILER=$MsysPrefix\bin\gcc.exe",
+                    "-DCMAKE_CXX_COMPILER=$MsysPrefix\bin\g++.exe",
+                    "-DCMAKE_PREFIX_PATH=$MsysPrefix",
+                    "-DLLVM_DIR=$MsysPrefix\lib\cmake\llvm"
+                )
+                if (Test-Path "$MsysPrefix\lib\cmake\GTest") {
+                    $cmakeArgs += "-DGTest_DIR=$MsysPrefix\lib\cmake\GTest"
+                }
+                if (Test-Path "$MsysPrefix\lib\cmake\fmt") {
+                    $cmakeArgs += "-Dfmt_DIR=$MsysPrefix\lib\cmake\fmt"
+                }
+            } elseif ($LLVM_DIR) {
+                $cmakeArgs += "-DLLVM_DIR=$LLVM_DIR"
+            } else {
+                Write-Host "  No MSYS2 found; relying on PATH / -DLLVM_DIR" -ForegroundColor Yellow
+                Write-Host "  Tip: .\manifast.ps1 bootstrap" -ForegroundColor Yellow
+            }
+            cmake @cmakeArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        } else {
+            Write-Host "  Mode: DEFAULT (vcpkg if available)" -ForegroundColor Blue
+            $toolchain = Find-VcpkgToolchain
+            $cmakeArgs = @("-S", ".", "-B", $BuildDir, "-G", "Ninja")
+            if ($toolchain) {
+                Write-Host "  Using vcpkg: $toolchain" -ForegroundColor Gray
+                $cmakeArgs += @(
+                    "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
+                    "-DVCPKG_TARGET_TRIPLET=x64-windows"
+                )
+            } else {
+                Write-Host "  vcpkg not found; configuring with system packages" -ForegroundColor Yellow
+                Write-Host "  Tip: .\manifast.ps1 bootstrap   or   build --fast" -ForegroundColor Yellow
+            }
+            if ($LLVM_DIR) { $cmakeArgs += "-DLLVM_DIR=$LLVM_DIR" }
+            cmake @cmakeArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
     }
-    
+
     Write-Host "Building Project..." -ForegroundColor Cyan
-    # Use parallel build (User has 8 cores, 75% is 6)
-    cmake --build $BuildDir --parallel 6
+    $jobs = [Math]::Max(1, [int]([Environment]::ProcessorCount * 0.75))
+    cmake --build $BuildDir --parallel $jobs
     exit $LASTEXITCODE
 }
 
@@ -190,39 +225,43 @@ if ($Command -eq "test") {
         Write-Host "Error: Binary not found. Run 'build' first." -ForegroundColor Red
         exit 1
     }
-    
     Write-Host "Running Modern Test Suite..." -ForegroundColor Cyan
-    & $TestBin test $RemainingArgs
-    exit $LASTEXITCODE
+    & $TestBin test @RemainingArgs
+    $scriptExit = $LASTEXITCODE
+    if (Get-Command ctest -ErrorAction SilentlyContinue) {
+        Write-Host "Running CTest..." -ForegroundColor Cyan
+        ctest --test-dir $BuildDir --output-on-failure
+        if ($LASTEXITCODE -ne 0) { $scriptExit = $LASTEXITCODE }
+    }
+    exit $scriptExit
 }
 
 if ($Command -eq "install") {
     $BinDir = "$BuildDir\bin"
     $LibDir = "$BuildDir\lib"
-    
+
     if (-not (Test-Path "$BinDir\mifast.exe")) {
         Write-Host "Error: Binary not found. Run 'build' first." -ForegroundColor Red
         exit 1
     }
-    
+
     $InstallDir = "$env:LOCALAPPDATA\Manifast"
     $InstallBin = "$InstallDir\bin"
     $InstallLib = "$InstallDir\lib"
-    
+
     Write-Host "Installing Manifast to $InstallDir..." -ForegroundColor Cyan
-    
     New-Item -ItemType Directory -Path $InstallBin -Force | Out-Null
     New-Item -ItemType Directory -Path $InstallLib -Force | Out-Null
-    
+
     Copy-Item "$BinDir\mifast.exe" "$InstallBin\" -Force
     if (Test-Path "$BinDir\mifastc.exe") {
         Copy-Item "$BinDir\mifastc.exe" "$InstallBin\" -Force
     }
-    
+
     Get-ChildItem "$LibDir\*" -Include "*.a","*.lib" -ErrorAction SilentlyContinue | ForEach-Object {
         Copy-Item $_.FullName "$InstallLib\" -Force
     }
-    
+
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($UserPath -notlike "*$InstallBin*") {
         [Environment]::SetEnvironmentVariable("Path", "$InstallBin;$UserPath", "User")
@@ -231,32 +270,27 @@ if ($Command -eq "install") {
     } else {
         Write-Host "$InstallBin already in PATH." -ForegroundColor Gray
     }
-    
+
     Write-Host "Manifast installed successfully!" -ForegroundColor Green
-    Write-Host "Run 'mifast --help' in a new terminal to verify." -ForegroundColor Gray
     exit 0
 }
 
 if ($Command -eq "uninstall") {
     $InstallDir = "$env:LOCALAPPDATA\Manifast"
     $InstallBin = "$InstallDir\bin"
-    
+
     Write-Host "Uninstalling Manifast..." -ForegroundColor Cyan
-    
-    # Remove from PATH
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($UserPath -like "*$InstallBin*") {
         $NewPath = ($UserPath -split ";" | Where-Object { $_ -ne $InstallBin }) -join ";"
         [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
         Write-Host "Removed $InstallBin from user PATH." -ForegroundColor Green
     }
-    
-    # Remove binaries
+
     if (Test-Path $InstallDir) {
-        Write-Host "Removing installed binaries in $InstallDir..." -ForegroundColor Yellow
         Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
     }
-    
+
     Write-Host "Manifast uninstalled successfully." -ForegroundColor Green
     exit 0
 }
@@ -264,27 +298,25 @@ if ($Command -eq "uninstall") {
 if ($Command -eq "build-wasm") {
     Write-Host "Building WebAssembly..." -ForegroundColor Cyan
     $WasmBuildDir = "build-wasm"
-    
+
     if (Test-Path $WasmBuildDir) {
-        Write-Host "Cleaning $WasmBuildDir..." -ForegroundColor Gray
-        cmd /c "rmdir /s /q $WasmBuildDir" 2>$null
-        if (Test-Path $WasmBuildDir) {
-             Start-Sleep -Seconds 1
-             cmd /c "rmdir /s /q $WasmBuildDir" 2>$null
-        }
+        Remove-Item $WasmBuildDir -Recurse -Force -ErrorAction SilentlyContinue
     }
-    
-    $EmsdkEnv = "D:\Program\Emscripten\emsdk\emsdk_env.bat"
-    
-    if (Test-Path $EmsdkEnv) {
+
+    $EmsdkEnv = Find-EmsdkEnv
+    if ($EmsdkEnv) {
         Write-Host "Activating Emscripten ($EmsdkEnv)..." -ForegroundColor Gray
-        # We must run in cmd /c to let the bat file set env vars for the session of that cmd
-        cmd /c "call `"$EmsdkEnv`" > NUL && emcmake cmake -G `"MinGW Makefiles`" -S src/wasm -B $WasmBuildDir && cmake --build $WasmBuildDir --target manifast"
+        cmd /c "call `"$EmsdkEnv`" > NUL && emcmake cmake -G Ninja -S src/wasm -B $WasmBuildDir && cmake --build $WasmBuildDir --target manifast"
+    } elseif (Get-Command emcmake -ErrorAction SilentlyContinue) {
+        emcmake cmake -G Ninja -S src/wasm -B $WasmBuildDir
+        if ($LASTEXITCODE -eq 0) {
+            cmake --build $WasmBuildDir --target manifast
+        }
     } else {
-        Write-Host "EMSDK script not found, assuming emcmake in PATH..." -ForegroundColor Yellow
-        cmd /c "emcmake cmake -G `"MinGW Makefiles`" -S src/wasm -B $WasmBuildDir && cmake --build $WasmBuildDir --target manifast"
+        Write-Host "Error: Emscripten not found. Set EMSDK or put emcmake on PATH." -ForegroundColor Red
+        exit 1
     }
-    
+
     if ($LASTEXITCODE -eq 0) {
         Write-Host "WASM Build Success!" -ForegroundColor Green
     } else {

@@ -84,14 +84,19 @@ void Compiler::compile(Stmt* stmt) {
             int valReg = allocReg();
             if (s->initializer) {
                 int initReg = compile(s->initializer.get());
-                emit(createABC(OpCode::MOVE, valReg, initReg, 0));
+                emit(createABC(OpCode::MOVE, valReg, initReg, 0), s->line, s->offset);
                 freeReg();
             } else {
-                emit(createABC(OpCode::LOADNIL, valReg, 0, 0));
+                emit(createABC(OpCode::LOADNIL, valReg, 0, 0), s->line, s->offset);
+            }
+
+            // Match locals/JIT: enforce annotations on top-level globals too
+            if (s->typeAnnotation.kind != TypeKind::Any) {
+                emitTypeCheck(valReg, s->typeAnnotation, s->line, s->offset);
             }
 
             int kName = makeConstant({1, 0.0, mf_strdup(s->name.c_str())});
-            emit(createABx(OpCode::SETGLOBAL, valReg, kName));
+            emit(createABx(OpCode::SETGLOBAL, valReg, kName), s->line, s->offset);
             freeReg();
         } else {
             int reg = allocReg(); 

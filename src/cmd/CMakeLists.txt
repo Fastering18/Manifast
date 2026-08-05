@@ -1,15 +1,27 @@
 if(MANIFAST_ENABLE_LLVM)
     add_executable(mifastc mifastc/main.cpp)
 
+    # Use native codegen (host arch) instead of hardcoding x86-only components
     llvm_map_components_to_libnames(mifastc_llvm_libs
-        core orcjit support target executionengine analysis native
-        passes mc object option ipo instrumentation
-        bitreader bitwriter
-        x86codegen x86asmparser x86desc x86info
+        core
+        orcjit
+        support
+        target
+        executionengine
+        analysis
+        native
+        passes
+        mc
+        object
+        option
+        ipo
+        instrumentation
+        bitreader
+        bitwriter
     )
 
-    target_link_libraries(mifastc PRIVATE 
-        manifast_jit 
+    target_link_libraries(mifastc PRIVATE
+        manifast_jit
         ${mifastc_llvm_libs}
         ${LLVM_SYSTEM_LIBS}
     )

@@ -1,40 +1,112 @@
-# Installing Dependencies with MSYS2 (Fast Build)
+# Installing Build Dependencies
 
-If you want to avoid long download and compile times with `vcpkg`, you can use **MSYS2** to install pre-compiled binaries for LLVM, GTest, and fmt. This method is used by the `.\manifast.ps1 build --fast` command.
+Manifast is a standard CMake C++20 project. You do **not** need WSL to develop on Windows.
 
-## 1. Install MSYS2
-Download and install MSYS2 from [msys2.org](https://www.msys2.org/). Follow the default installation instructions.
+## Windows (recommended — non-GUI)
 
-## 2. Update MSYS2
-Open the **MSYS2 UCRT64** terminal and run:
-```bash
-pacman -Syu
-```
-*(You might need to restart the terminal after the first update).*
-
-## 3. Install Compiler and Dependencies
-In the same **MSYS2 UCRT64** terminal, run the following command to install the required toolchain and libraries:
-
-```bash
-pacman -S mingw-w64-ucrt-x86_64-gcc \
-          mingw-w64-ucrt-x86_64-cmake \
-          mingw-w64-ucrt-x86_64-ninja \
-          mingw-w64-ucrt-x86_64-llvm \
-          mingw-w64-ucrt-x86_64-gtest \
-          mingw-w64-ucrt-x86_64-fmt
-```
-
-## 4. Build Manifast
-Once the dependencies are installed, you can build the project using the "Fast" mode in PowerShell:
+From PowerShell in the repo root:
 
 ```powershell
+.\scripts\bootstrap-windows.ps1
+# or:
+.\manifast.ps1 bootstrap
+```
+
+This uses **winget** to install CMake/Ninja (if missing) and **MSYS2 UCRT64** packages for:
+
+- MinGW toolchain (`g++`)
+- LLVM (prebuilt — much faster than compiling via vcpkg)
+- fmt, gtest
+
+Then build:
+
+```powershell
+$env:MSYS2_ROOT = "C:\msys64"   # if not already set
+$env:Path = "C:\msys64\ucrt64\bin;" + $env:Path
 .\manifast.ps1 build --fast
 ```
 
-The script will automatically detect your MSYS2 installation at `D:\Program\msys64\ucrt64` (or common defaults) and link against the system libraries.
+### VM-only (no LLVM)
+
+If you only need the bytecode VM (faster bootstrap, no JIT/AOT):
+
+```powershell
+.\scripts\bootstrap-windows.ps1 -VmOnly
+cmake --preset no-llvm
+cmake --build build
+```
+
+### Manual MSYS2 (optional)
+
+1. Install [MSYS2](https://www.msys2.org/) or `winget install MSYS2.MSYS2`
+2. In a shell with MSYS2 `bash`:
+
+```bash
+pacman -Syu --noconfirm
+pacman -S --needed --noconfirm \
+  mingw-w64-ucrt-x86_64-toolchain \
+  mingw-w64-ucrt-x86_64-cmake \
+  mingw-w64-ucrt-x86_64-ninja \
+  mingw-w64-ucrt-x86_64-llvm \
+  mingw-w64-ucrt-x86_64-fmt \
+  mingw-w64-ucrt-x86_64-gtest
+```
+
+3. Put `C:\msys64\ucrt64\bin` on PATH (or set `MSYS2_ROOT`).
 
 ---
 
-### Why use this instead of vcpkg?
-- **Speed**: Pacman downloads pre-compiled binaries. Vcpkg often compiles LLVM from source, which can take over an hour.
-- **Consistency**: Uses the same MinGW/UCRT environment for both the compiler and the libraries, avoiding ABI mismatches.
+## Linux
+
+```bash
+./scripts/bootstrap-linux.sh
+# or:
+./manifast.sh bootstrap
+
+./manifast.sh build --fast
+```
+
+On Ubuntu/Debian this installs cmake, ninja, g++, llvm (18 when available), libfmt-dev, libgtest-dev.
+
+---
+
+## vcpkg (optional)
+
+`vcpkg.json` lists: `fmt`, `asmjit`, `gtest`, `argparse`. LLVM is **not** a default feature (building it from source is slow).
+
+```bash
+# after setting VCPKG_ROOT
+vcpkg install
+cmake --preset vcpkg   # or pass -DCMAKE_TOOLCHAIN_FILE=...
+```
+
+To force LLVM via vcpkg (slow):
+
+```bash
+vcpkg install --x-feature=bundled-llvm
+```
+
+Prefer system/MSYS2 LLVM with `--fast` for day-to-day work.
+
+---
+
+## CMake presets
+
+| Preset | Use when |
+|--------|----------|
+| `windows-msys2` | Full Windows + MSYS2 UCRT64 |
+| `windows-msvc-vm` | MSVC + vcpkg, no LLVM |
+| `linux-system` | Linux with distro packages |
+| `no-llvm` | Portable VM-only |
+| `vcpkg` | Manifest mode via `VCPKG_ROOT` |
+
+```bash
+cmake --preset no-llvm
+cmake --build build
+```
+
+---
+
+## Why not WSL-only?
+
+Ship and debug native Windows binaries without a second environment. WSL is fine for optional Linux parity testing, not required for Manifast development on Windows.

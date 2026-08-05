@@ -7,38 +7,94 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install System Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget software-properties-common
-        wget https://apt.llvm.org/llvm.sh
-        chmod +x llvm.sh
-        sudo ./llvm.sh 18
-        sudo apt-get install -y ninja-build cmake g++-12 llvm-18-dev libfmt-dev libgtest-dev libcurl4-openssl-dev libedit-dev
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
-        
-        # Install argparse manually (header-only)
-        sudo mkdir -p /usr/local/include/argparse
-        sudo wget -O /usr/local/include/argparse/argparse.hpp https://raw.githubusercontent.com/p-ranav/argparse/master/include/argparse/argparse.hpp
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget software-properties-common
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 18
+          sudo apt-get install -y ninja-build cmake g++-12 llvm-18-dev libfmt-dev libgtest-dev libcurl4-openssl-dev libedit-dev
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
 
-    - name: Configure CMake
-      run: |
-        # Explicitly tell CMake where to find LLVM Config
-        cmake -S . -B build -G "Ninja" \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm
-          # No vcpkg toolchain -> uses system libs found by find_package
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm
 
-    - name: Build
-      run: cmake --build build
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
 
-    - name: Run Tests
-      run: |
-        ./build/bin/mifast test
-        ctest --test-dir build --output-on-failure
+      - name: Run Tests
+        run: |
+          ./build/bin/mifast test
+          ctest --test-dir build --output-on-failure
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-llvm
+            mingw-w64-ucrt-x86_64-fmt
+            mingw-w64-ucrt-x86_64-gtest
+
+      - name: Configure & Build
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVCPKG_MANIFEST_FEATURES=
+          cmake --build build --parallel $(nproc)
+
+      - name: Run Tests
+        shell: msys2 {0}
+        run: |
+          ./build/bin/mifast.exe test
+          ctest --test-dir build --output-on-failure
+
+  build-windows-vm-only:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-fmt
+            mingw-w64-ucrt-x86_64-gtest
+
+      - name: Configure & Build (VM-only)
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMANIFAST_ENABLE_LLVM=OFF
+          cmake --build build --parallel $(nproc)
+
+      - name: Run Tests
+        shell: msys2 {0}
+        run: |
+          ./build/bin/mifast.exe test
+          ctest --test-dir build --output-on-failure

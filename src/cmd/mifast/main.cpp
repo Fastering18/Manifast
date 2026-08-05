@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <numeric>
 #include <fstream>
+#include <cstdlib>
 #include <fmt/core.h>
 #include <fmt/color.h>
 #include <cassert>
@@ -186,11 +187,11 @@ void printUsage() {
     fmt::print("  build <file> [-o output] [--verbose]             Compile a Manifast wrapper to native executable (AOT)\n");
 }
 
-void runTestRunner(bool useVM) {
+int runTestRunner(bool useVM) {
     runCppTests();
 
     if (g_isInteractive) {
-        fmt::print(fmt::emphasis::bold | fg(fmt::color::cyan), "🚀 Starting Manifast Test Suite ({}) ...\n\n", useVM ? "Bytecode VM" : "LLVM JIT");
+        fmt::print(fmt::emphasis::bold | fg(fmt::color::cyan), "Starting Manifast Test Suite ({}) ...\n\n", useVM ? "Bytecode VM" : "LLVM JIT");
     } else {
         fmt::print("Starting Manifast Test Suite ({})...\n\n", useVM ? "Bytecode VM" : "LLVM JIT");
     }
@@ -206,6 +207,7 @@ void runTestRunner(bool useVM) {
     
     std::map<std::string, std::vector<TestResult>> resultsByCategory;
     std::vector<fs::path> testFiles;
+    int failCount = 0;
 
     if (fs::exists("tests")) {
         for (auto const& dir_entry : fs::recursive_directory_iterator("tests")) {
@@ -217,7 +219,7 @@ void runTestRunner(bool useVM) {
 
     if (testFiles.empty()) {
         fmt::print(fg(fmt::color::red), "No test files found in 'tests/' directory.\n");
-        return;
+        return 1;
     }
 
     size_t total = testFiles.size();
@@ -264,6 +266,7 @@ void runTestRunner(bool useVM) {
         std::chrono::duration<double, std::milli> elapsed = end - start;
 
         if (!success) {
+             failCount++;
              if (g_isInteractive) {
                 fmt::print(fg(fmt::color::red), "\n[FAIL] {} ({:.2f} ms)\n", file.filename().string(), elapsed.count());
              } else {
@@ -304,6 +307,7 @@ void runTestRunner(bool useVM) {
         fmt::print(" │ {:<10.2f} │ {:<10.2f} │ {:<10.2f} │\n", minTime, avgTime, maxTime);
     }
     fmt::print("└──────────────────────────┴────────────┴────────────┴────────────┴────────────┘\n");
+    return failCount == 0 ? 0 : 1;
 }
 
 int main(int argc, char* argv[]) {
@@ -338,7 +342,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (cmd == "test") {
-        runTestRunner(useVM);
+        return runTestRunner(useVM);
     } else if (cmd == "build") {
 #ifndef MANIFAST_HAS_LLVM
         fmt::print(fg(fmt::color::red), "Error: This binary was compiled without LLVM JIT support. Build command is unavailable.\n");
@@ -408,27 +412,41 @@ int main(int argc, char* argv[]) {
                 fs::path exePath = fs::weakly_canonical(fs::path(argv[0]));
                 std::string libDir = (exePath.parent_path().parent_path() / "lib").string();
                 
-                // Prefer MSYS2 g++ if available
+                // Resolve host C++ linker: PATH first, then MSYS2 env / common installs
                 std::string gpp = "g++";
+                std::string extraLibDir;
 #ifdef _WIN32
-                std::vector<std::string> msysPaths = {
-                    "D:/Program/msys64/ucrt64/bin/g++.exe",
-                    "C:/msys64/ucrt64/bin/g++.exe",
-                    "C:/msys64/mingw64/bin/g++.exe"
-                };
-                std::string msysLibDir;
-                for (const auto& p : msysPaths) {
-                    if (fs::exists(p)) {
-                        gpp = p;
-                        msysLibDir = fs::path(p).parent_path().parent_path().string() + "/lib";
-                        break;
+                auto firstExisting = [](const std::vector<std::string>& paths) -> std::string {
+                    for (const auto& p : paths) {
+                        if (fs::exists(p)) return p;
                     }
+                    return {};
+                };
+
+                std::vector<std::string> gppCandidates;
+                if (const char* msystem = std::getenv("MSYSTEM_PREFIX")) {
+                    gppCandidates.push_back(std::string(msystem) + "/bin/g++.exe");
+                }
+                if (const char* msysRoot = std::getenv("MSYS2_ROOT")) {
+                    gppCandidates.push_back(std::string(msysRoot) + "/ucrt64/bin/g++.exe");
+                    gppCandidates.push_back(std::string(msysRoot) + "/mingw64/bin/g++.exe");
+                }
+                // Portable fallbacks only (no user-specific drive layouts)
+                gppCandidates.push_back("C:/msys64/ucrt64/bin/g++.exe");
+                gppCandidates.push_back("C:/msys64/mingw64/bin/g++.exe");
+                gppCandidates.push_back("D:/msys64/ucrt64/bin/g++.exe");
+                gppCandidates.push_back("D:/msys64/mingw64/bin/g++.exe");
+
+                std::string found = firstExisting(gppCandidates);
+                if (!found.empty()) {
+                    gpp = found;
+                    extraLibDir = (fs::path(found).parent_path().parent_path() / "lib").string();
                 }
 #endif
-                
+
                 std::string cmdStr = gpp + " \"" + objPath + "\" -o \"" + actualOut + "\" -L\"" + libDir + "\"";
 #ifdef _WIN32
-                if (!msysLibDir.empty()) cmdStr += " -L\"" + msysLibDir + "\"";
+                if (!extraLibDir.empty()) cmdStr += " -L\"" + extraLibDir + "\"";
 #endif
                 cmdStr += " -L. -lmanifast_core -lfmt -static";
                 

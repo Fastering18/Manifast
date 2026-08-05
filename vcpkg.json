@@ -4,7 +4,8 @@
   "dependencies": [
     "fmt",
     "argparse",
-    "asmjit"
+    "asmjit",
+    "gtest"
   ],
   "features": {
     "bundled-llvm": {

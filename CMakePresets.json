@@ -1,0 +1,113 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "no-llvm",
+      "displayName": "VM-only (no LLVM)",
+      "description": "Portable bytecode VM build without LLVM JIT/AOT",
+      "inherits": "base",
+      "cacheVariables": {
+        "MANIFAST_ENABLE_LLVM": "OFF"
+      }
+    },
+    {
+      "name": "linux-system",
+      "displayName": "Linux system packages",
+      "description": "Use system LLVM/fmt/gtest (apt/dnf)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "MANIFAST_ENABLE_LLVM": "ON"
+      }
+    },
+    {
+      "name": "windows-msys2",
+      "displayName": "Windows MSYS2 UCRT64 (full LLVM)",
+      "description": "MinGW UCRT toolchain with MSYS2 LLVM — recommended for full Windows builds",
+      "inherits": "base",
+      "generator": "Ninja",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "MANIFAST_ENABLE_LLVM": "ON",
+        "VCPKG_MANIFEST_FEATURES": ""
+      }
+    },
+    {
+      "name": "windows-msvc-vm",
+      "displayName": "Windows MSVC VM-only",
+      "description": "MSVC + vcpkg without LLVM (fast bootstrap / IDE)",
+      "inherits": "no-llvm",
+      "generator": "Ninja",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    },
+    {
+      "name": "vcpkg",
+      "displayName": "vcpkg dependencies",
+      "description": "Use vcpkg toolchain (LLVM optional via feature bundled-llvm)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "no-llvm",
+      "configurePreset": "no-llvm"
+    },
+    {
+      "name": "linux-system",
+      "configurePreset": "linux-system"
+    },
+    {
+      "name": "windows-msys2",
+      "configurePreset": "windows-msys2"
+    },
+    {
+      "name": "windows-msvc-vm",
+      "configurePreset": "windows-msvc-vm"
+    },
+    {
+      "name": "vcpkg",
+      "configurePreset": "vcpkg"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "no-llvm",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

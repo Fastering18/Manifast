@@ -1,5 +1,6 @@
 # Build directories
 build/
+build-*/
 out/
 bin/
 
@@ -7,6 +8,7 @@ bin/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
+CMakeUserPresets.json
 Makefile
 *.ninja
 *.ninja_deps
@@ -38,9 +40,8 @@ test_plot_output.bmp
 test_scatter_output.bmp
 *.bmp
 *.tmp
-build-nollvm/
-build-llvm/
 
 vcpkg_installed/
 vendor/
 *.obj
+*.orig

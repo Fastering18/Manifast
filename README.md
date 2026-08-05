@@ -77,66 +77,58 @@ iwr -useb https://raw.githubusercontent.com/Fastering18/Manifast/master/install.
 - [ ] Self compilation
 
 ## How to compile & run?
-### Requirements
-- [vcpkg](https://vcpkg.io/) for dependency management
-- [CMake](https://cmake.org/) (version 3.25+)
-- [Ninja](https://ninja-build.org/) or any C++ build tool
-- [LLVM](https://llvm.org/) (Recommended 18+)
 
-### Clone the project
+Manifast is a **standard cross-platform C++20 CMake project**. It builds natively on **Windows** and **Linux** (no WSL required).
+
+### Requirements
+- CMake 3.25+
+- Ninja (or another CMake generator)
+- C++20 compiler (MSVC, MinGW/UCRT, or GCC/Clang)
+- **LLVM 18+** for JIT/AOT (optional — use VM-only builds without it)
+- **fmt** (and optionally asmjit, gtest)
+
+### Clone
 ```powershell
 git clone https://github.com/Fastering18/Manifast
 cd Manifast
 ```
 
-### Setup Dependencies
-Make sure `vcpkg` is installed and in your PATH. The `vcpkg.json` manages dependencies like `fmt` and `asmjit`.
+### Windows (recommended)
+
+Non-GUI bootstrap (winget + MSYS2 UCRT64 prebuilt LLVM):
+
 ```powershell
-vcpkg install
-```
-
-**Alternative (Recommended for Windows Speed):**
-For installing dependencies without vcpkg: [follow these steps in docs/INSTALLING.md](docs/INSTALLING.md)
-
-
-### LLVM Recommendation
-We recommend using **LLVM 18+**.
-- **Default**: The build system will automatically download and build the latest available LLVM via `vcpkg` (can be slow).
-- **Fast Build**: Install LLVM 18+ manually and use the `--fast` flag to skip the vcpkg build.
-
-### Build & Run
-We provide a unified helper script: `manifast.ps1` (Windows) or `manifast.sh` (Linux/macOS).
-By default, CMake builds `manifast_core` alongside the LLVM JIT. If you want a lightweight VM-only embedded build, configure with `-DMANIFAST_ENABLE_LLVM=OFF`.
-
-**Standard Build (Clone & Go):**
-```powershell
-.\manifast.ps1 build
-```
-
-**Run scripts:**
-```powershell
-.\manifast.ps1 run script.mnf --stack-size 64mb
-.\manifast.ps1 run-vm script.mnf
-```
-
-**Build WebAssembly:**
-```powershell
-.\manifast.ps1 build-wasm
-```
-
-**Fast Build (Uses System LLVM):**
-```powershell
+.\manifast.ps1 bootstrap
+# ensure UCRT64 bin is on PATH, then:
 .\manifast.ps1 build --fast
 ```
 
-**Run Tests:**
-```powershell
-.\manifast.ps1 test
+### Linux
+
+```bash
+./manifast.sh bootstrap
+./manifast.sh build --fast
 ```
 
-**Clean:**
-```powershell
-.\manifast.ps1 clean
+Details and alternatives (vcpkg, VM-only, presets): **[docs/INSTALLING.md](docs/INSTALLING.md)**.
+
+### Build & run helpers
+
+| Command | Windows | Linux/macOS |
+|---------|---------|-------------|
+| Bootstrap tools | `.\manifast.ps1 bootstrap` | `./manifast.sh bootstrap` |
+| Build (system LLVM) | `.\manifast.ps1 build --fast` | `./manifast.sh build --fast` |
+| Run JIT | `.\manifast.ps1 run script.mnf` | `./manifast.sh run script.mnf` |
+| Run VM | `.\manifast.ps1 run-vm script.mnf` | `./manifast.sh run-vm script.mnf` |
+| Tests | `.\manifast.ps1 test` | `./manifast.sh test` |
+| WASM | `.\manifast.ps1 build-wasm` | `./manifast.sh build-wasm` |
+| Clean | `.\manifast.ps1 clean` | `./manifast.sh clean` |
+
+VM-only (no LLVM):
+
+```bash
+cmake --preset no-llvm
+cmake --build build
 ```
 
 ---

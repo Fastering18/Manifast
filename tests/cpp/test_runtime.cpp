@@ -4,39 +4,59 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
-#include <unistd.h>
+#include <fstream>
+#include <filesystem>
 #include "manifast/Runtime.h"
 #include "manifast/AST.h"
 
+#ifdef _WIN32
+#include <io.h>
+#define ISATTY_FD(fd) _isatty(fd)
+#define DUP_FD _dup
+#define DUP2_FD _dup2
+#define FILENO_FD _fileno
+#define CLOSE_FD _close
+#else
+#include <unistd.h>
+#define ISATTY_FD(fd) isatty(fd)
+#define DUP_FD dup
+#define DUP2_FD dup2
+#define FILENO_FD fileno
+#define CLOSE_FD close
+#endif
+
 using namespace manifast;
+namespace fs = std::filesystem;
 
-// Helper to capture stdout
+// Portable stdout capture via temp file + fd redirect (MSVC + POSIX)
 std::string captureStdout(void (*func)(Any*, Any*), Any* arg1, Any* arg2) {
-    int pipefd[2];
-    if (pipe(pipefd) != 0) return "";
+    const auto tmpPath = fs::temp_directory_path() / "manifast_test_stdout.tmp";
+    const std::string path = tmpPath.string();
 
-    int old_stdout = dup(fileno(stdout));
-    fflush(stdout);
-    dup2(pipefd[1], fileno(stdout));
+    std::fflush(stdout);
+    int old_stdout = DUP_FD(FILENO_FD(stdout));
+    if (old_stdout < 0) return "";
+
+    FILE* log_file = std::fopen(path.c_str(), "w");
+    if (!log_file) {
+        CLOSE_FD(old_stdout);
+        return "";
+    }
+
+    DUP2_FD(FILENO_FD(log_file), FILENO_FD(stdout));
 
     func(arg1, arg2);
 
-    fflush(stdout);
-    dup2(old_stdout, fileno(stdout));
-    close(pipefd[1]);
-    close(old_stdout);
+    std::fflush(stdout);
+    DUP2_FD(old_stdout, FILENO_FD(stdout));
+    CLOSE_FD(old_stdout);
+    std::fclose(log_file);
 
-    char buf[1024];
-    std::string result;
-    ssize_t n;
-    // Non-blocking read or careful close so we don't hang
-    while ((n = read(pipefd[0], buf, sizeof(buf)-1)) > 0) {
-        buf[n] = '\0';
-        result += buf;
-        if (n < (ssize_t)sizeof(buf)-1) break;
-    }
-    close(pipefd[0]);
-
+    std::ifstream in(path, std::ios::binary);
+    std::string result((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    std::error_code ec;
+    fs::remove(tmpPath, ec);
     return result;
 }
 
