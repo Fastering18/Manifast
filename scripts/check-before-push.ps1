@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   1. Ensure native build exists (rebuild if missing)
-  2. Run mifast test + ctest — fail hard if any fail
+  2. Run mifast test + ctest - fail hard if any fail
   3. Rebuild WASM (requires Emscripten) and copy assets to docs/
   4. Fail if docs/ WASM outputs are missing or if the tree is dirty after rebuild
      (forces you to commit updated playground assets before push)
@@ -24,12 +24,12 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 if (-not (Test-Path (Join-Path $Root "CMakeLists.txt"))) {
-    $Root = Get-Location
+    $Root = (Get-Location).Path
 }
 Set-Location $Root
 
-function Write-Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
-function Fail($m) { Write-Host "FAIL: $m" -ForegroundColor Red; exit 1 }
+function Write-Step([string]$m) { Write-Host "==> $m" -ForegroundColor Cyan }
+function Fail([string]$m) { Write-Host "FAIL: $m" -ForegroundColor Red; exit 1 }
 
 function Ensure-UcrtPath {
     $candidates = @()
@@ -44,11 +44,7 @@ function Ensure-UcrtPath {
 }
 
 function Find-Mifast {
-    $candidates = @(
-        "build\bin\mifast.exe",
-        "build\bin\mifast"
-    )
-    foreach ($c in $candidates) {
+    foreach ($c in @("build\bin\mifast.exe", "build\bin\mifast")) {
         if (Test-Path $c) { return (Resolve-Path $c).Path }
     }
     return $null
@@ -59,9 +55,9 @@ Ensure-UcrtPath
 # --- Build if needed ---
 $mifast = Find-Mifast
 if (-not $mifast) {
-    Write-Step "No mifast binary — building..."
-    if (Test-Path ".\manifast.ps1") {
-        & ".\manifast.ps1" build --fast
+    Write-Step "No mifast binary - building..."
+    if (Test-Path (Join-Path $Root "manifast.ps1")) {
+        & (Join-Path $Root "manifast.ps1") build --fast
         if ($LASTEXITCODE -ne 0) { Fail "native build failed" }
     } else {
         Fail "mifast not found and manifast.ps1 missing"
@@ -74,7 +70,7 @@ if (-not $mifast) {
 if (-not $SkipTests) {
     Write-Step "Running language test suite (mifast test)..."
     & $mifast test
-    if ($LASTEXITCODE -ne 0) { Fail "mifast test failed (exit $LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { Fail ("mifast test failed (exit " + $LASTEXITCODE + ")") }
 
     Write-Step "Running CTest unit tests..."
     if (-not (Get-Command ctest -ErrorAction SilentlyContinue)) {
@@ -82,7 +78,7 @@ if (-not $SkipTests) {
     }
     if (-not (Test-Path "build")) { Fail "build/ missing for ctest" }
     ctest --test-dir build --output-on-failure
-    if ($LASTEXITCODE -ne 0) { Fail "ctest failed (exit $LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { Fail ("ctest failed (exit " + $LASTEXITCODE + ")") }
     Write-Host "  Tests OK" -ForegroundColor Green
 } else {
     Write-Host "  WARN: tests skipped (-SkipTests)" -ForegroundColor Yellow
@@ -93,11 +89,12 @@ if ($SkipWasm) {
     Write-Host "  WARN: WASM rebuild skipped (-SkipWasm)" -ForegroundColor Yellow
 } else {
     Write-Step "Rebuilding WASM playground assets..."
-    # Prefer EMSDK env, then common install path
     $emsdkEnv = $null
-    if ($env:EMSDK -and (Test-Path (Join-Path $env:EMSDK "emsdk_env.bat"))) {
-        $emsdkEnv = Join-Path $env:EMSDK "emsdk_env.bat"
-    } elseif (Test-Path "C:\emsdk\emsdk_env.bat") {
+    if ($env:EMSDK) {
+        $candidate = Join-Path $env:EMSDK "emsdk_env.bat"
+        if (Test-Path $candidate) { $emsdkEnv = $candidate }
+    }
+    if (-not $emsdkEnv -and (Test-Path "C:\emsdk\emsdk_env.bat")) {
         $emsdkEnv = "C:\emsdk\emsdk_env.bat"
         $env:EMSDK = "C:\emsdk"
     }
@@ -107,30 +104,32 @@ if ($SkipWasm) {
         Fail "Emscripten not found. Install EMSDK or set EMSDK. Use -SkipWasm only in emergencies."
     }
 
+    $ps1 = Join-Path $Root "manifast.ps1"
     if ($emsdkEnv -and -not $hasEmcmake) {
-        # Run build inside activated EMSDK shell
-        $cmd = @"
-call "$emsdkEnv" >nul 2>&1
-if errorlevel 1 exit /b 1
-cd /d "$Root"
-powershell -NoProfile -ExecutionPolicy Bypass -File ".\manifast.ps1" build-wasm
-exit /b %ERRORLEVEL%
-"@
-        $tmp = Join-Path $env:TEMP "manifast-wasm-build.cmd"
-        Set-Content -Path $tmp -Value $cmd -Encoding ASCII
-        cmd /c $tmp
-        if ($LASTEXITCODE -ne 0) { Fail "build-wasm failed (exit $LASTEXITCODE)" }
+        # Write a tiny cmd file so PowerShell never parses cmd metacharacters
+        $tmpCmd = Join-Path $env:TEMP "manifast-prepush-wasm.cmd"
+        $lines = @(
+            "@echo off"
+            ('call "' + $emsdkEnv + '" >nul 2>&1')
+            ("if errorlevel 1 exit /b 1")
+            ('cd /d "' + $Root + '"')
+            ('powershell -NoProfile -ExecutionPolicy Bypass -File "' + $ps1 + '" build-wasm')
+            "exit /b %ERRORLEVEL%"
+        )
+        Set-Content -Path $tmpCmd -Value $lines -Encoding ASCII
+        cmd.exe /c $tmpCmd
+        if ($LASTEXITCODE -ne 0) { Fail ("build-wasm failed (exit " + $LASTEXITCODE + ")") }
     } else {
-        & ".\manifast.ps1" build-wasm
-        if ($LASTEXITCODE -ne 0) { Fail "build-wasm failed (exit $LASTEXITCODE)" }
+        & $ps1 build-wasm
+        if ($LASTEXITCODE -ne 0) { Fail ("build-wasm failed (exit " + $LASTEXITCODE + ")") }
     }
 
     foreach ($asset in @("docs\manifast.js", "docs\manifast.wasm", "docs\index.html")) {
-        if (-not (Test-Path $asset)) { Fail "missing required web asset after WASM build: $asset" }
+        if (-not (Test-Path $asset)) { Fail ("missing required web asset after WASM build: " + $asset) }
     }
 
     # If WASM rebuild changed tracked files, require a commit before push
-    git rev-parse --is-inside-work-tree 2>$null | Out-Null
+    $null = git rev-parse --is-inside-work-tree 2>$null
     if ($LASTEXITCODE -eq 0) {
         $dirty = git status --porcelain -- docs/ src/wasm/ 2>$null
         if ($dirty) {
