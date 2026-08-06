@@ -149,6 +149,90 @@ void PlotBackend::drawLine(int x0, int y0, int x1, int y1, uint32_t color) {
     }
 }
 
+void PlotBackend::drawLineThick(int x0, int y0, int x1, int y1, uint32_t color, double width) {
+    int w = std::max(1, (int)std::lround(width));
+    if (w <= 1) {
+        drawLine(x0, y0, x1, y1, color);
+        return;
+    }
+    // Approximate thick stroke with parallel offsets along the normal
+    double dx = (double)(x1 - x0);
+    double dy = (double)(y1 - y0);
+    double len = std::sqrt(dx * dx + dy * dy);
+    if (len < 1e-9) {
+        drawCircle(x0, y0, w / 2, color);
+        return;
+    }
+    double nx = -dy / len;
+    double ny = dx / len;
+    int half = w / 2;
+    for (int o = -half; o <= half; o++) {
+        int ox = (int)std::lround(nx * o);
+        int oy = (int)std::lround(ny * o);
+        drawLine(x0 + ox, y0 + oy, x1 + ox, y1 + oy, color);
+    }
+    // Cap ends
+    drawCircle(x0, y0, half, color);
+    drawCircle(x1, y1, half, color);
+}
+
+void PlotBackend::setHeatmap(int w, int h, const std::vector<double>& values) {
+    heat_w_ = std::max(0, w);
+    heat_h_ = std::max(0, h);
+    heatmap_ = values;
+    if ((int)heatmap_.size() < heat_w_ * heat_h_) {
+        heatmap_.resize((size_t)heat_w_ * (size_t)heat_h_, 0.0);
+    }
+    current_type_ = ChartType::Heatmap;
+}
+
+uint32_t PlotBackend::heatColor(double t) {
+    // Smooth turbo-ish ramp: blue → cyan → green → yellow → red
+    t = std::clamp(t, 0.0, 1.0);
+    double r, g, b;
+    if (t < 0.25) {
+        double u = t / 0.25;
+        r = 0.1 + 0.1 * u; g = 0.15 + 0.55 * u; b = 0.55 + 0.45 * u;
+    } else if (t < 0.5) {
+        double u = (t - 0.25) / 0.25;
+        r = 0.2 + 0.2 * u; g = 0.7 + 0.3 * u; b = 1.0 - 0.7 * u;
+    } else if (t < 0.75) {
+        double u = (t - 0.5) / 0.25;
+        r = 0.4 + 0.6 * u; g = 1.0 - 0.2 * u; b = 0.3 - 0.3 * u;
+    } else {
+        double u = (t - 0.75) / 0.25;
+        r = 1.0; g = 0.8 - 0.7 * u; b = 0.05 * (1.0 - u);
+    }
+    auto ch = [](double v) -> uint32_t {
+        return (uint32_t)std::clamp((int)std::lround(v * 255.0), 0, 255);
+    };
+    return (ch(r) << 24) | (ch(g) << 16) | (ch(b) << 8) | 0xFF;
+}
+
+uint32_t parseColor(const char* s, uint32_t fallback) {
+    if (!s || !*s) return fallback;
+    // Named colors
+    if (strcmp(s, "red") == 0) return 0xE74C3CFF;
+    if (strcmp(s, "blue") == 0) return 0x3498DBFF;
+    if (strcmp(s, "green") == 0) return 0x2ECC71FF;
+    if (strcmp(s, "orange") == 0) return 0xF39C12FF;
+    if (strcmp(s, "purple") == 0) return 0x9B59B6FF;
+    if (strcmp(s, "black") == 0) return 0x222222FF;
+    if (strcmp(s, "white") == 0) return 0xFFFFFFFF;
+    if (strcmp(s, "gray") == 0 || strcmp(s, "grey") == 0) return 0x888888FF;
+    if (strcmp(s, "cyan") == 0) return 0x1ABC9CFF;
+    if (strcmp(s, "yellow") == 0) return 0xF1C40FFF;
+    if (s[0] == '#') {
+        unsigned r = 0, g = 0, b = 0, a = 255;
+        size_t n = strlen(s + 1);
+        if (n == 6 && sscanf(s + 1, "%02x%02x%02x", &r, &g, &b) == 3)
+            return (r << 24) | (g << 16) | (b << 8) | 0xFF;
+        if (n == 8 && sscanf(s + 1, "%02x%02x%02x%02x", &r, &g, &b, &a) == 4)
+            return (r << 24) | (g << 16) | (b << 8) | a;
+    }
+    return fallback;
+}
+
 void PlotBackend::drawRect(int x, int y, int w, int h, uint32_t color) {
     for (int dy = 0; dy < h; dy++)
         for (int dx = 0; dx < w; dx++)
@@ -163,6 +247,12 @@ void PlotBackend::drawCircle(int cx, int cy, int r, uint32_t color) {
 }
 
 void PlotBackend::computeAxes(double& xmin, double& xmax, double& ymin, double& ymax) {
+    if (!std::isnan(config_.xmin) && !std::isnan(config_.xmax) &&
+        !std::isnan(config_.ymin) && !std::isnan(config_.ymax)) {
+        xmin = config_.xmin; xmax = config_.xmax;
+        ymin = config_.ymin; ymax = config_.ymax;
+        return;
+    }
     xmin = ymin = 1e18;
     xmax = ymax = -1e18;
     for (auto& s : series_) {
@@ -174,6 +264,10 @@ void PlotBackend::computeAxes(double& xmin, double& xmax, double& ymin, double& 
     double xpad = (xmax - xmin) * 0.05, ypad = (ymax - ymin) * 0.05;
     xmin -= xpad; xmax += xpad;
     ymin -= ypad; ymax += ypad;
+    if (!std::isnan(config_.xmin)) xmin = config_.xmin;
+    if (!std::isnan(config_.xmax)) xmax = config_.xmax;
+    if (!std::isnan(config_.ymin)) ymin = config_.ymin;
+    if (!std::isnan(config_.ymax)) ymax = config_.ymax;
 }
 
 int PlotBackend::mapX(double val, double xmin, double xmax) {
@@ -205,9 +299,24 @@ void PlotBackend::drawText(int x, int y, const std::string& text, uint32_t color
     }
 }
 
+void PlotBackend::drawLegend(const std::vector<uint32_t>& colors) {
+    int lx = config_.width - config_.padding - 120;
+    int ly = config_.padding + 8;
+    for (size_t i = 0; i < series_.size() && i < colors.size(); i++) {
+        if (series_[i].label.empty()) continue;
+        drawRect(lx, ly + (int)i * 16, 12, 4, colors[i]);
+        drawText(lx + 16, ly + (int)i * 16 - 2, series_[i].label, config_.axis_color, 1);
+    }
+}
+
 void PlotBackend::render(ChartType type) {
+    // Safety clamps (avoid huge allocations)
+    config_.width = std::clamp(config_.width, 64, 4096);
+    config_.height = std::clamp(config_.height, 64, 4096);
+    config_.padding = std::clamp(config_.padding, 10, std::min(config_.width, config_.height) / 3);
+
     int w = config_.width, h = config_.height;
-    framebuffer_.resize(w * h * 4);
+    framebuffer_.resize((size_t)w * (size_t)h * 4);
 
     // Fill background
     uint8_t br = (config_.bg_color >> 24) & 0xFF;
@@ -222,13 +331,42 @@ void PlotBackend::render(ChartType type) {
     p[3] = 0xFF;
 
     uint32_t* ptr = reinterpret_cast<uint32_t*>(framebuffer_.data());
-    std::fill(ptr, ptr + (w * h), bg_pixel);
+    std::fill(ptr, ptr + (size_t)w * (size_t)h, bg_pixel);
+
+    // Heatmap / image fills the plot area (and can be the whole chart)
+    if (type == ChartType::Heatmap && heat_w_ > 0 && heat_h_ > 0 && !heatmap_.empty()) {
+        double mn = heatmap_[0], mx = heatmap_[0];
+        for (double v : heatmap_) { mn = std::min(mn, v); mx = std::max(mx, v); }
+        if (mx <= mn) mx = mn + 1.0;
+
+        int pad = config_.padding;
+        int pw = w - 2 * pad, ph = h - 2 * pad;
+        for (int y = 0; y < ph; y++) {
+            int sy = std::min(heat_h_ - 1, y * heat_h_ / std::max(1, ph));
+            for (int x = 0; x < pw; x++) {
+                int sx = std::min(heat_w_ - 1, x * heat_w_ / std::max(1, pw));
+                double t = (heatmap_[(size_t)sy * (size_t)heat_w_ + (size_t)sx] - mn) / (mx - mn);
+                setPixel(pad + x, pad + y, heatColor(t));
+            }
+        }
+        if (!config_.title.empty()) {
+            int title_scale = 2;
+            int title_w = (int)config_.title.length() * 6 * title_scale;
+            drawText(w / 2 - title_w / 2, 12, config_.title, config_.axis_color, title_scale);
+        }
+        // Border
+        drawLine(pad, pad, pad + pw, pad, config_.axis_color);
+        drawLine(pad, pad + ph, pad + pw, pad + ph, config_.axis_color);
+        drawLine(pad, pad, pad, pad + ph, config_.axis_color);
+        drawLine(pad + pw, pad, pad + pw, pad + ph, config_.axis_color);
+        return;
+    }
 
     double xmin, xmax, ymin, ymax;
     computeAxes(xmin, xmax, ymin, ymax);
 
     int px = config_.padding, py = config_.padding;
-    int pw = w - 2*px, ph = h - 2*py;
+    int pw = w - 2 * px, ph = h - 2 * py;
 
     // Draw grid lines and labels
     for (int i = 0; i <= 5; i++) {
@@ -237,8 +375,10 @@ void PlotBackend::render(ChartType type) {
         int gx = px + pw * i / 5;
         int gy = py + ph - ph * i / 5;
 
-        drawLine(gx, py, gx, py + ph, config_.grid_color);
-        drawLine(px, gy, px + pw, gy, config_.grid_color);
+        if (config_.grid) {
+            drawLine(gx, py, gx, py + ph, config_.grid_color);
+            drawLine(px, gy, px + pw, gy, config_.grid_color);
+        }
 
         char buf[32];
         if (std::abs(vx) >= 1e6 || (std::abs(vx) > 0 && std::abs(vx) < 0.01))
@@ -254,7 +394,6 @@ void PlotBackend::render(ChartType type) {
         drawText(px - 50, gy - 3, buf, config_.axis_color);
     }
 
-    // Draw Title & Axis Labels
     if (!config_.title.empty()) {
         int title_scale = 2;
         int title_w = (int)config_.title.length() * 6 * title_scale;
@@ -262,42 +401,46 @@ void PlotBackend::render(ChartType type) {
     }
     if (!config_.xlabel.empty())
         drawText(w / 2 - (int)config_.xlabel.length() * 6 / 2, h - 25, config_.xlabel, config_.axis_color);
-    if (!config_.ylabel.empty()) {
-        // Simple vertical text not implemented, draw at top left for now
+    if (!config_.ylabel.empty())
         drawText(10, py - 20, config_.ylabel, config_.axis_color);
-    }
 
-    // Draw axes border
     drawLine(px, py, px, py + ph, config_.axis_color);
     drawLine(px, py + ph, px + pw, py + ph, config_.axis_color);
 
-    // Draw data
+    std::vector<uint32_t> legendColors;
+    legendColors.reserve(series_.size());
+
     for (size_t si = 0; si < series_.size(); si++) {
         uint32_t color = series_[si].color;
         if (color == 0) color = PALETTE[si % 8];
+        legendColors.push_back(color);
         auto& sx = series_[si].x;
         auto& sy = series_[si].y;
         size_t n = std::min(sx.size(), sy.size());
+        double lw = series_[si].line_width > 0 ? series_[si].line_width : config_.line_width;
+        int ms = (int)std::lround(series_[si].marker_size > 0 ? series_[si].marker_size : config_.marker_size);
 
-        if (type == ChartType::Line) {
-            for (size_t i = 1; i < n; i++) {
-                int x0 = mapX(sx[i-1], xmin, xmax), y0 = mapY(sy[i-1], ymin, ymax);
-                int x1 = mapX(sx[i], xmin, xmax),   y1 = mapY(sy[i], ymin, ymax);
-                drawLine(x0, y0, x1, y1, color);
-                // Thicken
-                drawLine(x0, y0-1, x1, y1-1, color);
-                drawLine(x0, y0+1, x1, y1+1, color);
+        if (type == ChartType::Line || (type == ChartType::Scatter && series_[si].draw_line)) {
+            if (series_[si].draw_line || type == ChartType::Line) {
+                for (size_t i = 1; i < n; i++) {
+                    int x0 = mapX(sx[i - 1], xmin, xmax), y0 = mapY(sy[i - 1], ymin, ymax);
+                    int x1 = mapX(sx[i], xmin, xmax), y1 = mapY(sy[i], ymin, ymax);
+                    drawLineThick(x0, y0, x1, y1, color, lw);
+                }
+            }
+            if (series_[si].draw_markers) {
+                for (size_t i = 0; i < n; i++) {
+                    drawCircle(mapX(sx[i], xmin, xmax), mapY(sy[i], ymin, ymax), std::max(1, ms), color);
+                }
             }
         } else if (type == ChartType::Scatter) {
             for (size_t i = 0; i < n; i++) {
-                int px_ = mapX(sx[i], xmin, xmax);
-                int py_ = mapY(sy[i], ymin, ymax);
-                drawCircle(px_, py_, 4, color);
+                drawCircle(mapX(sx[i], xmin, xmax), mapY(sy[i], ymin, ymax), std::max(1, ms), color);
             }
         } else if (type == ChartType::Bar) {
-            int bar_w = std::max(2, pw / (int)(n * series_.size() + (int)n) );
+            int bar_w = std::max(2, pw / (int)(n * series_.size() + (int)n));
             for (size_t i = 0; i < n; i++) {
-                int bx = mapX(sx[i], xmin, xmax) - bar_w/2 + (int)si * (bar_w + 1);
+                int bx = mapX(sx[i], xmin, xmax) - bar_w / 2 + (int)si * (bar_w + 1);
                 int by_bottom = mapY(0, ymin, ymax);
                 int by_top = mapY(sy[i], ymin, ymax);
                 if (by_top > by_bottom) std::swap(by_top, by_bottom);
@@ -305,6 +448,8 @@ void PlotBackend::render(ChartType type) {
             }
         }
     }
+
+    if (config_.legend) drawLegend(legendColors);
 }
 
 void PlotBackend::renderChart(ChartType type) {

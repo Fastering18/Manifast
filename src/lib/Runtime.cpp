@@ -29,44 +29,121 @@ static ManifastPlotShowCallback g_plot_show_callback = nullptr;
 static ManifastClearOutputCallback g_clear_output_callback = nullptr;
 static ManifastDelayCallback g_delay_callback = nullptr;
 
+// Apply matplotlib-like chart options from a Manifast object.
+static void apply_plot_config(ManifastObject* cobj, manifast::plot::ChartConfig& cfg,
+                              manifast::plot::Series* seriesStyle = nullptr,
+                              manifast::plot::ChartType* outType = nullptr) {
+    if (!cobj) return;
+    auto num = [&](const char* k, double& dst) {
+        Any* a = manifast_object_get_raw(cobj, k);
+        if (a && a->type == ANY_NUMBER) dst = a->number;
+    };
+    auto numi = [&](const char* k, int& dst) {
+        Any* a = manifast_object_get_raw(cobj, k);
+        if (a && a->type == ANY_NUMBER) dst = (int)a->number;
+    };
+    auto str = [&](const char* k, std::string& dst) {
+        Any* a = manifast_object_get_raw(cobj, k);
+        if (a && a->type == ANY_STRING && a->ptr) dst = (char*)a->ptr;
+    };
+    auto color = [&](const char* k, uint32_t& dst) {
+        Any* a = manifast_object_get_raw(cobj, k);
+        if (!a) return;
+        if (a->type == ANY_STRING && a->ptr)
+            dst = manifast::plot::parseColor((char*)a->ptr, dst);
+        else if (a->type == ANY_NUMBER)
+            dst = (uint32_t)(uint64_t)a->number;
+    };
+    auto flag = [&](const char* k, bool& dst) {
+        Any* a = manifast_object_get_raw(cobj, k);
+        if (a && (a->type == ANY_BOOLEAN || a->type == ANY_NUMBER))
+            dst = a->number != 0.0;
+    };
+
+    str("title", cfg.title);
+    str("xlabel", cfg.xlabel);
+    str("ylabel", cfg.ylabel);
+    numi("width", cfg.width);
+    numi("height", cfg.height);
+    numi("padding", cfg.padding);
+    numi("figsize_w", cfg.width);  // alias
+    numi("figsize_h", cfg.height);
+    num("linewidth", cfg.line_width);
+    num("line_width", cfg.line_width);
+    num("markersize", cfg.marker_size);
+    num("marker_size", cfg.marker_size);
+    num("xmin", cfg.xmin);
+    num("xmax", cfg.xmax);
+    num("ymin", cfg.ymin);
+    num("ymax", cfg.ymax);
+    flag("grid", cfg.grid);
+    flag("legend", cfg.legend);
+    color("bgcolor", cfg.bg_color);
+    color("facecolor", cfg.bg_color);
+    color("axiscolor", cfg.axis_color);
+    color("gridcolor", cfg.grid_color);
+
+    // Safety
+    if (cfg.width < 64) cfg.width = 64;
+    if (cfg.height < 64) cfg.height = 64;
+    if (cfg.width > 4096) cfg.width = 4096;
+    if (cfg.height > 4096) cfg.height = 4096;
+    if (cfg.line_width < 0.5) cfg.line_width = 0.5;
+    if (cfg.line_width > 32) cfg.line_width = 32;
+
+    if (seriesStyle) {
+        str("label", seriesStyle->label);
+        num("linewidth", seriesStyle->line_width);
+        num("line_width", seriesStyle->line_width);
+        num("markersize", seriesStyle->marker_size);
+        num("marker_size", seriesStyle->marker_size);
+        color("color", seriesStyle->color);
+        color("c", seriesStyle->color);
+        flag("markers", seriesStyle->draw_markers);
+        Any* mk = manifast_object_get_raw(cobj, "marker");
+        if (mk && mk->type == ANY_STRING && mk->ptr && ((char*)mk->ptr)[0] != '\0' && strcmp((char*)mk->ptr, "None") != 0)
+            seriesStyle->draw_markers = true;
+        Any* ls = manifast_object_get_raw(cobj, "linestyle");
+        if (ls && ls->type == ANY_STRING && ls->ptr && strcmp((char*)ls->ptr, "None") == 0)
+            seriesStyle->draw_line = false;
+        if (seriesStyle->line_width <= 0) seriesStyle->line_width = cfg.line_width;
+        if (seriesStyle->marker_size <= 0) seriesStyle->marker_size = cfg.marker_size;
+    }
+
+    if (outType) {
+        Any* tp = manifast_object_get_raw(cobj, "type");
+        if (tp && tp->type == ANY_STRING && tp->ptr) {
+            const char* t = (const char*)tp->ptr;
+            if (strcmp(t, "scatter") == 0) *outType = manifast::plot::ChartType::Scatter;
+            else if (strcmp(t, "bar") == 0) *outType = manifast::plot::ChartType::Bar;
+            else if (strcmp(t, "heatmap") == 0 || strcmp(t, "image") == 0)
+                *outType = manifast::plot::ChartType::Heatmap;
+            else *outType = manifast::plot::ChartType::Line;
+        }
+    }
+}
+
 static void plot_for_impl(Any* y_arr, Any* x_arr, Any* config) {
      g_plot = manifast::plot::PlotBackend();
      manifast::plot::ChartType chartType = manifast::plot::ChartType::Line;
+     manifast::plot::ChartConfig cfg;
+     manifast::plot::Series s;
 
      if (config && config->type == ANY_OBJECT) {
-         manifast::plot::ChartConfig cfg;
-         ManifastObject* cobj = (ManifastObject*)config->ptr;
-         Any* t = manifast_object_get_raw(cobj, "title");
-         if (t && t->type == ANY_STRING) cfg.title = (char*)t->ptr;
-         Any* xl = manifast_object_get_raw(cobj, "xlabel");
-         if (xl && xl->type == ANY_STRING) cfg.xlabel = (char*)xl->ptr;
-         Any* yl = manifast_object_get_raw(cobj, "ylabel");
-         if (yl && yl->type == ANY_STRING) cfg.ylabel = (char*)yl->ptr;
-         Any* w = manifast_object_get_raw(cobj, "width");
-         if (w && w->type == ANY_NUMBER) cfg.width = (int)w->number;
-         Any* h = manifast_object_get_raw(cobj, "height");
-         if (h && h->type == ANY_NUMBER) cfg.height = (int)h->number;
-         Any* tp = manifast_object_get_raw(cobj, "type");
-         if (tp && tp->type == ANY_STRING) {
-             const char* typeStr = (const char*)tp->ptr;
-             if (strcmp(typeStr, "scatter") == 0) chartType = manifast::plot::ChartType::Scatter;
-             else if (strcmp(typeStr, "bar") == 0) chartType = manifast::plot::ChartType::Bar;
-         }
+         apply_plot_config((ManifastObject*)config->ptr, cfg, &s, &chartType);
          g_plot.setConfig(cfg);
      }
 
-     manifast::plot::Series s;
      if (y_arr && y_arr->type == ANY_ARRAY) {
          ManifastArray* ya = (ManifastArray*)y_arr->ptr;
+         s.y.reserve(ya->size);
          if (x_arr && x_arr->type == ANY_ARRAY) {
              ManifastArray* xa = (ManifastArray*)x_arr->ptr;
              s.x.reserve(xa->size);
-             s.y.reserve(ya->size);
              for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
              for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
          } else {
              s.x.reserve(ya->size);
-             s.y.reserve(ya->size);
              for (uint32_t i = 0; i < ya->size; i++) {
                  s.x.push_back((double)(i + 1));
                  s.y.push_back(ya->elements[i].number);
@@ -683,100 +760,34 @@ MF_API Any* manifast_impor(const char* name) {
              args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
         };
 
-        static auto extract_config_local = [](Any* args, int argIdx, int nargs) {
-            manifast::plot::ChartConfig cfg;
-            int remaining = nargs - argIdx;
-            if (remaining >= 3 && args[argIdx+2].type == ANY_OBJECT) {
-                ManifastObject* cobj = (ManifastObject*)args[argIdx+2].ptr;
-                Any* t = manifast_object_get_raw(cobj, "title");
-                if (t && t->type == ANY_STRING) cfg.title = (char*)t->ptr;
-                Any* xl = manifast_object_get_raw(cobj, "xlabel");
-                if (xl && xl->type == ANY_STRING) cfg.xlabel = (char*)xl->ptr;
-                Any* yl = manifast_object_get_raw(cobj, "ylabel");
-                if (yl && yl->type == ANY_STRING) cfg.ylabel = (char*)yl->ptr;
-                Any* w = manifast_object_get_raw(cobj, "width");
-                if (w && w->type == ANY_NUMBER) cfg.width = (int)w->number;
-                Any* h = manifast_object_get_raw(cobj, "height");
-                if (h && h->type == ANY_NUMBER) cfg.height = (int)h->number;
-            } else if (remaining >= 2 && args[argIdx+1].type == ANY_OBJECT) {
-                ManifastObject* cobj = (ManifastObject*)args[argIdx+1].ptr;
-                Any* t = manifast_object_get_raw(cobj, "title");
-                if (t && t->type == ANY_STRING) cfg.title = (char*)t->ptr;
-                // ... same for others if needed, but usually 3rd arg for (x, y, config)
-                // and 2nd arg for (y, config)
-                Any* xl = manifast_object_get_raw(cobj, "xlabel");
-                if (xl && xl->type == ANY_STRING) cfg.xlabel = (char*)xl->ptr;
-                Any* yl = manifast_object_get_raw(cobj, "ylabel");
-                if (yl && yl->type == ANY_STRING) cfg.ylabel = (char*)yl->ptr;
-                Any* w = manifast_object_get_raw(cobj, "width");
-                if (w && w->type == ANY_NUMBER) cfg.width = (int)w->number;
-                Any* h = manifast_object_get_raw(cobj, "height");
-                if (h && h->type == ANY_NUMBER) cfg.height = (int)h->number;
+        // Fill series + chart config from optional trailing options object
+        static auto fill_xy_series = [](Any* args, int offset, int nargs,
+                                        manifast::plot::Series& s,
+                                        manifast::plot::ChartConfig& cfg,
+                                        bool y_only_ok) -> bool {
+            int actual = nargs - offset;
+            if (actual < 1) return false;
+            ManifastObject* opt = nullptr;
+            if (actual >= 3 && args[offset].type == ANY_ARRAY && args[offset + 1].type == ANY_ARRAY
+                && args[offset + 2].type == ANY_OBJECT) {
+                opt = (ManifastObject*)args[offset + 2].ptr;
+            } else if (actual >= 2 && args[offset].type == ANY_ARRAY && args[offset + 1].type == ANY_OBJECT) {
+                opt = (ManifastObject*)args[offset + 1].ptr;
+            } else if (actual >= 3 && args[offset + 2].type == ANY_OBJECT) {
+                opt = (ManifastObject*)args[offset + 2].ptr;
             }
-            return cfg;
-        };
+            if (opt) apply_plot_config(opt, cfg, &s, nullptr);
 
-        auto plot_line = [](void* vm, Any* args, int nargs) {
-            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
-            int actual_nargs = nargs - offset;
-            if (actual_nargs >= 1) {
-                manifast::plot::Series s;
-                if (actual_nargs >= 2 && args[offset].type == ANY_ARRAY && args[offset+1].type == ANY_ARRAY) {
-                    ManifastArray* xa = (ManifastArray*)args[offset].ptr;
-                    ManifastArray* ya = (ManifastArray*)args[offset+1].ptr;
-                    s.x.reserve(xa->size);
-                    s.y.reserve(ya->size);
-                    for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
-                    for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
-                    if (actual_nargs >= 3) g_plot.setConfig(extract_config_local(args, offset, nargs));
-                } else if (args[offset].type == ANY_ARRAY) {
-                    ManifastArray* ya = (ManifastArray*)args[offset].ptr;
-                    s.x.reserve(ya->size);
-                    s.y.reserve(ya->size);
-                    for (uint32_t i = 0; i < ya->size; i++) {
-                        s.x.push_back((double)(i + 1));
-                        s.y.push_back(ya->elements[i].number);
-                    }
-                    if (actual_nargs >= 2) g_plot.setConfig(extract_config_local(args, offset, nargs));
-                }
-                g_plot.addSeries(s);
-                g_plot.setChartType(manifast::plot::ChartType::Line);
+            if (actual >= 2 && args[offset].type == ANY_ARRAY && args[offset + 1].type == ANY_ARRAY) {
+                ManifastArray* xa = (ManifastArray*)args[offset].ptr;
+                ManifastArray* ya = (ManifastArray*)args[offset + 1].ptr;
+                s.x.reserve(xa->size);
+                s.y.reserve(ya->size);
+                for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
+                for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
+                return true;
             }
-        };
-
-        auto plot_scatter = [](void* vm, Any* args, int nargs) {
-            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
-            int actual_nargs = nargs - offset;
-            if (actual_nargs >= 1) {
-                manifast::plot::Series s;
-                if (actual_nargs >= 2 && args[offset].type == ANY_ARRAY && args[offset+1].type == ANY_ARRAY) {
-                    ManifastArray* xa = (ManifastArray*)args[offset].ptr;
-                    ManifastArray* ya = (ManifastArray*)args[offset+1].ptr;
-                    s.x.reserve(xa->size);
-                    s.y.reserve(ya->size);
-                    for (uint32_t i = 0; i < xa->size; i++) s.x.push_back(xa->elements[i].number);
-                    for (uint32_t i = 0; i < ya->size; i++) s.y.push_back(ya->elements[i].number);
-                    if (actual_nargs >= 3) g_plot.setConfig(extract_config_local(args, offset, nargs));
-                } else if (args[offset].type == ANY_ARRAY) {
-                    ManifastArray* ya = (ManifastArray*)args[offset].ptr;
-                    s.x.reserve(ya->size);
-                    s.y.reserve(ya->size);
-                    for (uint32_t i = 0; i < ya->size; i++) {
-                        s.x.push_back((double)(i + 1));
-                        s.y.push_back(ya->elements[i].number);
-                    }
-                    if (actual_nargs >= 2) g_plot.setConfig(extract_config_local(args, offset, nargs));
-                }
-                g_plot.addSeries(s);
-                g_plot.setChartType(manifast::plot::ChartType::Scatter);
-            }
-        };
-
-        auto plot_bar = [](void* vm, Any* args, int nargs) {
-            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
-            int actual_nargs = nargs - offset;
-            if (actual_nargs >= 1) {
-                manifast::plot::Series s;
+            if (y_only_ok && args[offset].type == ANY_ARRAY) {
                 ManifastArray* ya = (ManifastArray*)args[offset].ptr;
                 s.x.reserve(ya->size);
                 s.y.reserve(ya->size);
@@ -784,10 +795,95 @@ MF_API Any* manifast_impor(const char* name) {
                     s.x.push_back((double)(i + 1));
                     s.y.push_back(ya->elements[i].number);
                 }
-                if (actual_nargs >= 2) g_plot.setConfig(extract_config_local(args, offset, nargs));
-                g_plot.addSeries(s);
-                g_plot.setChartType(manifast::plot::ChartType::Bar);
+                return true;
             }
+            return false;
+        };
+
+        auto plot_line = [](void* vm, Any* args, int nargs) {
+            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
+            manifast::plot::Series s;
+            manifast::plot::ChartConfig cfg = {}; // keep current defaults via setConfig merge
+            // Start from current-ish defaults
+            cfg.line_width = 2.0;
+            cfg.marker_size = 4.0;
+            s.line_width = 2.0;
+            s.draw_line = true;
+            if (!fill_xy_series(args, offset, nargs, s, cfg, true)) return;
+            g_plot.setConfig(cfg);
+            g_plot.addSeries(s);
+            g_plot.setChartType(manifast::plot::ChartType::Line);
+            g_plot_initialized = true;
+            args[-1] = {ANY_NIL, 0.0, nullptr};
+        };
+
+        auto plot_scatter = [](void* vm, Any* args, int nargs) {
+            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
+            manifast::plot::Series s;
+            manifast::plot::ChartConfig cfg;
+            cfg.line_width = 0;
+            s.draw_line = false;
+            s.draw_markers = true;
+            s.marker_size = 4.0;
+            if (!fill_xy_series(args, offset, nargs, s, cfg, true)) return;
+            g_plot.setConfig(cfg);
+            g_plot.addSeries(s);
+            g_plot.setChartType(manifast::plot::ChartType::Scatter);
+            g_plot_initialized = true;
+            args[-1] = {ANY_NIL, 0.0, nullptr};
+        };
+
+        auto plot_bar = [](void* vm, Any* args, int nargs) {
+            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
+            manifast::plot::Series s;
+            manifast::plot::ChartConfig cfg;
+            if (!fill_xy_series(args, offset, nargs, s, cfg, true)) return;
+            g_plot.setConfig(cfg);
+            g_plot.addSeries(s);
+            g_plot.setChartType(manifast::plot::ChartType::Bar);
+            g_plot_initialized = true;
+            args[-1] = {ANY_NIL, 0.0, nullptr};
+        };
+
+        // plot.heatmap(w, h, values[], {title, width, height, ...})
+        // or plot.image(w, h, values[], opts)
+        auto plot_heatmap = [](void* vm, Any* args, int nargs) {
+            int offset = (nargs > 0 && args[0].type == ANY_OBJECT) ? 1 : 0;
+            int actual = nargs - offset;
+            if (actual < 3) {
+                args[-1] = {ANY_BOOLEAN, 0.0, nullptr};
+                return;
+            }
+            if (args[offset].type != ANY_NUMBER || args[offset + 1].type != ANY_NUMBER
+                || args[offset + 2].type != ANY_ARRAY) {
+                args[-1] = {ANY_BOOLEAN, 0.0, nullptr};
+                return;
+            }
+            int hw = (int)args[offset].number;
+            int hh = (int)args[offset + 1].number;
+            if (hw < 1 || hh < 1 || hw > 2048 || hh > 2048) {
+                args[-1] = {ANY_BOOLEAN, 0.0, nullptr};
+                return;
+            }
+            ManifastArray* vals = (ManifastArray*)args[offset + 2].ptr;
+            std::vector<double> data;
+            data.reserve((size_t)hw * (size_t)hh);
+            for (uint32_t i = 0; i < vals->size && (int)data.size() < hw * hh; i++)
+                data.push_back(vals->elements[i].number);
+            while ((int)data.size() < hw * hh) data.push_back(0.0);
+
+            manifast::plot::ChartConfig cfg;
+            cfg.width = std::max(hw + 80, 400);
+            cfg.height = std::max(hh + 80, 300);
+            cfg.padding = 40;
+            cfg.legend = false;
+            if (actual >= 4 && args[offset + 3].type == ANY_OBJECT)
+                apply_plot_config((ManifastObject*)args[offset + 3].ptr, cfg, nullptr, nullptr);
+
+            g_plot.setConfig(cfg);
+            g_plot.setHeatmap(hw, hh, data);
+            g_plot_initialized = true;
+            args[-1] = {ANY_BOOLEAN, 1.0, nullptr};
         };
 
         auto plot_save = [](void* vm, Any* args, int nargs) {
@@ -815,6 +911,7 @@ MF_API Any* manifast_impor(const char* name) {
         Any fn_line = {ANY_NATIVE, 0.0, (void*)+plot_line};
         Any fn_scatter = {ANY_NATIVE, 0.0, (void*)+plot_scatter};
         Any fn_bar = {ANY_NATIVE, 0.0, (void*)+plot_bar};
+        Any fn_heat = {ANY_NATIVE, 0.0, (void*)+plot_heatmap};
         Any fn_save = {ANY_NATIVE, 0.0, (void*)+plot_save};
         Any fn_show = {ANY_NATIVE, 0.0, (void*)+plot_show};
 
@@ -823,6 +920,8 @@ MF_API Any* manifast_impor(const char* name) {
         manifast_object_set(obj, "line", &fn_line);
         manifast_object_set(obj, "scatter", &fn_scatter);
         manifast_object_set(obj, "bar", &fn_bar);
+        manifast_object_set(obj, "heatmap", &fn_heat);
+        manifast_object_set(obj, "image", &fn_heat); // alias
         manifast_object_set(obj, "save", &fn_save);
         manifast_object_set(obj, "show", &fn_show);
 

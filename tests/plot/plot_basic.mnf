@@ -10,8 +10,19 @@ untuk i = 1 ke len(x) lakukan
     y.push(val)
 tutup
 
--- Create line chart and save to file
-lokal config = { title: "Sine Wave", xlabel: "X", ylabel: "Y", width: 800, height: 600 }
+-- Create line chart and save to file (matplotlib-style options)
+lokal config = {
+    title: "Sine Wave",
+    xlabel: "X",
+    ylabel: "Y",
+    width: 800,
+    height: 600,
+    linewidth: 2.5,
+    color: "blue",
+    label: "sin",
+    grid: benar,
+    legend: benar
+}
 plot.line(x, y, config)
 lokal saved = plot.save("test_plot_output.bmp")
 assert(saved, "plot.save harusnya berhasil")

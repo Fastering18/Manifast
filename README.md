@@ -15,11 +15,55 @@
 
 ## Why Manifast?
 
-- **Readable syntax** — keywords such as `fungsi`, `jika`, `selama`, `kembali`, with optional static types.
-- **Multi-tier execution** — start in a tiny VM; promote hot code to AsmJit or full LLVM JIT when you need throughput.
-- **Embeddable core** — `manifast_core` builds without LLVM for host apps, configs, plugins, and WASM.
-- **Cross-platform** — native Windows and Linux (no WSL required); browser via WebAssembly.
-- **Batteries** — math helpers, plotting, objects/classes, try/catch, and a web playground.
+Manifast is built for people who want a **friendly scripting surface** without giving up **native-grade performance** or **embedding**.
+
+| Strength | What you get |
+|----------|----------------|
+| **Indonesian-inspired syntax** | `fungsi`, `jika`/`kalau`/`sebaliknya`, `selama`, `untuk`/`langkah`, `coba`/`tangkap` — readable for ID/SEA learners, still familiar to JS/Python users |
+| **Optional static types** | Annotate with `i32`, `f64`, `angka`, custom `tipe` aliases and struct shapes when you want safety and better JIT optimization |
+| **Multi-tier runtime** | Bytecode VM for instant start → optional AsmJit → full **LLVM JIT/AOT** for heavy numeric work |
+| **Tiny embeddable core** | Link `manifast_core` with `-DMANIFAST_ENABLE_LLVM=OFF` — no LLVM dependency for hosts, configs, games, plugins |
+| **First-class WASM playground** | Same VM in the browser: [live demo](https://fastering.thedev.id/Manifast/) with async output, plots, and animations |
+| **Scientific-friendly stdlib** | `math` (linspace, trig, clamp, …) and a **plot** module with matplotlib-style options |
+| **Cross-platform native** | Windows (MSYS2 UCRT) and Linux without requiring WSL for development |
+
+### Plot module (Python-flavored)
+
+```manifast
+lokal plot = impor("plot")
+lokal math = impor("math")
+lokal x = math.linspace(0, math.tau, 100)
+lokal y = []
+untuk i = 1 ke len(x) lakukan
+    y.push(math.sin(x[i]))
+tutup
+
+plot.line(x, y, {
+    title: "Sine",
+    xlabel: "x",
+    ylabel: "sin(x)",
+    linewidth: 3,          -- line width in px
+    color: "#3498DB",      -- or "blue", "red", …
+    label: "sin",
+    markers: salah,
+    markersize: 4,
+    grid: benar,
+    legend: benar,
+    width: 800,
+    height: 500,
+    xmin: 0,
+    xmax: 6.3
+})
+plot.show()
+
+-- Heatmaps / images (e.g. Mandelbrot field)
+-- plot.heatmap(W, H, flat_values, { title: "…", width: 720, height: 480 })
+```
+
+Supported options (chart + series): `title`, `xlabel`, `ylabel`, `width`, `height`, `padding`,
+`linewidth` / `line_width`, `markersize` / `marker_size`, `color` / `c`, `label`, `markers`,
+`marker`, `linestyle`, `grid`, `legend`, `bgcolor` / `facecolor`, `axiscolor`, `gridcolor`,
+`xmin`/`xmax`/`ymin`/`ymax`, `type` (`line`|`scatter`|`bar`|`heatmap`).
 
 ---
 

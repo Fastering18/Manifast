@@ -177,19 +177,23 @@ void Compiler::compile(Stmt* stmt) {
         freeReg();
     }
     else if (auto* s = dynamic_cast<ForStmt*>(stmt)) {
+        // Snapshot so nested for-loops cannot permanently reclaim outer temps
+        // (endScope + freeReg LIFO was clobbering parent loop end/step registers).
+        const int baseReg = nextReg;
+
         beginScope();
         // untuk i = start ke end [langkah step] lakukan body tutup
         // Continue while (i - end) * step <= 0 (supports positive & negative steps)
         int rVar = allocReg();
         int rStart = compile(s->start.get());
         emit(createABC(OpCode::MOVE, rVar, rStart, 0));
-        freeReg(); // start temp
+        // Drop start temp only if it was the top of the reg stack
+        if (nextReg > 0 && rStart == nextReg - 1) freeReg();
 
         locals.push_back({s->varName, scopeDepth, rVar});
 
         int rEnd = compile(s->end.get());
 
-        // step register (default 1)
         int rStep;
         if (s->step) {
             rStep = compile(s->step.get());
@@ -205,20 +209,18 @@ void Compiler::compile(Stmt* stmt) {
 
         int loopTop = (int)currentChunk->code.size();
 
-        // rTmp = (var - end) * step
+        // rTmp = (var - end) * step  (must not free outer temps)
         int rTmp = allocReg();
         emit(createABC(OpCode::SUB, rTmp, rVar, rEnd), s->line, s->offset);
         emit(createABC(OpCode::MUL, rTmp, rTmp, rStep), s->line, s->offset);
-        // if rTmp <= 0 then enter body, else jump end
         emit(createABC(OpCode::LE, 1, rTmp, rZero), s->line, s->offset);
-        emit(createAsBx(OpCode::JMP, 0, 1), s->line, s->offset); // skip end-jump when true
+        emit(createAsBx(OpCode::JMP, 0, 1), s->line, s->offset);
         int jmpEndIdx = emit(createAsBx(OpCode::JMP, 0, 0), s->line, s->offset);
-        freeReg(); // rTmp
-        int bodyStart = (int)currentChunk->code.size();
+        if (nextReg > 0 && rTmp == nextReg - 1) freeReg(); // rTmp only
 
+        int bodyStart = (int)currentChunk->code.size();
         compile(s->body.get());
 
-        // var = var + step
         emit(createABC(OpCode::ADD, rVar, rVar, rStep), s->line, s->offset);
 
         int loopBottom = (int)currentChunk->code.size();
@@ -227,10 +229,10 @@ void Compiler::compile(Stmt* stmt) {
         int endPos = (int)currentChunk->code.size();
         currentChunk->code[jmpEndIdx] = createAsBx(OpCode::JMP, 0, endPos - bodyStart);
 
-        freeReg(); // rZero
-        freeReg(); // rStep
-        freeReg(); // rEnd
+        // Pop for-locals (loop var + any body locals at this depth), then restore
+        // the register watermark so nested loops never steal outer end/step regs.
         endScope();
+        nextReg = baseReg;
     }
     else if (auto* s = dynamic_cast<FunctionStmt*>(stmt)) {
         Chunk* funcChunk = compileFunctionBody(s->params, s->body.get(), s->name);
