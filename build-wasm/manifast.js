@@ -2496,13 +2496,7 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
           return 32;
         }
         var mode = FS.flagsToPermissionString(flags);
-        if (FS.isDir(node.mode)) {
-          if (flags & 2097152) mode = 'x';
-          // opening for write
-          if ((mode !== 'r' && mode !== 'x') || (flags & (512 | 64))) {
-            return 31;
-          }
-        }
+        if (FS.isDir(node.mode)) { if (flags & 2097152) mode = 'x'; /* opening for write */ if ((mode !== 'r' && mode !== 'x') || (flags & (512 | 64))) { return 31; } }
         return FS.nodePermissions(node, mode);
       },
   checkOpExists(op, err) {
