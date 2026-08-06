@@ -14,9 +14,27 @@ fi
 
 echo "Manifast pre-push: tests + WASM..."
 
+# Prefer MSYS2 UCRT64 DLLs when present (Windows MinGW builds of mifast)
+for _ucrt in "${MSYS2_ROOT:-}/ucrt64/bin" /c/msys64/ucrt64/bin /d/msys64/ucrt64/bin; do
+  if [[ -d "$_ucrt" ]]; then
+    export PATH="$_ucrt:$PATH"
+    break
+  fi
+done
+# Also set EMSDK if a common install exists
+if [[ -z "${EMSDK:-}" ]]; then
+  for _em in /c/emsdk /d/emsdk "$HOME/emsdk"; do
+    if [[ -f "$_em/emsdk_env.sh" || -f "$_em/emsdk_env.bat" ]]; then
+      export EMSDK="$_em"
+      break
+    fi
+  done
+fi
+
 if command -v powershell.exe >/dev/null 2>&1 && [[ -f "$ROOT/scripts/check-before-push.ps1" ]]; then
   # Prefer PowerShell script on Windows Git Bash / PowerShell-capable hosts
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ROOT/scripts/check-before-push.ps1"
+  MSYS2_ROOT="${MSYS2_ROOT:-C:/msys64}" EMSDK="${EMSDK:-}" \
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ROOT/scripts/check-before-push.ps1"
   exit $?
 fi
 

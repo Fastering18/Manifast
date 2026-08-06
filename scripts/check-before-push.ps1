@@ -37,10 +37,13 @@ function Ensure-UcrtPath {
     $candidates += @("C:\msys64\ucrt64\bin", "D:\msys64\ucrt64\bin")
     foreach ($p in $candidates) {
         if (Test-Path $p) {
-            if ($env:PATH -notlike "*$p*") { $env:PATH = "$p;" + $env:PATH }
-            return
+            # Always prepend so git-hook / mixed MinGW PATHs do not shadow UCRT DLLs
+            $env:PATH = "$p;" + $env:PATH
+            $env:MSYS2_ROOT = (Split-Path (Split-Path $p))
+            return $p
         }
     }
+    return $null
 }
 
 function Find-Mifast {
@@ -50,7 +53,10 @@ function Find-Mifast {
     return $null
 }
 
-Ensure-UcrtPath
+$ucrtBin = Ensure-UcrtPath
+if (-not $ucrtBin) {
+    Write-Host "WARN: MSYS2 UCRT64 bin not found; mifast may fail to load DLLs" -ForegroundColor Yellow
+}
 
 # --- Build if needed ---
 $mifast = Find-Mifast
@@ -69,6 +75,7 @@ if (-not $mifast) {
 # --- Tests ---
 if (-not $SkipTests) {
     Write-Step "Running language test suite (mifast test)..."
+    if ($ucrtBin) { $env:PATH = "$ucrtBin;" + $env:PATH }
     & $mifast test
     if ($LASTEXITCODE -ne 0) { Fail ("mifast test failed (exit " + $LASTEXITCODE + ")") }
 
