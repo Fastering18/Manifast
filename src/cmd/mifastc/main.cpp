@@ -12,6 +12,7 @@
 #include "manifast/AST.h"
 #include "manifast/CodeGen.h"
 #include "manifast/Utils/Path.h"
+#include "manifast/Utils/Process.h"
 
 namespace fs = std::filesystem;
 
@@ -209,12 +210,17 @@ void compileToAOT(const std::string& inputPath, const std::string& outputPath) {
             }
             codegen.emitObject(objPath);
             
-            // Invoke GCC for linking (fallback/legacy)
-            // Assumes libmanifast_core.a is in library path or current directory
-            // and fmt is available.
-            std::string cmd = "g++ \"" + objPath + "\" -o \"" + actualOut + "\" -L. -lmanifast_core -lfmt -static";
-            std::cout << "Linking executable (External g++): " << cmd << "\n";
-            int ret = std::system(cmd.c_str());
+            // Invoke GCC for linking without a shell (no command injection via paths)
+            std::vector<std::string> linkArgs = {
+                "g++", objPath, "-o", actualOut, "-L.", "-lmanifast_core", "-lfmt", "-static"
+            };
+            std::string cmdStr;
+            for (size_t i = 0; i < linkArgs.size(); ++i) {
+                if (i) cmdStr += ' ';
+                cmdStr += linkArgs[i];
+            }
+            std::cout << "Linking executable (External g++): " << cmdStr << "\n";
+            int ret = manifast::utils::runCommand(linkArgs);
             
             if (ret == 0) {
                 std::cout << "Created Executable: " << actualOut << "\n";

@@ -19,6 +19,7 @@
 #include "manifast/VM/Compiler.h"
 #include "manifast/VM/VM.h"
 #include "manifast/Utils/Path.h"
+#include "manifast/Utils/Process.h"
 #ifdef MANIFAST_HAS_LLVM
 #include "manifast/CodeGen.h" 
 #endif
@@ -449,14 +450,25 @@ int main(int argc, char* argv[]) {
                 }
 #endif
 
-                std::string cmdStr = gpp + " \"" + objPath + "\" -o \"" + actualOut + "\" -L\"" + libDir + "\"";
+                // Argv-style link (no shell) — avoids command injection via paths
+                std::vector<std::string> linkArgs = {
+                    gpp, objPath, "-o", actualOut, "-L" + libDir
+                };
 #ifdef _WIN32
-                if (!extraLibDir.empty()) cmdStr += " -L\"" + extraLibDir + "\"";
+                if (!extraLibDir.empty()) linkArgs.push_back("-L" + extraLibDir);
 #endif
-                cmdStr += " -L. -lmanifast_core -lfmt -static";
-                
+                linkArgs.push_back("-L.");
+                linkArgs.push_back("-lmanifast_core");
+                linkArgs.push_back("-lfmt");
+                linkArgs.push_back("-static");
+
+                std::string cmdStr;
+                for (size_t i = 0; i < linkArgs.size(); ++i) {
+                    if (i) cmdStr += ' ';
+                    cmdStr += linkArgs[i];
+                }
                 fmt::print("Linking executable: {}\n", cmdStr);
-                int ret = std::system(cmdStr.c_str());
+                int ret = manifast::utils::runCommand(linkArgs);
                 
                 if (ret == 0) {
                     fmt::print(fg(fmt::color::green), "Created Executable: {}\n", actualOut);
