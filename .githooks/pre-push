@@ -21,19 +21,27 @@ for _ucrt in "${MSYS2_ROOT:-}/ucrt64/bin" /c/msys64/ucrt64/bin /d/msys64/ucrt64/
     break
   fi
 done
-# Also set EMSDK if a common install exists
-if [[ -z "${EMSDK:-}" ]]; then
-  for _em in /c/emsdk /d/emsdk "$HOME/emsdk"; do
-    if [[ -f "$_em/emsdk_env.sh" || -f "$_em/emsdk_env.bat" ]]; then
-      export EMSDK="$_em"
-      break
-    fi
-  done
+# Pass Windows-style paths into PowerShell (not /c/...)
+_msys2_win="${MSYS2_ROOT:-C:/msys64}"
+_emsdk_win=""
+if [[ -n "${EMSDK:-}" ]]; then
+  _emsdk_win="$EMSDK"
+elif [[ -d /c/emsdk ]]; then
+  _emsdk_win="C:/emsdk"
+elif [[ -d /d/emsdk ]]; then
+  _emsdk_win="D:/emsdk"
+fi
+# Convert /c/foo -> C:/foo for PowerShell
+if [[ "$_emsdk_win" =~ ^/([a-zA-Z])/(.*)$ ]]; then
+  _emsdk_win="${BASH_REMATCH[1]^}:/${BASH_REMATCH[2]}"
+fi
+if [[ "$_msys2_win" =~ ^/([a-zA-Z])/(.*)$ ]]; then
+  _msys2_win="${BASH_REMATCH[1]^}:/${BASH_REMATCH[2]}"
 fi
 
 if command -v powershell.exe >/dev/null 2>&1 && [[ -f "$ROOT/scripts/check-before-push.ps1" ]]; then
   # Prefer PowerShell script on Windows Git Bash / PowerShell-capable hosts
-  MSYS2_ROOT="${MSYS2_ROOT:-C:/msys64}" EMSDK="${EMSDK:-}" \
+  MSYS2_ROOT="$_msys2_win" EMSDK="$_emsdk_win" \
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ROOT/scripts/check-before-push.ps1"
   exit $?
 fi

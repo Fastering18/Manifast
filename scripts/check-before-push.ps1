@@ -96,14 +96,26 @@ if ($SkipWasm) {
     Write-Host "  WARN: WASM rebuild skipped (-SkipWasm)" -ForegroundColor Yellow
 } else {
     Write-Step "Rebuilding WASM playground assets..."
+
+    # Normalize MSYS/Git-Bash EMSDK paths like /c/emsdk -> C:\emsdk
+    if ($env:EMSDK -match '^/([a-zA-Z])/(.*)$') {
+        $env:EMSDK = ($Matches[1].ToUpper() + ":\" + ($Matches[2] -replace '/', '\'))
+    }
+
     $emsdkEnv = $null
     if ($env:EMSDK) {
         $candidate = Join-Path $env:EMSDK "emsdk_env.bat"
         if (Test-Path $candidate) { $emsdkEnv = $candidate }
     }
-    if (-not $emsdkEnv -and (Test-Path "C:\emsdk\emsdk_env.bat")) {
-        $emsdkEnv = "C:\emsdk\emsdk_env.bat"
-        $env:EMSDK = "C:\emsdk"
+    if (-not $emsdkEnv) {
+        foreach ($root in @("C:\emsdk", "D:\emsdk", (Join-Path $env:USERPROFILE "emsdk"))) {
+            $candidate = Join-Path $root "emsdk_env.bat"
+            if (Test-Path $candidate) {
+                $emsdkEnv = $candidate
+                $env:EMSDK = $root
+                break
+            }
+        }
     }
 
     $hasEmcmake = [bool](Get-Command emcmake -ErrorAction SilentlyContinue)
