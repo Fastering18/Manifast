@@ -313,6 +313,9 @@ const char* mf_run_script_tier(const char* source, int tier) {
     
     manifast_set_plot_show_callback(wasm_plot_callback);
     manifast_set_clear_output_callback([](){ g_wasm_output += "[CLR]"; });
+    manifast_set_delay_callback([](int ms){
+        g_wasm_output += "[DLY:" + std::to_string(ms) + "]";
+    });
     
     manifast::SyntaxConfig config;
     manifast::Lexer lexer(source, config);

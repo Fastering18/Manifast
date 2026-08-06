@@ -3,35 +3,16 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manifast Playground | Indonesian-Syntax High-Performance Language</title>
-
-    <!-- Primary Meta Tags -->
-    <meta name="title" content="Manifast Playground | Indonesian-Syntax High-Performance Language">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0c1017">
+    <title>Manifast Playground | Indonesian-Syntax Language</title>
     <meta name="description"
-        content="Experiment with Manifast, a high-performance programming language featuring Indonesian syntax. Powered by LLVM and WASM for near-native speed in your browser.">
-    <meta name="keywords"
-        content="Manifast, bahasa pemrograman, Indonesian programming language, LLVM, WebAssembly, coding playground, IDE">
-    <meta name="author" content="Fastering18">
-
-    <!-- Open Graph / Facebook -->
+        content="Run Manifast in your browser — general-purpose & embeddable language with Indonesian-inspired syntax, powered by a WebAssembly VM.">
+    <meta name="keywords" content="Manifast, WASM, playground, Indonesian programming language, embeddable">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://fastering.thedev.id/Manifast/">
-    <meta property="og:title" content="Manifast Playground | Indonesian-Syntax Language">
-    <meta property="og:description"
-        content="High-performance coding with Indonesian syntax. Try it now in your browser!">
-    <meta property="og:image"
-        content="https://repository-images.githubusercontent.com/832731807/f6f59b0b-6d6c-4b36-a8a2-8a9d1d1d1d1d">
-
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://fastering.thedev.id/Manifast/">
-    <meta property="twitter:title" content="Manifast Playground | Indonesian-Syntax Language">
-    <meta property="twitter:description"
-        content="High-performance coding with Indonesian syntax. Try it now in your browser!">
-    <meta property="twitter:image"
-        content="https://repository-images.githubusercontent.com/832731807/f6f59b0b-6d6c-4b36-a8a2-8a9d1d1d1d1d">
-
+    <meta property="og:title" content="Manifast Playground">
+    <meta property="og:description" content="High-performance coding with Indonesian syntax — try it in your browser.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -43,16 +24,25 @@
         :root {
             --bg-deep: hsl(222, 25%, 6%);
             --bg-surface: hsl(222, 25%, 10%);
-            --bg-glass: rgba(22, 27, 34, 0.7);
+            --bg-elevated: hsl(222, 22%, 13%);
+            --bg-glass: rgba(22, 27, 34, 0.75);
             --text-primary: hsl(210, 40%, 98%);
-            --text-secondary: hsl(210, 20%, 70%);
+            --text-secondary: hsl(210, 16%, 68%);
             --accent: hsl(212, 100%, 65%);
-            --accent-glow: hsla(212, 100%, 65%, 0.3);
-            --border: hsl(215, 20%, 20%);
-            --border-light: hsla(215, 20%, 30%, 0.5);
+            --accent-glow: hsla(212, 100%, 65%, 0.28);
+            --border: hsl(215, 18%, 22%);
+            --border-light: hsla(215, 20%, 35%, 0.45);
             --success: hsl(142, 70%, 50%);
             --error: hsl(0, 84%, 60%);
             --warning: hsl(38, 92%, 50%);
+            --sidebar-w: clamp(200px, 22vw, 280px);
+            --header-h: 56px;
+            --console-h: clamp(160px, 32vh, 360px);
+            --radius: 8px;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
         }
 
         * {
@@ -61,44 +51,58 @@
             scrollbar-color: var(--border) transparent;
         }
 
-        body {
+        html, body {
             margin: 0;
             padding: 0;
+            height: 100%;
+            height: 100dvh;
             background: var(--bg-deep);
             color: var(--text-primary);
-            font-family: 'Inter', -apple-system, sans-serif;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
+            font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
             overflow: hidden;
         }
 
+        body {
+            display: flex;
+            flex-direction: column;
+            padding:
+                var(--safe-top)
+                var(--safe-right)
+                var(--safe-bottom)
+                var(--safe-left);
+        }
+
         header {
+            min-height: var(--header-h);
             background: var(--bg-glass);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            padding: 0.75rem 1.5rem;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
             border-bottom: 1px solid var(--border);
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            z-index: 100;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.5rem clamp(0.75rem, 2vw, 1.5rem);
+            z-index: 40;
+            flex-shrink: 0;
         }
 
         .brand {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.6rem;
+            min-width: 0;
         }
 
         .logo-text {
             font-weight: 800;
-            font-size: 1.25rem;
+            font-size: clamp(1rem, 2.5vw, 1.25rem);
             letter-spacing: -0.02em;
             background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
+            white-space: nowrap;
         }
 
         .version-badge {
@@ -108,19 +112,22 @@
             padding: 2px 8px;
             border-radius: 99px;
             border: 1px solid var(--border);
+            white-space: nowrap;
         }
 
-        .status-container {
+        .header-actions {
             display: flex;
             align-items: center;
-            gap: 1.5rem;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         .status-indicator {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            font-size: 0.75rem;
+            gap: 0.45rem;
+            font-size: 0.72rem;
             color: var(--text-secondary);
             font-weight: 500;
         }
@@ -134,70 +141,83 @@
             animation: pulse 2s infinite;
         }
 
+        .pulse-dot.warn { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+        .pulse-dot.err { background: var(--error); box-shadow: 0 0 8px var(--error); animation: none; }
+
         @keyframes pulse {
-            0% {
-                transform: scale(0.95);
-                opacity: 0.7;
-            }
-
-            50% {
-                transform: scale(1.1);
-                opacity: 1;
-            }
-
-            100% {
-                transform: scale(0.95);
-                opacity: 0.7;
-            }
+            0%, 100% { transform: scale(0.95); opacity: 0.75; }
+            50% { transform: scale(1.15); opacity: 1; }
         }
 
         .workspace {
-            display: flex;
             flex: 1;
-            overflow: hidden;
+            display: flex;
+            min-height: 0;
+            position: relative;
         }
 
         .sidebar {
-            width: 220px;
+            width: var(--sidebar-w);
+            flex-shrink: 0;
             background: var(--bg-surface);
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
+            min-height: 0;
+            z-index: 30;
         }
 
         .sidebar-header {
-            padding: 1rem;
+            padding: 0.85rem 1rem;
             font-size: 0.65rem;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             color: var(--text-secondary);
             font-weight: 700;
             border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
         }
 
         .example-list {
             flex: 1;
             overflow-y: auto;
             padding: 0.5rem;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .example-group-label {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            opacity: 0.7;
+            padding: 0.65rem 0.75rem 0.25rem;
+            font-weight: 700;
         }
 
         .example-item {
-            padding: 0.6rem 0.75rem;
+            padding: 0.55rem 0.75rem;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 0.85rem;
+            font-size: 0.84rem;
             color: var(--text-secondary);
-            transition: all 0.2s;
+            transition: background 0.15s, color 0.15s;
             margin-bottom: 2px;
             display: flex;
             align-items: center;
             gap: 0.5rem;
             border-left: 3px solid transparent;
+            user-select: none;
         }
 
-        .example-item:hover {
+        .example-item:hover,
+        .example-item:focus-visible {
             background: hsla(212, 100%, 65%, 0.1);
             color: var(--accent);
+            outline: none;
         }
 
         .example-item.active {
@@ -212,186 +232,159 @@
             display: flex;
             flex-direction: column;
             min-width: 0;
+            min-height: 0;
         }
 
         .pane-header {
-            padding: 0.4rem 1rem;
+            padding: 0.4rem clamp(0.75rem, 2vw, 1rem);
             background: var(--bg-deep);
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 0.5rem;
             font-size: 0.7rem;
             font-weight: 600;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            flex-shrink: 0;
         }
 
         #editor-container {
             flex: 1;
-            background: var(--bg-deep);
+            min-height: 120px;
             overflow: hidden;
+            background: var(--bg-deep);
         }
 
         .console-area {
-            height: 35%;
+            height: var(--console-h);
+            min-height: 120px;
+            max-height: 70vh;
             border-top: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            background: #000;
+            background: #05070b;
+            flex-shrink: 0;
+            resize: vertical;
+            overflow: auto;
         }
 
         #output {
             flex: 1;
-            padding: 1rem;
-            font-family: 'JetBrains Mono', 'Consolas', monospace;
-            font-size: 13px;
-            line-height: 1.6;
-            overflow-y: auto;
+            padding: clamp(0.75rem, 2vw, 1rem);
+            font-family: "JetBrains Mono", ui-monospace, Consolas, monospace;
+            font-size: clamp(12px, 1.6vw, 13.5px);
+            line-height: 1.55;
+            overflow: auto;
             white-space: pre-wrap;
+            word-break: break-word;
             color: #d1d5db;
+            -webkit-overflow-scrolling: touch;
         }
 
         #output img {
-            max-width: 600px;
+            display: block;
+            max-width: min(100%, 720px);
             width: 100%;
             height: auto;
-            border-radius: 8px;
-            margin: 12px 0;
+            border-radius: var(--radius);
+            margin: 0.75rem 0;
             border: 1px solid var(--border-light);
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            animation: fadeIn 0.5s ease-out;
+            background: #111;
         }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
+        #output .err {
+            color: var(--error);
+        }
 
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        #output .meta {
+            color: hsla(200, 100%, 70%, 0.85);
         }
 
         .btn {
             background: var(--accent);
             color: var(--bg-deep);
             border: none;
-            padding: 0.4rem 1rem;
+            padding: 0.45rem 0.9rem;
             border-radius: 6px;
             font-weight: 700;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
+            transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+            display: inline-flex;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.35rem;
+            min-height: 36px;
         }
 
-        .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px var(--accent-glow);
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-stop { background: var(--error); display: none; }
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
         }
+        .btn-ghost:hover { color: var(--text-primary); border-color: var(--text-secondary); background: var(--bg-elevated); box-shadow: none; }
 
-        .btn:active {
-            transform: translateY(0);
+        .btn-icon {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
         }
-
-        .btn-stop {
-            background: var(--error);
-            display: none;
-        }
-
-        .btn-stop:hover {
-            box-shadow: 0 4px 12px hsla(0, 84%, 60%, 0.3);
-        }
+        .btn-icon:hover { color: var(--text-primary); background: var(--bg-elevated); }
 
         .btn-sm {
             background: transparent;
             color: var(--text-secondary);
             border: 1px solid var(--border);
             padding: 3px 8px;
-            font-size: 0.6rem;
+            font-size: 0.65rem;
             border-radius: 4px;
             cursor: pointer;
-            transition: all 0.2s;
             font-weight: 600;
+            min-height: 28px;
+        }
+        .btn-sm:hover { color: var(--text-primary); background: var(--bg-surface); }
+
+        .shortcut-hint {
+            font-size: 10px;
+            color: var(--text-secondary);
+            opacity: 0.55;
         }
 
-        .btn-sm:hover {
-            color: var(--text-primary);
-            border-color: var(--text-secondary);
-            background: var(--bg-surface);
+        #timing {
+            color: var(--accent);
+            font-weight: 500;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 0.72rem;
         }
 
-        /* CodeMirror Syntax Styling */
-        .cm-s-one-dark .cm-keyword {
-            color: #c678dd;
-            font-weight: bold;
-        }
-
-        .cm-s-one-dark .cm-string {
-            color: #98c379;
-        }
-
-        .cm-s-one-dark .cm-builtin {
-            color: #61afef;
-        }
-
-        .cm-s-one-dark .cm-number {
-            color: #d19a66;
-        }
-
-        .cm-s-one-dark .cm-comment {
-            color: #5c6370;
-            font-style: italic;
-        }
-
-        .cm-s-one-dark .cm-operator {
-            color: #56b6c2;
-        }
-
-        .cm-s-one-dark .cm-variable {
-            color: #ffffff;
-        }
-
-        .cm-s-one-dark .cm-property {
-            color: #e06c75;
-        }
-
-        .cm-s-one-dark .CodeMirror-cursor {
-            border-left: 2px solid var(--accent) !important;
-        }
-
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 10px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-        }
+        .cm-s-one-dark .cm-keyword { color: #c678dd; font-weight: bold; }
+        .cm-s-one-dark .cm-string { color: #98c379; }
+        .cm-s-one-dark .cm-builtin { color: #61afef; }
+        .cm-s-one-dark .cm-number { color: #d19a66; }
+        .cm-s-one-dark .cm-comment { color: #5c6370; font-style: italic; }
+        .cm-s-one-dark .cm-operator { color: #56b6c2; }
+        .cm-s-one-dark .CodeMirror-cursor { border-left: 2px solid var(--accent) !important; }
 
         .CodeMirror {
             height: 100% !important;
-            font-family: 'JetBrains Mono', 'Consolas', monospace !important;
-            font-size: 14px;
+            font-family: "JetBrains Mono", ui-monospace, Consolas, monospace !important;
+            font-size: clamp(13px, 1.8vw, 14.5px);
             background: transparent !important;
             color: white !important;
         }
-
         .CodeMirror-gutters {
             background: var(--bg-deep) !important;
             border-right: 1px solid var(--border) !important;
@@ -406,85 +399,109 @@
             justify-content: center;
             align-items: center;
             z-index: 1000;
-            transition: opacity 0.5s ease;
+            transition: opacity 0.4s ease;
+            padding: 1rem;
+            text-align: center;
         }
-
         .spinner {
             width: 48px;
             height: 48px;
             border: 3px solid var(--border);
             border-top-color: var(--accent);
             border-radius: 50%;
-            animation: spin 0.8s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+            animation: spin 0.8s linear infinite;
         }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
+        @keyframes spin { to { transform: rotate(360deg); } }
         .loader p {
-            margin-top: 1.5rem;
-            font-size: 0.9rem;
+            margin-top: 1.25rem;
             color: var(--text-secondary);
             font-weight: 500;
+            font-size: 0.9rem;
         }
 
-        .shortcut-hint {
-            font-size: 10px;
-            color: var(--text-secondary);
-            opacity: 0.5;
-            margin-left: 8px;
+        .sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 25;
+        }
+
+        /* Mobile / tablet */
+        @media (max-width: 900px) {
+            .sidebar {
+                position: fixed;
+                top: calc(var(--header-h) + var(--safe-top));
+                bottom: var(--safe-bottom);
+                left: 0;
+                width: min(86vw, 300px);
+                transform: translateX(-105%);
+                transition: transform 0.22s ease;
+                box-shadow: 8px 0 32px rgba(0, 0, 0, 0.4);
+            }
+            body.sidebar-open .sidebar { transform: translateX(0); }
+            body.sidebar-open .sidebar-backdrop { display: block; }
+            .status-label { display: none; }
+            .console-area { height: min(40vh, 280px); }
+        }
+
+        @media (max-width: 520px) {
+            .version-badge, .shortcut-hint { display: none; }
+            .btn-run span, .btn-stop span { display: none; }
+            header { gap: 0.4rem; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .pulse-dot, .spinner { animation: none; }
+            .btn, .sidebar { transition: none; }
         }
     </style>
 </head>
 
 <body>
-
-    <div id="loader" class="loader">
-        <div class="spinner"></div>
-        <p>INITIALIZING VM...</p>
+    <div id="loader" class="loader" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Loading Manifast WASM VM…</p>
     </div>
+
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
     <header>
         <div class="brand">
+            <button class="btn-icon" id="btnMenu" type="button" aria-label="Toggle examples" onclick="toggleSidebar()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
             <span class="logo-text">MANIFAST</span>
-            <span class="version-badge">v0.0.13</span>
+            <span class="version-badge">v0.0.13 · WASM</span>
         </div>
 
-        <div class="status-container">
-            <div class="status-indicator">
-                <div class="pulse-dot"></div>
-                WASM VM ACTIVE
+        <div class="header-actions">
+            <div class="status-indicator" title="Runtime status">
+                <div class="pulse-dot warn" id="statusDot"></div>
+                <span class="status-label" id="statusLabel">Loading</span>
             </div>
-
-            <div style="display: flex; gap: 8px;">
-                <button class="btn btn-run" id="btnRun" onclick="runCode()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                    </svg>
-                    RUN
-                </button>
-                <button class="btn btn-stop" id="btnStop" onclick="stopPlayback()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="6" y="6" width="12" height="12" />
-                    </svg>
-                    STOP
-                </button>
-            </div>
-            <span class="shortcut-hint">Ctrl+Enter</span>
+            <button class="btn btn-run" id="btnRun" type="button" onclick="runCode()" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                <span>Run</span>
+            </button>
+            <button class="btn btn-stop" id="btnStop" type="button" onclick="stopPlayback()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+                <span>Stop</span>
+            </button>
+            <span class="shortcut-hint">Ctrl/⌘+Enter</span>
         </div>
     </header>
 
     <div class="workspace">
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar" aria-label="Examples">
             <div class="sidebar-header">
                 <span>Examples</span>
-                <div style="display: flex; gap: 4px;">
-                    <button class="btn-sm" onclick="createNewExample()" title="New Example">+</button>
-                    <button class="btn-sm" id="btnDeleteExample" onclick="deleteCurrentExample()" title="Delete Example"
-                        style="display: none; color: var(--error); border-color: var(--error);">–</button>
+                <div style="display:flex;gap:4px;">
+                    <button class="btn-sm" type="button" onclick="createNewExample()" title="New example">+</button>
+                    <button class="btn-sm" type="button" id="btnDeleteExample" onclick="deleteCurrentExample()"
+                        title="Delete example" style="display:none;color:var(--error);border-color:var(--error);">–</button>
                 </div>
             </div>
             <div class="example-list" id="example-list"></div>
@@ -492,63 +509,52 @@
 
         <div class="main-editor">
             <div class="pane-header">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                    </svg>
-                    main.mnf
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                    <span id="fileLabel">main.mnf</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <span id="timing"
-                        style="color: var(--accent); font-weight: 500; font-family: 'JetBrains Mono';"></span>
-                    <button class="btn-sm" onclick="copyCode()">COPY</button>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span id="timing"></span>
+                    <button class="btn-sm" type="button" id="btnCopy" onclick="copyCode()">Copy</button>
                 </div>
             </div>
-            <div id="editor-container"></div>
+            <div id="editor-container" role="textbox" aria-label="Manifast source editor"></div>
 
-            <div class="console-area">
+            <div class="console-area" id="consoleArea">
                 <div class="pane-header">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="3">
-                            <polyline points="4 17 10 11 4 5" />
-                            <line x1="12" y1="19" x2="20" y2="19" />
-                        </svg>
-                        Terminal
-                    </div>
-                    <button class="btn-sm" onclick="document.getElementById('output').innerHTML = ''">CLEAR</button>
+                    <span>Output</span>
+                    <button class="btn-sm" type="button" onclick="clearOutputView()">Clear</button>
                 </div>
-                <div id="output"></div>
+                <div id="output" aria-live="polite"></div>
             </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/mode/simple.min.js"></script>
-
     <script>
+        /* ---------- Syntax mode ---------- */
         CodeMirror.defineSimpleMode("manifast", {
             start: [
                 { regex: /--.*/, token: "comment" },
                 { regex: /"(?:[^\\]|\\.)*?(?:"|$)/, token: "string" },
                 { regex: /'(?:[^\\]|\\.)'/, token: "string" },
-                { regex: /\b(?:fungsi|jika|kalau|sebaliknya|maka|tutup|kembali|lokal|untuk|ke|lakukan|selama|selagi|dan|atau|bukan|kelas|self|impor|benar|salah|nil|tetap|coba|tangkap|tipe)\b/, token: "keyword" },
+                { regex: /\b(?:fungsi|jika|kalau|sebaliknya|kecuali|maka|tutup|kembali|lokal|tetap|untuk|ke|langkah|lakukan|selama|selagi|dan|atau|bukan|kelas|self|impor|benar|salah|nil|coba|tangkap|tipe)\b/, token: "keyword" },
                 { regex: /\b(?:i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|angka|char|string|boolean)\b/, token: "builtin" },
-                { regex: /\b(?:print|println|tunggu|input|assert|exit|waktuNano|clearOutput|len|sin|cos|tan|sqrt|abs|floor|ceil|pow|log|exp)\b/, token: "builtin" },
-                { regex: /\b\d+\.?\d*\b/, token: "number" },
-                { regex: /[+\-*/%<>=!&|^]/, token: "operator" },
+                { regex: /\b(?:print|println|tunggu|input|assert|exit|waktuNano|clearOutput|len|sin|cos|tan|sqrt|abs|floor|ceil|pow|log|exp|linspace)\b/, token: "builtin" },
+                { regex: /\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/, token: "number" },
+                { regex: /[+\-*/%<>=!&|^]+/, token: "operator" },
             ],
             meta: { lineComment: "--" }
         });
 
         window.editor = CodeMirror(document.getElementById("editor-container"), {
-            value: "-- Loading...",
+            value: "-- Loading…",
             mode: "manifast",
             theme: "one-dark",
             lineNumbers: true,
             tabSize: 2,
             indentWithTabs: false,
+            lineWrapping: true,
             viewportMargin: Infinity,
             extraKeys: {
                 "Ctrl-Enter": () => runCode(),
@@ -556,51 +562,186 @@
             }
         });
 
+        /* ---------- Examples (verified against language + WASM runtime) ---------- */
         const defaultExamples = {
             fib: {
                 name: "Fibonacci",
-                code: `-- Fibonacci Recursion\nlokal os = impor("os")\n\nfungsi fib(n)\n  jika n < 2 maka kembali n tutup\n  kembali fib(n-1) + fib(n-2)\ntutup\n\nlokal t0 = os.waktuNano()\nlokal h = fib(20)\nlokal t1 = os.waktuNano()\n\nprintln("fib(20) =", h)\nprintln("Waktu:", (t1 - t0) / 1000000, "ms")`
+                group: "Basics",
+                code: `-- Fibonacci (recursive)
+lokal os = impor("os")
+
+fungsi fib(n)
+  jika n < 2 maka kembali n tutup
+  kembali fib(n - 1) + fib(n - 2)
+tutup
+
+lokal t0 = os.waktuNano()
+lokal h = fib(20)
+lokal t1 = os.waktuNano()
+
+println("fib(20) =", h)
+println("Waktu:", (t1 - t0) / 1000000, "ms")`
             },
             fizzbuzz: {
                 name: "FizzBuzz",
-                code: `untuk i = 1 ke 20 lakukan\n  jika i % 15 == 0 maka println("FizzBuzz")\n  kalau i % 3 == 0 maka println("Fizz")\n  kalau i % 5 == 0 maka println("Buzz")\n  sebaliknya println(i)\n  tutup\ntutup`
+                group: "Basics",
+                code: `untuk i = 1 ke 20 lakukan
+  jika i % 15 == 0 maka println("FizzBuzz")
+  kalau i % 3 == 0 maka println("Fizz")
+  kalau i % 5 == 0 maka println("Buzz")
+  sebaliknya println(i)
+  tutup
+tutup`
             },
             plot: {
                 name: "Plot Chart",
-                code: `lokal plot = impor("plot")\nlokal x = []\nlokal y = []\n\nuntuk i = 0 ke 20 lakukan\n  x.push(i)\n  y.push(sin(i/2))\ntutup\n\nplot.line(x, y, { title: "Sine Wave Demo", xlabel: "Radians", ylabel: "Magnitude" })\nplot.show()\nprintln("Plot rendered successfully!")`
-            },
-            newton: {
-                name: "Newton-Raphson",
-                code: `-- Newton-Raphson Method\n-- x_{n+1} = x_n - f(x_n)/f'(x_n)\n\ntipe fnAngka = fungsi(angka): angka\nfungsi nr(xn: angka, f: fnAngka, fd: fnAngka): angka\n  kembali xn - f(xn)/fd(xn)\ntutup\n\n-- target: y = x^2 + 7x + 6\n-- derivative: dy/dx = 2x + 7\nlokal f = fungsi(x) kembali x*x + 7*x + 6 tutup\nlokal fd = fungsi(x) kembali 2*x + 7 tutup\n\nprintln("# Finding roots with xn = 1")\nlokal xn = 1.0\nprintln("i", "xn")\nuntuk i = 1 ke 6 lakukan\n  println(i, xn)\n  xn = nr(xn, f, fd)\ntutup\n\nprintln("\\nFinal Root: ", xn)`
-            },
-            error_calc: {
-                name: "Numerical Error",
-                code: `-- Numerical Error Function example\nlokal math = impor("math")\n\nfungsi hitung_error(v_true: angka, v_approx: angka): angka\n  jika v_true == 0 maka kembali math.abs(v_approx) tutup\n  kembali math.abs((v_true - v_approx) / v_true) * 100\ntutup\n\nlokal t = math.pi\nlokal a = 3.14\n\nlokal err = hitung_error(t, a)\nprintln("Nilai Sebenarnya: ", t)\nprintln("Nilai Aproksimasi: ", a)\nprintln("Relative Error: ", err, "%")`
-            },
-            oop: {
-                name: "Class & Objects",
-                code: `kelas Mobil maka\n  fungsi inisiasi(merk, thn)\n    self.merk = merk\n    self.thn = thn\n  tutup\n\n  fungsi info()\n    println("Mobil: " + self.merk + " (" + self.thn + ")")\n  tutup\ntutup\n\nlokal m1 = Mobil("Toyota", 2022)\nm1.info()`
+                group: "Graphics",
+                code: `-- Sine wave chart (WASM plot module)
+lokal plot = impor("plot")
+lokal math = impor("math")
+
+plot.reset()
+lokal x = []
+lokal y = []
+
+untuk i = 0 ke 64 lakukan
+  lokal t = i / 10.0
+  x.push(t)
+  y.push(math.sin(t))
+tutup
+
+plot.line(x, y, {
+  title: "Sine Wave",
+  xlabel: "x (rad)",
+  ylabel: "sin(x)",
+  width: 720,
+  height: 400
+})
+plot.show()
+println("Plot rendered.")`
             },
             mandelbrot: {
                 name: "Mandelbrot Animated",
-                code: `lokal os = impor("os")\n\nfungsi gambar(iterasi)\n  os.clearOutput()\n  println("Mandelbrot [Depth: " + iterasi + "]")\n  untuk y = 0 ke 20 lakukan\n    lokal cy = (y/20)*2 - 1\n    untuk x = 0 ke 60 lakukan\n      lokal cx = (x/60)*2.5 - 1.75\n      lokal zx = 0; lokal zy = 0; lokal i = 0\n      selama (zx*zx + zy*zy < 4) dan (i < iterasi) lakukan\n        lokal t = zx*zx - zy*zy + cx\n        zy = 2*zx*zy + cy\n        zx = t\n        i = i + 1\n      tutup\n      jika i == iterasi maka print("#") sebaliknya print(" ") tutup\n    tutup\n    println("")\n  tutup\ntutup\n\nuntuk i = 1 ke 24 lakukan\n  gambar(i)\n  os.tunggu(30)\ntutup\nprintln("Done!")`
+                group: "Graphics",
+                code: `-- ASCII Mandelbrot animation
+-- os.clearOutput + os.tunggu(ms) work in the playground
+lokal os = impor("os")
+
+fungsi gambar(iterasi)
+  os.clearOutput()
+  println("Mandelbrot  depth=", iterasi)
+  untuk y = 0 ke 22 lakukan
+    lokal cy = (y / 22.0) * 2.0 - 1.0
+    untuk x = 0 ke 64 lakukan
+      lokal cx = (x / 64.0) * 2.5 - 1.75
+      lokal zx = 0.0
+      lokal zy = 0.0
+      lokal i = 0
+      selama (zx * zx + zy * zy < 4.0) dan (i < iterasi) lakukan
+        lokal t = zx * zx - zy * zy + cx
+        zy = 2.0 * zx * zy + cy
+        zx = t
+        i = i + 1
+      tutup
+      jika i == iterasi maka print("#") sebaliknya print(".") tutup
+    tutup
+    println("")
+  tutup
+tutup
+
+untuk d = 1 ke 18 lakukan
+  gambar(d)
+  os.tunggu(45)
+tutup
+println("Done!")`
             },
             ascii_heart: {
                 name: "Heart ASCII Art",
-                code: `-- Heart ASCII Art\nlokal math = impor("math")\n\nuntuk y = 1.5 ke -1.5 langkah -0.1 lakukan\n  untuk x = -1.5 ke 1.5 langkah 0.05 lakukan\n    lokal a = x*x + y*y - 1\n    jika a*a*a - x*x*y*y*y <= 0 maka\n      print("*")\n    sebaliknya\n      print(" ")\n    tutup\n  tutup\n  println("")\ntutup\nprintln("\\nManifast ❤️ ASCII")`
+                group: "Graphics",
+                code: `-- Heart curve (negative for-step supported)
+untuk y = 1.5 ke -1.5 langkah -0.1 lakukan
+  untuk x = -1.5 ke 1.5 langkah 0.045 lakukan
+    lokal a = x * x + y * y - 1.0
+    jika a * a * a - x * x * y * y * y <= 0.0 maka
+      print("*")
+    sebaliknya
+      print(" ")
+    tutup
+  tutup
+  println("")
+tutup
+println("")
+println("Manifast <3")`
+            },
+            newton: {
+                name: "Newton-Raphson",
+                group: "Math",
+                code: `-- Newton-Raphson: x_{n+1} = x_n - f(x_n)/f'(x_n)
+tipe fnAngka = fungsi(angka): angka
+
+fungsi nr(xn: angka, f: fnAngka, fd: fnAngka): angka
+  kembali xn - f(xn) / fd(xn)
+tutup
+
+-- target: y = x^2 + 7x + 6
+lokal f = fungsi(x) kembali x * x + 7 * x + 6 tutup
+lokal fd = fungsi(x) kembali 2 * x + 7 tutup
+
+println("Finding root (xn starts at 1)")
+lokal xn = 1.0
+untuk i = 1 ke 8 lakukan
+  println(i, xn)
+  xn = nr(xn, f, fd)
+tutup
+println("Final root:", xn)`
+            },
+            error_calc: {
+                name: "Numerical Error",
+                group: "Math",
+                code: `lokal math = impor("math")
+
+fungsi hitung_error(v_true: angka, v_approx: angka): angka
+  jika v_true == 0 maka kembali math.abs(v_approx) tutup
+  kembali math.abs((v_true - v_approx) / v_true) * 100
+tutup
+
+lokal t = math.pi
+lokal a = 3.14
+lokal err = hitung_error(t, a)
+
+println("True value:", t)
+println("Approx:", a)
+println("Relative error:", err, "%")`
+            },
+            oop: {
+                name: "Class & Objects",
+                group: "OOP",
+                code: `kelas Mobil maka
+  fungsi inisiasi(merk, thn)
+    self.merk = merk
+    self.thn = thn
+  tutup
+
+  fungsi info()
+    println("Mobil:", self.merk, "(" + self.thn + ")")
+  tutup
+tutup
+
+lokal m1 = Mobil("Toyota", 2022)
+m1.info()`
             }
         };
 
-        const STORAGE_KEY = 'manifast_playground_custom_v1';
+        const STORAGE_KEY = "manifast_playground_custom_v2";
         let customExamples = {};
-        let currentExampleKey = 'fib';
+        let currentExampleKey = "fib";
 
         function loadCustom() {
             try {
                 const data = localStorage.getItem(STORAGE_KEY);
                 if (data) customExamples = JSON.parse(data);
             } catch (e) {
-                console.error("Failed to load custom examples", e);
+                console.warn("custom examples load failed", e);
             }
         }
 
@@ -608,13 +749,70 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(customExamples));
         }
 
+        function allExamples() {
+            return { ...defaultExamples, ...customExamples };
+        }
+
+        function selectExample(key) {
+            currentExampleKey = key;
+            const ex = allExamples()[key];
+            if (!ex) return;
+            window.editor.setValue(ex.code);
+            document.getElementById("fileLabel").textContent = (ex.name || key) + ".mnf";
+            document.querySelectorAll(".example-item").forEach((el) => {
+                el.classList.toggle("active", el.dataset.key === key);
+            });
+            document.getElementById("btnDeleteExample").style.display =
+                key.startsWith("custom_") ? "inline-block" : "none";
+            closeSidebar();
+            window.editor.refresh();
+        }
+
+        function initSidebar() {
+            const list = document.getElementById("example-list");
+            list.innerHTML = "";
+            const all = allExamples();
+
+            const groups = {};
+            Object.keys(all).forEach((key) => {
+                const g = all[key].group || (key.startsWith("custom_") ? "Yours" : "Examples");
+                if (!groups[g]) groups[g] = [];
+                groups[g].push(key);
+            });
+
+            Object.keys(groups).forEach((g) => {
+                const label = document.createElement("div");
+                label.className = "example-group-label";
+                label.textContent = g;
+                list.appendChild(label);
+
+                groups[g].forEach((key) => {
+                    const item = document.createElement("div");
+                    item.className = "example-item" + (key === currentExampleKey ? " active" : "");
+                    item.dataset.key = key;
+                    item.tabIndex = 0;
+                    item.setAttribute("role", "button");
+                    item.innerHTML = `<span>${all[key].name}</span>`;
+                    item.onclick = () => selectExample(key);
+                    item.onkeydown = (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            selectExample(key);
+                        }
+                    };
+                    list.appendChild(item);
+                });
+            });
+        }
+
         function createNewExample() {
-            const name = prompt("Enter name for new example:", "Custom Script");
+            const name = prompt("Name for new example:", "Custom Script");
             if (!name) return;
-            const key = 'custom_' + Date.now();
+            const key = "custom_" + Date.now();
             customExamples[key] = {
-                name: name,
-                code: window.editor.getValue() || "-- Start coding here..."
+                name,
+                group: "Yours",
+                code: window.editor.getValue() || "-- Start coding here\nprintln(\"halo\")\n"
             };
             saveCustom();
             initSidebar();
@@ -622,161 +820,236 @@
         }
 
         function deleteCurrentExample() {
-            if (!currentExampleKey.startsWith('custom_')) return;
-            if (!confirm(`Delete example "${customExamples[currentExampleKey].name}"?`)) return;
+            if (!currentExampleKey.startsWith("custom_")) return;
+            if (!confirm("Delete this custom example?")) return;
             delete customExamples[currentExampleKey];
             saveCustom();
             initSidebar();
-            selectExample('fib');
+            selectExample("fib");
         }
 
-        function selectExample(key) {
-            currentExampleKey = key;
-            const all = { ...defaultExamples, ...customExamples };
-            const ex = all[key];
-            if (!ex) return;
-
-            window.editor.setValue(ex.code);
-            document.querySelectorAll('.example-item').forEach(i => {
-                i.classList.toggle('active', i.dataset.key === key);
-            });
-
-            // Toggle delete button
-            document.getElementById('btnDeleteExample').style.display = key.startsWith('custom_') ? 'inline-block' : 'none';
+        /* ---------- Layout helpers ---------- */
+        function toggleSidebar() {
+            if (window.matchMedia("(max-width: 900px)").matches) {
+                document.body.classList.toggle("sidebar-open");
+            }
+        }
+        function closeSidebar() {
+            document.body.classList.remove("sidebar-open");
+        }
+        function clearOutputView() {
+            document.getElementById("output").innerHTML = "";
         }
 
-        function initSidebar() {
-            const list = document.getElementById('example-list');
-            list.innerHTML = '';
-            const all = { ...defaultExamples, ...customExamples };
-
-            Object.keys(all).forEach(key => {
-                const item = document.createElement('div');
-                item.className = 'example-item';
-                item.dataset.key = key;
-                if (key === currentExampleKey) item.classList.add('active');
-
-                const isCustom = key.startsWith('custom_');
-                item.innerHTML = `
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                        <polyline points="13 2 13 9 20 9"/>
-                    </svg> 
-                    ${all[key].name}
-                    ${isCustom ? '<span style="font-size: 10px; opacity: 0.5; margin-left: auto;">User</span>' : ''}
-                `;
-                item.onclick = () => selectExample(key);
-                list.appendChild(item);
-            });
+        function setStatus(kind, label) {
+            const dot = document.getElementById("statusDot");
+            const text = document.getElementById("statusLabel");
+            dot.className = "pulse-dot" + (kind === "ok" ? "" : kind === "warn" ? " warn" : " err");
+            text.textContent = label;
         }
 
-        // --- Playback Engine ---
+        /* ---------- Playback engine (async markers) ---------- */
         let playbackId = 0;
         let isRunning = false;
 
         function setRunning(running) {
             isRunning = running;
-            document.getElementById('btnRun').style.display = running ? 'none' : 'flex';
-            document.getElementById('btnStop').style.display = running ? 'flex' : 'none';
+            document.getElementById("btnRun").style.display = running ? "none" : "inline-flex";
+            document.getElementById("btnStop").style.display = running ? "inline-flex" : "none";
+            document.getElementById("btnRun").disabled = running || !window.Module;
         }
 
         function stopPlayback() {
             playbackId++;
             setRunning(false);
-            console.log("[Manifast] Playback stopped by user");
+            setStatus("ok", "Stopped");
+        }
+
+        function sleep(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function appendText(text, className) {
+            if (!text) return;
+            const outputEl = document.getElementById("output");
+            const span = document.createElement("span");
+            if (className) span.className = className;
+            span.textContent = text;
+            outputEl.appendChild(span);
+            outputEl.scrollTop = outputEl.scrollHeight;
+        }
+
+        function appendImage(dataUrl) {
+            const outputEl = document.getElementById("output");
+            const img = document.createElement("img");
+            img.alt = "Manifast plot";
+            img.loading = "lazy";
+            img.src = dataUrl.startsWith("data:") ? dataUrl : ("data:image/bmp;base64," + dataUrl);
+            outputEl.appendChild(img);
+            outputEl.scrollTop = outputEl.scrollHeight;
+        }
+
+        /**
+         * Parse WASM runtime markers and play them with real delays.
+         * Markers: [CLR]  [DLY:ms]  [IMG:data:...]
+         */
+        async function playMarkedOutput(raw, runId) {
+            const outputEl = document.getElementById("output");
+            let pos = 0;
+            const s = raw || "";
+
+            while (pos < s.length) {
+                if (runId !== playbackId) return;
+
+                const clr = s.indexOf("[CLR]", pos);
+                const dly = s.indexOf("[DLY:", pos);
+                const img = s.indexOf("[IMG:", pos);
+
+                let next = -1;
+                let kind = null;
+                if (clr !== -1) { next = clr; kind = "clr"; }
+                if (dly !== -1 && (next === -1 || dly < next)) { next = dly; kind = "dly"; }
+                if (img !== -1 && (next === -1 || img < next)) { next = img; kind = "img"; }
+
+                if (next === -1) {
+                    appendText(s.slice(pos));
+                    break;
+                }
+
+                if (next > pos) appendText(s.slice(pos, next));
+
+                if (kind === "clr") {
+                    outputEl.innerHTML = "";
+                    pos = next + 5;
+                } else if (kind === "dly") {
+                    const end = s.indexOf("]", next);
+                    if (end === -1) { appendText(s.slice(next)); break; }
+                    const ms = parseInt(s.slice(next + 5, end), 10) || 0;
+                    pos = end + 1;
+                    if (ms > 0) await sleep(Math.min(ms, 5000));
+                } else if (kind === "img") {
+                    const end = s.indexOf("]", next);
+                    if (end === -1) { appendText(s.slice(next)); break; }
+                    const payload = s.slice(next + 5, end);
+                    appendImage(payload);
+                    pos = end + 1;
+                }
+            }
         }
 
         async function runCode() {
-            if (!window.Module || !window.Module.ccall) {
-                alert("WASM not loaded yet!");
+            if (!window.Module || typeof window.Module.ccall !== "function") {
+                appendText("WASM runtime is not ready yet.\n", "err");
                 return;
             }
 
             const code = window.editor.getValue();
-            const outputEl = document.getElementById('output');
-            const timingEl = document.getElementById('timing');
+            const timingEl = document.getElementById("timing");
+            const outputEl = document.getElementById("output");
 
             playbackId++;
-            const currentId = playbackId;
+            const runId = playbackId;
             setRunning(true);
-            outputEl.innerHTML = '<span style="color: hsla(200, 100%, 70%, 0.8)"> > Executing...</span>\n';
-            timingEl.innerText = '';
+            setStatus("warn", "Running");
+            outputEl.innerHTML = "";
+            appendText("> Executing…\n", "meta");
+            timingEl.textContent = "";
 
-            console.log("[Manifast] Running script...");
-            const startTime = performance.now();
+            const t0 = performance.now();
+            let raw = "";
 
             try {
-                window.Module.ccall('mf_run_script_tier', 'string', ['string', 'number'], [code, 0]);
-
-                const endTime = performance.now();
-                timingEl.innerText = `${((endTime - startTime) / 1000).toFixed(3)}s`;
+                // Suppress progressive event spam; we play the marker stream ourselves.
+                raw = window.Module.ccall(
+                    "mf_run_script_tier",
+                    "string",
+                    ["string", "number"],
+                    [code, 0]
+                ) || "";
             } catch (err) {
-                console.error("[Manifast] Execution error:", err);
-                const span = document.createElement('span');
-                span.style.color = 'var(--error)';
-                let msg = err.message || "Unknown error";
-                span.textContent = "\n[ERROR] " + msg + "\n";
-                outputEl.appendChild(span);
-            } finally {
-                if (currentId === playbackId) setRunning(false);
+                appendText("\n[ERROR] " + (err && err.message ? err.message : String(err)) + "\n", "err");
+                setStatus("err", "Error");
+                setRunning(false);
+                return;
+            }
+
+            const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
+            timingEl.textContent = elapsed + "s";
+
+            // Drop the provisional line, then play markers (clear / delay / images)
+            if (runId === playbackId) {
+                outputEl.innerHTML = "";
+                await playMarkedOutput(raw, runId);
+            }
+
+            if (runId === playbackId) {
+                setRunning(false);
+                setStatus("ok", "Ready");
             }
         }
 
         function copyCode() {
-            const btn = document.querySelector('.btn-sm');
+            const btn = document.getElementById("btnCopy");
             navigator.clipboard.writeText(window.editor.getValue()).then(() => {
-                const orig = btn.innerText;
-                btn.innerText = 'COPIED!';
-                btn.style.borderColor = 'var(--success)';
-                btn.style.color = 'var(--success)';
-                setTimeout(() => { btn.innerText = orig; btn.style.borderColor = ''; btn.style.color = ''; }, 2000);
+                const orig = btn.textContent;
+                btn.textContent = "Copied";
+                setTimeout(() => { btn.textContent = orig; }, 1500);
+            }).catch(() => {
+                // fallback
+                window.editor.execCommand("selectAll");
             });
         }
+
+        window.addEventListener("resize", () => {
+            if (window.editor) window.editor.refresh();
+            if (!window.matchMedia("(max-width: 900px)").matches) {
+                document.body.classList.remove("sidebar-open");
+            }
+        });
     </script>
     <script src="manifast.js"></script>
     <script>
-        // MODULARIZE=1 requires calling the factory function
         ManifastModule({
-            print: (text) => console.log("[MF stdout]", text),
-            printErr: (text) => console.warn("[MF stderr]", text)
+            print: (t) => console.log("[MF]", t),
+            printErr: (t) => console.warn("[MF err]", t),
+            locateFile: (path) => path  // manifast.wasm next to this page
         }).then(function (Module) {
             window.Module = Module;
-            console.log("[Manifast] WASM VM loaded successfully");
-            document.getElementById('loader').style.opacity = '0';
-            setTimeout(() => document.getElementById('loader').remove(), 500);
+            setStatus("ok", "Ready");
+            document.getElementById("btnRun").disabled = false;
 
-            // Register event callback (vii = void, int, int/ptr)
+            const loader = document.getElementById("loader");
+            loader.style.opacity = "0";
+            setTimeout(() => loader.remove(), 400);
+
+            // Optional live callback (still used if some builds emit early events)
             try {
-                const eventCallback = Module.addFunction((type, dataPtr) => {
-                    const data = Module.UTF8ToString(dataPtr);
-                    const outputEl = document.getElementById('output');
-                    if (type === 0) {
-                        const span = document.createElement('span');
-                        span.textContent = data;
-                        outputEl.appendChild(span);
-                    } else if (type === 2) {
-                        const img = document.createElement('img');
-                        img.src = data;
-                        outputEl.appendChild(img);
-                    } else if (type === 3) {
-                        outputEl.innerHTML = '';
-                    }
-                    outputEl.scrollTop = outputEl.scrollHeight;
-                }, 'vii');
-                if (Module._mf_set_event_callback) {
-                    Module._mf_set_event_callback(eventCallback);
+                if (Module.addFunction && Module._mf_set_event_callback) {
+                    const cb = Module.addFunction(function () { /* playback uses return string */ }, "vii");
+                    Module._mf_set_event_callback(cb);
                 }
             } catch (e) {
-                console.warn("[Manifast] addFunction not available, using return-string mode", e);
+                console.warn("event callback optional", e);
             }
 
             loadCustom();
             initSidebar();
-            selectExample('fib');
+            selectExample("fib");
+            // Hide menu button on desktop
+            function syncMenuBtn() {
+                document.getElementById("btnMenu").style.display =
+                    window.matchMedia("(max-width: 900px)").matches ? "inline-flex" : "none";
+            }
+            syncMenuBtn();
+            window.addEventListener("resize", syncMenuBtn);
         }).catch(function (err) {
-            console.error("[Manifast] Failed to initialize WASM:", err);
-            document.querySelector('#loader p').textContent = 'Failed to load WASM: ' + err.message;
-            document.querySelector('#loader p').style.color = 'var(--error)';
+            console.error(err);
+            setStatus("err", "Load failed");
+            const p = document.querySelector("#loader p");
+            if (p) {
+                p.textContent = "Failed to load WASM: " + (err && err.message ? err.message : err);
+                p.style.color = "var(--error)";
+            }
         });
     </script>
 </body>

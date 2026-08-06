@@ -178,40 +178,57 @@ void Compiler::compile(Stmt* stmt) {
     }
     else if (auto* s = dynamic_cast<ForStmt*>(stmt)) {
         beginScope();
-        // untuk i = start ke end loop body
-        // 1. Init var
+        // untuk i = start ke end [langkah step] lakukan body tutup
+        // Continue while (i - end) * step <= 0 (supports positive & negative steps)
         int rVar = allocReg();
         int rStart = compile(s->start.get());
         emit(createABC(OpCode::MOVE, rVar, rStart, 0));
         freeReg(); // start temp
-        
+
         locals.push_back({s->varName, scopeDepth, rVar});
-        
-        int rEnd = compile(s->end.get()); // Keep end in reg for comparison
-        
+
+        int rEnd = compile(s->end.get());
+
+        // step register (default 1)
+        int rStep;
+        if (s->step) {
+            rStep = compile(s->step.get());
+        } else {
+            int k1 = makeConstant({0, 1.0, nullptr});
+            rStep = allocReg();
+            emit(createABx(OpCode::LOADK, rStep, k1), s->line, s->offset);
+        }
+
+        int k0 = makeConstant({0, 0.0, nullptr});
+        int rZero = allocReg();
+        emit(createABx(OpCode::LOADK, rZero, k0), s->line, s->offset);
+
         int loopTop = (int)currentChunk->code.size();
-        
-        // condition: var <= end
-        emit(createABC(OpCode::LE, 1, rVar, rEnd), s->line, s->offset);
-        emit(createAsBx(OpCode::JMP, 0, 1), s->line, s->offset); // Skip body jump if false
+
+        // rTmp = (var - end) * step
+        int rTmp = allocReg();
+        emit(createABC(OpCode::SUB, rTmp, rVar, rEnd), s->line, s->offset);
+        emit(createABC(OpCode::MUL, rTmp, rTmp, rStep), s->line, s->offset);
+        // if rTmp <= 0 then enter body, else jump end
+        emit(createABC(OpCode::LE, 1, rTmp, rZero), s->line, s->offset);
+        emit(createAsBx(OpCode::JMP, 0, 1), s->line, s->offset); // skip end-jump when true
         int jmpEndIdx = emit(createAsBx(OpCode::JMP, 0, 0), s->line, s->offset);
+        freeReg(); // rTmp
         int bodyStart = (int)currentChunk->code.size();
-        
+
         compile(s->body.get());
-        
-        // increment: i = i + 1
-        int k1 = makeConstant({0, 1.0, nullptr});
-        int r1 = allocReg();
-        emit(createABx(OpCode::LOADK, r1, k1), s->line, s->offset);
-        emit(createABC(OpCode::ADD, rVar, rVar, r1), s->line, s->offset);
-        freeReg(); 
-        
+
+        // var = var + step
+        emit(createABC(OpCode::ADD, rVar, rVar, rStep), s->line, s->offset);
+
         int loopBottom = (int)currentChunk->code.size();
         emit(createAsBx(OpCode::JMP, 0, loopTop - loopBottom - 1), s->line, s->offset);
-        
+
         int endPos = (int)currentChunk->code.size();
         currentChunk->code[jmpEndIdx] = createAsBx(OpCode::JMP, 0, endPos - bodyStart);
-        
+
+        freeReg(); // rZero
+        freeReg(); // rStep
         freeReg(); // rEnd
         endScope();
     }

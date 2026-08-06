@@ -27,6 +27,7 @@ static manifast::plot::PlotBackend g_plot;
 static bool g_plot_initialized = false;
 static ManifastPlotShowCallback g_plot_show_callback = nullptr;
 static ManifastClearOutputCallback g_clear_output_callback = nullptr;
+static ManifastDelayCallback g_delay_callback = nullptr;
 
 static void plot_for_impl(Any* y_arr, Any* x_arr, Any* config) {
      g_plot = manifast::plot::PlotBackend();
@@ -106,6 +107,10 @@ MF_API void manifast_set_plot_show_callback(ManifastPlotShowCallback cb) {
 // Implementation for the new clear output callback setter
 MF_API void manifast_set_clear_output_callback(ManifastClearOutputCallback cb) {
     g_clear_output_callback = cb;
+}
+
+MF_API void manifast_set_delay_callback(ManifastDelayCallback cb) {
+    g_delay_callback = cb;
 }
 
 MF_API void* mf_malloc(size_t size) {
@@ -569,12 +574,23 @@ MF_API Any* manifast_impor(const char* name) {
             args[-1] = {3, 0.0, nullptr};
         };
         auto tunggu = [](void* vm, Any* args, int nargs) {
-            if (nargs < 1 || args[0].type != 0) return;
-            double sec = args[0].number;
-            // Native wait might block the main thread, but Emscripten handles this for now
-            // if we are using async methods or if we just want it to work in native
-            std::this_thread::sleep_for(std::chrono::milliseconds((int)(sec)));
-            args[-1] = {3, 0.0, nullptr};
+            // Method form: os.tunggu(ms) injects self as args[0]
+            int idx = 0;
+            if (nargs >= 1 && args[0].type != ANY_NUMBER) idx++;
+            if (nargs - idx < 1 || args[idx].type != ANY_NUMBER) {
+                args[-1] = {ANY_NIL, 0.0, nullptr};
+                return;
+            }
+            int ms = (int)args[idx].number;
+            if (ms < 0) ms = 0;
+            if (g_delay_callback) {
+                // Non-blocking path for WASM/playground (emit marker / schedule)
+                g_delay_callback(ms);
+            } else {
+                // Native CLI: block for the requested milliseconds
+                std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+            }
+            args[-1] = {ANY_NIL, 0.0, nullptr};
         };
         Any fn1 = {4, 0.0, (void*)+waktuNano};
         Any fn2 = {4, 0.0, (void*)+exitFn};

@@ -115,6 +115,11 @@ MF_API void manifast_set_plot_show_callback(ManifastPlotShowCallback cb);
 typedef void (*ManifastClearOutputCallback)();
 MF_API void manifast_set_clear_output_callback(ManifastClearOutputCallback cb);
 
+// Delay/sleep callback (ms). Used by WASM/playground so os.tunggu does not block the browser.
+// When unset, tunggu sleeps on the calling thread (native CLI).
+typedef void (*ManifastDelayCallback)(int ms);
+MF_API void manifast_set_delay_callback(ManifastDelayCallback cb);
+
 } // extern "C"
 
 #ifdef __cplusplus
