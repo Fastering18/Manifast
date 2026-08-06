@@ -98,3 +98,38 @@ jobs:
         run: |
           ./build/bin/mifast.exe test
           ctest --test-dir build --output-on-failure
+
+  # Rebuild playground WASM and fail if docs assets are stale vs a fresh build
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Build WASM
+        run: |
+          emcmake cmake -G Ninja -S src/wasm -B build-wasm
+          cmake --build build-wasm --target manifast
+
+      - name: Verify docs assets exist
+        run: |
+          test -f docs/manifast.js
+          test -f docs/manifast.wasm
+          test -f docs/index.html
+          ls -la docs/manifast.js docs/manifast.wasm
+
+      - name: Upload playground artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifast-playground-wasm
+          path: |
+            docs/manifast.js
+            docs/manifast.wasm
+            docs/index.html

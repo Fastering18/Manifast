@@ -14,16 +14,18 @@ show_help() {
     echo "Usage: ./manifast.sh <command> [options]"
     echo ""
     echo "Commands:"
-    echo "  bootstrap   Install system packages (non-interactive apt/dnf)"
-    echo "  build       Configure and build the project"
-    echo "  run         Run manifast file in jit tier"
-    echo "  run-vm      Run manifast file in vm tier"
-    echo "  test        Run the test suite"
-    echo "  install     Install binaries to ~/.local (or \$PREFIX)"
-    echo "  uninstall   Remove binaries and PATH entry"
-    echo "  clean       Remove the build directory"
-    echo "  build-wasm  Build for WebAssembly (requires Emscripten)"
-    echo "  help        Show this help message"
+    echo "  bootstrap      Install system packages (non-interactive apt/dnf)"
+    echo "  build          Configure and build the project"
+    echo "  run            Run manifast file in jit tier"
+    echo "  run-vm         Run manifast file in vm tier"
+    echo "  test           Run the test suite"
+    echo "  check          Pre-push gate: tests + rebuild WASM into docs/"
+    echo "  install-hooks  Enable versioned git pre-push hook"
+    echo "  install        Install binaries to ~/.local (or \$PREFIX)"
+    echo "  uninstall      Remove binaries and PATH entry"
+    echo "  clean          Remove the build directory"
+    echo "  build-wasm     Build for WebAssembly (requires Emscripten)"
+    echo "  help           Show this help message"
     echo ""
     echo "Options:"
     echo "  --fast              Use system LLVM (skip vcpkg LLVM bundle)"
@@ -88,6 +90,14 @@ help)
     ;;
 bootstrap)
     bash "$SCRIPT_DIR/scripts/bootstrap-linux.sh"
+    exit $?
+    ;;
+install-hooks)
+    bash "$SCRIPT_DIR/scripts/install-hooks.sh"
+    exit $?
+    ;;
+check)
+    bash "$SCRIPT_DIR/scripts/check-before-push.sh" "${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}"
     exit $?
     ;;
 clean)

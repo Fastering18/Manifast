@@ -1,19 +1,29 @@
-# Manifast: Fast Indonesian-Syntax Programming Language
+# Manifast
 
-Manifast is a high-performance programming language featuring Indonesian syntax, designed for speed and simplicity. It leverages LLVM for JIT and AOT compilation, offering native performance with a syntax that is intuitive for Indonesian developers.
+Manifast is a high-performance programming language with Indonesian-inspired syntax.
+It targets both general-purpose scripting (CLI `mifast`) and embedding (lightweight
+bytecode VM without LLVM, plus optional LLVM JIT/AOT and WebAssembly).
 
-## Key Features
-- **Indonesian Syntax**: Uses familiar Indonesian keywords (e.g., `fungsi`, `jika`, `kembali`).
-- **LLVM-Powered**: High-performance execution via LLVM JIT/AOT.
-- **Embedded VM**: Includes a lightweight bytecode VM for constrained environments and WASM.
-- **Cross-Platform**: Supports Windows, Linux, and WebAssembly.
-- **WASM Playground**: A web-based IDE for testing and sharing Manifast code.
+## Key features
+- Indonesian-style keywords: fungsi, jika, selama, kembali, lokal, coba/tangkap
+- Optional static types (i8–i64, f32/f64, char, custom tipe / structs)
+- Tiered runtime: bytecode VM, optional AsmJit, optional LLVM JIT/AOT
+- Embeddable C API (include/manifast/Runtime.h) via manifast_core
+- Cross-platform: Windows, Linux, WebAssembly playground
+- Math stdlib and plotting helpers
 
 ## Resources
-- **GitHub Repository**: https://github.com/Fastering18/Manifast
-- **Documentation**: https://fastering.thedev.id/Manifast/
-- **Playground**: https://fastering.thedev.id/Manifast/
+- Repository: https://github.com/Fastering18/Manifast
+- Playground: https://fastering.thedev.id/Manifast/
+- Grammar: docs/GRAMMAR.md
+- Install / build: docs/INSTALLING.md
+- Contributing / push gates: CONTRIBUTING.md
 
-## Installation
-- **Windows (PowerShell)**: `irm https://fastering.thedev.id/Manifast/install.ps1 | iex`
-- **Linux/macOS (Bash)**: `curl -fsSL https://fastering.thedev.id/Manifast/install.sh | bash`
+## Install binaries
+- Windows: iwr -useb https://raw.githubusercontent.com/Fastering18/Manifast/master/install.ps1 | iex
+- Linux/macOS: curl -fsSL https://raw.githubusercontent.com/Fastering18/Manifast/master/install.sh | bash
+
+## Quality before push
+- All tests: mifast test + ctest
+- Rebuild WASM playground into docs/ (manifast.js, manifast.wasm, index.html)
+- Local: ./manifast.ps1 check  or  ./scripts/check-before-push.sh

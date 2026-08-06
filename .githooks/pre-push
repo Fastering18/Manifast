@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Manifast pre-push gate: all tests must pass; WASM playground must be rebuilt.
+# Install: git config core.hooksPath .githooks
+# Bypass (emergency only): SKIP_PUSH_CHECKS=1 git push
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT"
+
+if [[ "${SKIP_PUSH_CHECKS:-}" == "1" ]]; then
+  echo "WARN: SKIP_PUSH_CHECKS=1 — pre-push gate skipped" >&2
+  exit 0
+fi
+
+echo "Manifast pre-push: tests + WASM..."
+
+if command -v powershell.exe >/dev/null 2>&1 && [[ -f "$ROOT/scripts/check-before-push.ps1" ]]; then
+  # Prefer PowerShell script on Windows Git Bash / PowerShell-capable hosts
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ROOT/scripts/check-before-push.ps1"
+  exit $?
+fi
+
+if [[ -f "$ROOT/scripts/check-before-push.sh" ]]; then
+  bash "$ROOT/scripts/check-before-push.sh"
+  exit $?
+fi
+
+echo "FAIL: no check-before-push script found" >&2
+exit 1

@@ -45,3 +45,5 @@ vcpkg_installed/
 vendor/
 *.obj
 *.orig
+
+build-wasm/

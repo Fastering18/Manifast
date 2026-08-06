@@ -1,6 +1,6 @@
 param (
     [Parameter(Mandatory=$true, Position=0)]
-    [ValidateSet("build", "run", "run-vm", "test", "clean", "help", "build-wasm", "install", "uninstall", "bootstrap")]
+    [ValidateSet("build", "run", "run-vm", "test", "clean", "help", "build-wasm", "install", "uninstall", "bootstrap", "check", "install-hooks")]
     [string]$Command,
 
     [switch]$Fast,
@@ -21,16 +21,18 @@ function Show-Help {
     Write-Host "Usage: .\manifast.ps1 <command> [options]"
     Write-Host ""
     Write-Host "Commands:"
-    Write-Host "  bootstrap     Install toolchain via winget/MSYS2 (non-GUI)"
-    Write-Host "  build         Configure and build the project"
-    Write-Host "  run           Run manifast file in jit tier"
-    Write-Host "  run-vm        Run manifast file in vm tier"
-    Write-Host "  test          Run the test suite"
-    Write-Host "  install       Install binaries to user profile and add to PATH"
-    Write-Host "  uninstall     Remove binaries from system and clear from PATH"
-    Write-Host "  clean         Remove the build directory"
-    Write-Host "  build-wasm    Build for WebAssembly (requires Emscripten)"
-    Write-Host "  help          Show this help message"
+    Write-Host "  bootstrap      Install toolchain via winget/MSYS2 (non-GUI)"
+    Write-Host "  build          Configure and build the project"
+    Write-Host "  run            Run manifast file in jit tier"
+    Write-Host "  run-vm         Run manifast file in vm tier"
+    Write-Host "  test           Run the test suite"
+    Write-Host "  check          Pre-push gate: tests + rebuild WASM into docs/"
+    Write-Host "  install-hooks  Enable versioned git pre-push hook"
+    Write-Host "  install        Install binaries to user profile and add to PATH"
+    Write-Host "  uninstall      Remove binaries from system and clear from PATH"
+    Write-Host "  clean          Remove the build directory"
+    Write-Host "  build-wasm     Build for WebAssembly (requires Emscripten)"
+    Write-Host "  help           Show this help message"
     Write-Host ""
     Write-Host "Options:"
     Write-Host "  --fast              Use system/MSYS2 LLVM (skip vcpkg LLVM)"
@@ -88,6 +90,28 @@ function Find-EmsdkEnv {
     return $null
 }
 
+function Invoke-WithEmsdk([scriptblock]$Action) {
+    $emsdkEnv = Find-EmsdkEnv
+    if (Get-Command emcmake -ErrorAction SilentlyContinue) {
+        & $Action
+        return $LASTEXITCODE
+    }
+    if ($emsdkEnv) {
+        $env:EMSDK = Split-Path $emsdkEnv
+        # Activate EMSDK in cmd then re-enter PowerShell for the build steps is awkward;
+        # callers that need activation should use cmd wrappers. Here we prepend typical paths.
+        $upstream = Join-Path (Split-Path $emsdkEnv) "upstream\emscripten"
+        $nodeDirs = Get-ChildItem (Join-Path (Split-Path $emsdkEnv) "node") -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending
+        if (Test-Path $upstream) { $env:PATH = "$upstream;" + $env:PATH }
+        if ($nodeDirs) { $env:PATH = "$($nodeDirs[0].FullName);" + $env:PATH }
+        $env:PATH = "$(Split-Path $emsdkEnv);" + $env:PATH
+        & $Action
+        return $LASTEXITCODE
+    }
+    Write-Host "Error: Emscripten not found. Set EMSDK or install to C:\emsdk." -ForegroundColor Red
+    return 1
+}
+
 function Ensure-Cmake {
     if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
         Write-Host "Error: cmake not found. Run: .\manifast.ps1 bootstrap" -ForegroundColor Red
@@ -106,6 +130,16 @@ if ($Command -eq "help") {
 
 if ($Command -eq "bootstrap") {
     & "$ScriptRoot\scripts\bootstrap-windows.ps1" @RemainingArgs
+    exit $LASTEXITCODE
+}
+
+if ($Command -eq "install-hooks") {
+    & "$ScriptRoot\scripts\install-hooks.ps1"
+    exit $LASTEXITCODE
+}
+
+if ($Command -eq "check") {
+    & "$ScriptRoot\scripts\check-before-push.ps1" @RemainingArgs
     exit $LASTEXITCODE
 }
 
@@ -304,21 +338,32 @@ if ($Command -eq "build-wasm") {
     }
 
     $EmsdkEnv = Find-EmsdkEnv
+    # Prefer Ninja from MSYS2/winget when available
+    $msysPrefix = Find-Msys2Ucrt
+    if ($msysPrefix) {
+        $env:PATH = "$msysPrefix\bin;" + $env:PATH
+    }
+    $gen = "Ninja"
+    if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+        $gen = "MinGW Makefiles"
+    }
+
     if ($EmsdkEnv) {
         Write-Host "Activating Emscripten ($EmsdkEnv)..." -ForegroundColor Gray
-        cmd /c "call `"$EmsdkEnv`" > NUL && emcmake cmake -G Ninja -S src/wasm -B $WasmBuildDir && cmake --build $WasmBuildDir --target manifast"
+        cmd /c "call `"$EmsdkEnv`" > NUL && emcmake cmake -G `"$gen`" -S src/wasm -B $WasmBuildDir && cmake --build $WasmBuildDir --target manifast"
     } elseif (Get-Command emcmake -ErrorAction SilentlyContinue) {
-        emcmake cmake -G Ninja -S src/wasm -B $WasmBuildDir
+        emcmake cmake -G $gen -S src/wasm -B $WasmBuildDir
         if ($LASTEXITCODE -eq 0) {
             cmake --build $WasmBuildDir --target manifast
         }
     } else {
-        Write-Host "Error: Emscripten not found. Set EMSDK or put emcmake on PATH." -ForegroundColor Red
+        Write-Host "Error: Emscripten not found. Set EMSDK (e.g. C:\emsdk) or put emcmake on PATH." -ForegroundColor Red
         exit 1
     }
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "WASM Build Success!" -ForegroundColor Green
+        Write-Host "Playground assets: docs\manifast.js, docs\manifast.wasm, docs\index.html" -ForegroundColor Gray
     } else {
         Write-Host "WASM Build Failed!" -ForegroundColor Red
     }
