@@ -474,7 +474,7 @@
                 </svg>
             </button>
             <span class="logo-text">MANIFAST</span>
-            <span class="version-badge">v0.0.13 · WASM</span>
+            <span class="version-badge">v0.0.13 · playground</span>
         </div>
 
         <div class="header-actions">
@@ -1007,50 +1007,76 @@ m1.info()`
             }
         });
     </script>
-    <script src="manifast.js"></script>
+    <!-- Cache-bust so GitHub Pages / CDNs pick up new builds after push -->
+    <script src="manifast.js?v=0.0.13-c5f5"></script>
     <script>
-        ManifastModule({
-            print: (t) => console.log("[MF]", t),
-            printErr: (t) => console.warn("[MF err]", t),
-            locateFile: (path) => path  // manifast.wasm next to this page
-        }).then(function (Module) {
-            window.Module = Module;
-            setStatus("ok", "Ready");
-            document.getElementById("btnRun").disabled = false;
+        (function () {
+            // Resolve wasm next to this page (works for /Manifast/ on GitHub Pages)
+            const pageBase = new URL(".", window.location.href).href;
+            const asset = (name) => new URL(name, pageBase).href;
 
-            const loader = document.getElementById("loader");
-            loader.style.opacity = "0";
-            setTimeout(() => loader.remove(), 400);
-
-            // Optional live callback (still used if some builds emit early events)
-            try {
-                if (Module.addFunction && Module._mf_set_event_callback) {
-                    const cb = Module.addFunction(function () { /* playback uses return string */ }, "vii");
-                    Module._mf_set_event_callback(cb);
+            if (typeof ManifastModule !== "function") {
+                setStatus("err", "Load failed");
+                const p = document.querySelector("#loader p");
+                if (p) {
+                    p.textContent = "manifast.js did not define ManifastModule. Hard-refresh (Ctrl+F5) or clear cache.";
+                    p.style.color = "var(--error)";
                 }
-            } catch (e) {
-                console.warn("event callback optional", e);
+                return;
             }
 
-            loadCustom();
-            initSidebar();
-            selectExample("fib");
-            // Hide menu button on desktop
-            function syncMenuBtn() {
-                document.getElementById("btnMenu").style.display =
-                    window.matchMedia("(max-width: 900px)").matches ? "inline-flex" : "none";
-            }
-            syncMenuBtn();
-            window.addEventListener("resize", syncMenuBtn);
-        }).catch(function (err) {
-            console.error(err);
-            setStatus("err", "Load failed");
-            const p = document.querySelector("#loader p");
-            if (p) {
-                p.textContent = "Failed to load WASM: " + (err && err.message ? err.message : err);
-                p.style.color = "var(--error)";
-            }
-        });
+            ManifastModule({
+                print: (t) => console.log("[MF]", t),
+                printErr: (t) => console.warn("[MF err]", t),
+                // Critical: do NOT strip the directory — GitHub Pages serves under /Manifast/
+                locateFile: (path, prefix) => {
+                    if (prefix) return prefix + path;
+                    return asset(path.split("/").pop());
+                }
+            }).then(function (Module) {
+                window.Module = Module;
+                setStatus("ok", "Ready");
+                document.getElementById("btnRun").disabled = false;
+
+                const loader = document.getElementById("loader");
+                if (loader) {
+                    loader.style.opacity = "0";
+                    setTimeout(() => loader.remove(), 400);
+                }
+
+                try {
+                    if (Module.addFunction && Module._mf_set_event_callback) {
+                        const cb = Module.addFunction(function () { /* playback uses return string */ }, "vii");
+                        Module._mf_set_event_callback(cb);
+                    }
+                } catch (e) {
+                    console.warn("event callback optional", e);
+                }
+
+                loadCustom();
+                initSidebar();
+                selectExample("fib");
+                function syncMenuBtn() {
+                    const btn = document.getElementById("btnMenu");
+                    if (btn) {
+                        btn.style.display =
+                            window.matchMedia("(max-width: 900px)").matches ? "inline-flex" : "none";
+                    }
+                }
+                syncMenuBtn();
+                window.addEventListener("resize", syncMenuBtn);
+                if (window.editor) window.editor.refresh();
+            }).catch(function (err) {
+                console.error(err);
+                setStatus("err", "Load failed");
+                const p = document.querySelector("#loader p");
+                if (p) {
+                    p.textContent = "Failed to load WASM: " + (err && err.message ? err.message : err)
+                        + " — try hard-refresh (Ctrl+F5).";
+                    p.style.color = "var(--error)";
+                }
+            });
+        })();
     </script>
 </body>
 

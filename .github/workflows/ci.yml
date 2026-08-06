@@ -96,7 +96,8 @@ jobs:
       - name: Run Tests
         shell: msys2 {0}
         run: |
-          ./build/bin/mifast.exe test
+          # VM-only binary has no LLVM JIT — always exercise the bytecode suite
+          ./build/bin/mifast.exe test --vm
           ctest --test-dir build --output-on-failure
 
   # Rebuild playground WASM and fail if docs assets are stale vs a fresh build

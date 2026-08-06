@@ -321,7 +321,12 @@ int main(int argc, char* argv[]) {
     std::string cmd = argv[1];
     
     // Simple argument parsing
+    // Without LLVM, always use the bytecode VM (no JIT tier available).
+#ifndef MANIFAST_HAS_LLVM
+    bool useVM = true;
+#else
     bool useVM = false;
+#endif
     bool debugDev = false;
     size_t stackSizeMB = 16; // default 16MB stack size
     std::string filePath;
