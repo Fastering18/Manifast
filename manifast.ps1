@@ -337,8 +337,43 @@ if ($Command -eq "build-wasm") {
         Remove-Item $WasmBuildDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    # Git Bash hooks inject MSYSTEM/unix PATH fragments that break cmd + emsdk_env.bat
+    foreach ($v in @("MSYSTEM", "MSYS", "MSYSTEM_PREFIX", "MSYSTEM_CHOST", "MINGW_PREFIX", "MINGW_CHOST")) {
+        Remove-Item "Env:$v" -ErrorAction SilentlyContinue
+    }
+    if ($env:EMSDK -match '^/([a-zA-Z])/(.*)$') {
+        $env:EMSDK = ($Matches[1].ToUpper() + ":\" + ($Matches[2] -replace '/', '\'))
+    }
+
+    $emsdkRoot = $null
     $EmsdkEnv = Find-EmsdkEnv
-    # Prefer Ninja from MSYS2/winget when available
+    if ($EmsdkEnv) {
+        $emsdkRoot = Split-Path $EmsdkEnv
+        $env:EMSDK = $emsdkRoot
+    } elseif ($env:EMSDK -and (Test-Path $env:EMSDK)) {
+        $emsdkRoot = $env:EMSDK
+    }
+
+    $emcmake = $null
+    if ($emsdkRoot) {
+        $candidate = Join-Path $emsdkRoot "upstream\emscripten\emcmake.bat"
+        if (Test-Path $candidate) { $emcmake = $candidate }
+        $emBin = Join-Path $emsdkRoot "upstream\emscripten"
+        $nodeDir = Get-ChildItem (Join-Path $emsdkRoot "node") -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending | Select-Object -First 1
+        $pathPrefix = @($emsdkRoot, $emBin)
+        if ($nodeDir) { $pathPrefix += $nodeDir.FullName }
+        $env:PATH = ($pathPrefix -join ";") + ";" + $env:PATH
+        $env:EMSDK_NODE = if ($nodeDir) {
+            $n = Join-Path $nodeDir.FullName "node.exe"
+            if (Test-Path $n) { $n } else { $env:EMSDK_NODE }
+        } else { $env:EMSDK_NODE }
+    }
+    if (-not $emcmake -and (Get-Command emcmake -ErrorAction SilentlyContinue)) {
+        $emcmake = "emcmake"
+    }
+
+    # Ninja for configure/build (prefer MSYS2 UCRT)
     $msysPrefix = Find-Msys2Ucrt
     if ($msysPrefix) {
         $env:PATH = "$msysPrefix\bin;" + $env:PATH
@@ -348,17 +383,19 @@ if ($Command -eq "build-wasm") {
         $gen = "MinGW Makefiles"
     }
 
-    if ($EmsdkEnv) {
-        Write-Host "Activating Emscripten ($EmsdkEnv)..." -ForegroundColor Gray
-        cmd /c "call `"$EmsdkEnv`" > NUL && emcmake cmake -G `"$gen`" -S src/wasm -B $WasmBuildDir && cmake --build $WasmBuildDir --target manifast"
-    } elseif (Get-Command emcmake -ErrorAction SilentlyContinue) {
-        emcmake cmake -G $gen -S src/wasm -B $WasmBuildDir
-        if ($LASTEXITCODE -eq 0) {
-            cmake --build $WasmBuildDir --target manifast
-        }
-    } else {
+    if (-not $emcmake) {
         Write-Host "Error: Emscripten not found. Set EMSDK (e.g. C:\emsdk) or put emcmake on PATH." -ForegroundColor Red
         exit 1
+    }
+
+    Write-Host "Using Emscripten: $emcmake" -ForegroundColor Gray
+    if ($emcmake -like "*.bat") {
+        cmd.exe /c "`"$emcmake`" cmake -G `"$gen`" -S src/wasm -B $WasmBuildDir"
+    } else {
+        & $emcmake cmake -G $gen -S src/wasm -B $WasmBuildDir
+    }
+    if ($LASTEXITCODE -eq 0) {
+        cmake --build $WasmBuildDir --target manifast
     }
 
     if ($LASTEXITCODE -eq 0) {

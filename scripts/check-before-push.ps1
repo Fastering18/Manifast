@@ -118,30 +118,18 @@ if ($SkipWasm) {
         }
     }
 
-    $hasEmcmake = [bool](Get-Command emcmake -ErrorAction SilentlyContinue)
-    if (-not $hasEmcmake -and -not $emsdkEnv) {
+    if (-not $emsdkEnv -and -not (Get-Command emcmake -ErrorAction SilentlyContinue)) {
         Fail "Emscripten not found. Install EMSDK or set EMSDK. Use -SkipWasm only in emergencies."
     }
 
-    $ps1 = Join-Path $Root "manifast.ps1"
-    if ($emsdkEnv -and -not $hasEmcmake) {
-        # Write a tiny cmd file so PowerShell never parses cmd metacharacters
-        $tmpCmd = Join-Path $env:TEMP "manifast-prepush-wasm.cmd"
-        $lines = @(
-            "@echo off"
-            ('call "' + $emsdkEnv + '" >nul 2>&1')
-            ("if errorlevel 1 exit /b 1")
-            ('cd /d "' + $Root + '"')
-            ('powershell -NoProfile -ExecutionPolicy Bypass -File "' + $ps1 + '" build-wasm')
-            "exit /b %ERRORLEVEL%"
-        )
-        Set-Content -Path $tmpCmd -Value $lines -Encoding ASCII
-        cmd.exe /c $tmpCmd
-        if ($LASTEXITCODE -ne 0) { Fail ("build-wasm failed (exit " + $LASTEXITCODE + ")") }
-    } else {
-        & $ps1 build-wasm
-        if ($LASTEXITCODE -ne 0) { Fail ("build-wasm failed (exit " + $LASTEXITCODE + ")") }
+    # Clear Git-Bash MSYS vars so Emscripten uses Windows paths
+    foreach ($v in @("MSYSTEM", "MSYS", "MSYSTEM_PREFIX", "MSYSTEM_CHOST", "MINGW_PREFIX", "MINGW_CHOST")) {
+        Remove-Item "Env:$v" -ErrorAction SilentlyContinue
     }
+
+    $ps1 = Join-Path $Root "manifast.ps1"
+    & $ps1 build-wasm
+    if ($LASTEXITCODE -ne 0) { Fail ("build-wasm failed (exit " + $LASTEXITCODE + ")") }
 
     foreach ($asset in @("docs\manifast.js", "docs\manifast.wasm", "docs\index.html")) {
         if (-not (Test-Path $asset)) { Fail ("missing required web asset after WASM build: " + $asset) }
