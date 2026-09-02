@@ -77,6 +77,13 @@ private:
     int heat_w_ = 0, heat_h_ = 0;
 
     void render(ChartType type);
+    void renderBackground(int w, int h);
+    void renderHeatmap(int w, int h);
+    void renderGridAndLabels(int w, int h, double xmin, double xmax, double ymin, double ymax);
+    void renderLineSeries(const Series& series, uint32_t color, double xmin, double xmax, double ymin, double ymax, ChartType type);
+    void renderScatterSeries(const Series& series, uint32_t color, double xmin, double xmax, double ymin, double ymax);
+    void renderBarSeries(const Series& series, uint32_t color, int pw, double xmin, double xmax, double ymin, double ymax, size_t si, size_t total_series);
+
     void drawRect(int x, int y, int w, int h, uint32_t color);
     void drawCircle(int cx, int cy, int r, uint32_t color);
     void setPixel(int x, int y, uint32_t color);
