@@ -342,12 +342,32 @@ void PlotBackend::render(ChartType type) {
 
         int pad = config_.padding;
         int pw = w - 2 * pad, ph = h - 2 * pad;
+        double inv_diff = 1.0 / (mx - mn);
+
+        // Cache row offsets and divisions
+        int safe_ph = std::max(1, ph);
+        int safe_pw = std::max(1, pw);
+
+        std::vector<int> sx_map(pw);
+        for (int x = 0; x < pw; x++) {
+            sx_map[x] = std::min(heat_w_ - 1, x * heat_w_ / safe_pw);
+        }
+
         for (int y = 0; y < ph; y++) {
-            int sy = std::min(heat_h_ - 1, y * heat_h_ / std::max(1, ph));
-            for (int x = 0; x < pw; x++) {
-                int sx = std::min(heat_w_ - 1, x * heat_w_ / std::max(1, pw));
-                double t = (heatmap_[(size_t)sy * (size_t)heat_w_ + (size_t)sx] - mn) / (mx - mn);
-                setPixel(pad + x, pad + y, heatColor(t));
+            int py = pad + y;
+            if (py < 0 || py >= config_.height) continue;
+
+            int sy = std::min(heat_h_ - 1, y * heat_h_ / safe_ph);
+            size_t row_offset = (size_t)sy * (size_t)heat_w_;
+
+            // Calculate start and end indices for x to avoid inner loop bounds checking
+            int x_start = std::max(0, -pad);
+            int x_end = std::min(pw, config_.width - pad);
+
+            for (int x = x_start; x < x_end; x++) {
+                int px = pad + x;
+                double t = (heatmap_[row_offset + (size_t)sx_map[x]] - mn) * inv_diff;
+                setPixel(px, py, heatColor(t));
             }
         }
         if (!config_.title.empty()) {
