@@ -235,16 +235,99 @@ uint32_t parseColor(const char* s, uint32_t fallback) {
 }
 
 void PlotBackend::drawRect(int x, int y, int w, int h, uint32_t color) {
-    for (int dy = 0; dy < h; dy++)
-        for (int dx = 0; dx < w; dx++)
-            setPixel(x + dx, y + dy, color);
+    int x0 = std::max(0, x);
+    int y0 = std::max(0, y);
+    int x1 = std::min(config_.width, x + w);
+    int y1 = std::min(config_.height, y + h);
+
+    if (x0 >= x1 || y0 >= y1) return;
+
+    uint8_t cr = (color >> 24) & 0xFF;
+    uint8_t cg = (color >> 16) & 0xFF;
+    uint8_t cb = (color >> 8) & 0xFF;
+    uint8_t ca = color & 0xFF;
+
+    if (ca == 0) return;
+
+    if (ca == 0xFF) {
+        uint32_t fill_color;
+        uint8_t* p = reinterpret_cast<uint8_t*>(&fill_color);
+        p[0] = cr; p[1] = cg; p[2] = cb; p[3] = 0xFF;
+
+        for (int cy = y0; cy < y1; ++cy) {
+            uint32_t* row_ptr = reinterpret_cast<uint32_t*>(framebuffer_.data() + (cy * config_.width + x0) * 4);
+            std::fill(row_ptr, row_ptr + (x1 - x0), fill_color);
+        }
+    } else {
+        float af = ca / 255.0f;
+        float om_af = 1.0f - af;
+        for (int cy = y0; cy < y1; ++cy) {
+            int idx = (cy * config_.width + x0) * 4;
+            for (int cx = x0; cx < x1; ++cx) {
+                framebuffer_[idx] = (uint8_t)(cr * af + framebuffer_[idx] * om_af);
+                framebuffer_[idx+1] = (uint8_t)(cg * af + framebuffer_[idx+1] * om_af);
+                framebuffer_[idx+2] = (uint8_t)(cb * af + framebuffer_[idx+2] * om_af);
+                framebuffer_[idx+3] = 0xFF;
+                idx += 4;
+            }
+        }
+    }
 }
 
 void PlotBackend::drawCircle(int cx, int cy, int r, uint32_t color) {
-    for (int y = -r; y <= r; y++)
-        for (int x = -r; x <= r; x++)
-            if (x*x + y*y <= r*r)
-                setPixel(cx + x, cy + y, color);
+    int x0 = std::max(0, cx - r);
+    int y0 = std::max(0, cy - r);
+    int x1 = std::min(config_.width, cx + r + 1);
+    int y1 = std::min(config_.height, cy + r + 1);
+
+    if (x0 >= x1 || y0 >= y1) return;
+
+    uint8_t cr = (color >> 24) & 0xFF;
+    uint8_t cg = (color >> 16) & 0xFF;
+    uint8_t cb = (color >> 8) & 0xFF;
+    uint8_t ca = color & 0xFF;
+
+    if (ca == 0) return;
+
+    int r2 = r * r;
+
+    if (ca == 0xFF) {
+        uint32_t fill_color;
+        uint8_t* p = reinterpret_cast<uint8_t*>(&fill_color);
+        p[0] = cr; p[1] = cg; p[2] = cb; p[3] = 0xFF;
+
+        for (int y = y0; y < y1; ++y) {
+            int dy = y - cy;
+            int dy2 = dy * dy;
+            int idx = (y * config_.width + x0) * 4;
+            uint32_t* row = reinterpret_cast<uint32_t*>(framebuffer_.data() + idx);
+            for (int x = x0; x < x1; ++x) {
+                int dx = x - cx;
+                if (dx * dx + dy2 <= r2) {
+                    *row = fill_color;
+                }
+                row++;
+            }
+        }
+    } else {
+        float af = ca / 255.0f;
+        float om_af = 1.0f - af;
+        for (int y = y0; y < y1; ++y) {
+            int dy = y - cy;
+            int dy2 = dy * dy;
+            int idx = (y * config_.width + x0) * 4;
+            for (int x = x0; x < x1; ++x) {
+                int dx = x - cx;
+                if (dx * dx + dy2 <= r2) {
+                    framebuffer_[idx] = (uint8_t)(cr * af + framebuffer_[idx] * om_af);
+                    framebuffer_[idx+1] = (uint8_t)(cg * af + framebuffer_[idx+1] * om_af);
+                    framebuffer_[idx+2] = (uint8_t)(cb * af + framebuffer_[idx+2] * om_af);
+                    framebuffer_[idx+3] = 0xFF;
+                }
+                idx += 4;
+            }
+        }
+    }
 }
 
 void PlotBackend::computeAxes(double& xmin, double& xmax, double& ymin, double& ymax) {
