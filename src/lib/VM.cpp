@@ -111,6 +111,9 @@ static void nativeInput(VM* vm, Any* args, int nargs) {
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
+        if (line.size() > 1024 * 1024) {
+            MANIFAST_THROW("Error: Input line exceeds the 1 MiB limit");
+        }
         Any res = {1, 0.0, (void*)mf_strdup(line.c_str())};
         args[-1] = res;
     } else {

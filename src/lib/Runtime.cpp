@@ -1076,6 +1076,9 @@ MF_API Any* manifast_input() {
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
+        if (line.size() > 1024 * 1024) {
+            MANIFAST_THROW("Error: Input line exceeds the 1 MiB limit");
+        }
         return manifast_create_string(line.c_str());
     }
     return manifast_create_string("");
