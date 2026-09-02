@@ -1065,9 +1065,12 @@ llvm::Value* CodeGen::visitCallExpr(const CallExpr* expr) {
         }
 
         if (isPrint) {
+            llvm::Value* tab = nullptr;
+            if (expr->args.size() > 1) {
+                tab = createString("\t");
+            }
             for (size_t i = 0; i < expr->args.size(); ++i) {
                 if (i > 0) {
-                    llvm::Value* tab = createString("\t");
                     createCallOrInvoke(module->getFunction("manifast_print_any"), {tab});
                 }
                 llvm::Value* argVal = generateExpr(expr->args[i].get());
