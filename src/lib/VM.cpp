@@ -103,12 +103,15 @@ static void nativeTunggu(VM* vm, Any* args, int nargs) {
 static void nativeInput(VM* vm, Any* args, int nargs) {
     if (nargs >= 1 && args[0].type == 1) {
         printf("%s", (char*)args[0].ptr);
+        fflush(stdout);
     }
-    char buffer[1024];
-    if (fgets(buffer, 1024, stdin)) {
-        // Strip newline
-        buffer[strcspn(buffer, "\n")] = 0;
-        Any res = {1, 0.0, (void*)mf_strdup(buffer)};
+    std::string line;
+    if (std::getline(std::cin, line)) {
+        // Strip carriage return if it exists (for Windows compatibility)
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        Any res = {1, 0.0, (void*)mf_strdup(line.c_str())};
         args[-1] = res;
     } else {
         Any res = {1, 0.0, (void*)mf_strdup("")};
