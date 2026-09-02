@@ -1070,14 +1070,14 @@ MF_API void manifast_printfmt(Any* fmt, Any* any) {
 }
 
 MF_API Any* manifast_input() {
-    char buf[1024];
-    if (fgets(buf, sizeof(buf), stdin)) {
-        // Remove newline
-        size_t len = strlen(buf);
-        if (len > 0 && buf[len-1] == '\n') buf[len-1] = '\0';
-        return manifast_create_string(buf);
+    std::string result;
+    int c;
+    while ((c = fgetc(stdin)) != EOF && c != '\n') {
+        if (c != '\r') {
+            result += static_cast<char>(c);
+        }
     }
-    return manifast_create_string("");
+    return manifast_create_string(result.c_str());
 }
 
 #ifndef __EMSCRIPTEN__
