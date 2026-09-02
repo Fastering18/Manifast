@@ -342,12 +342,43 @@ void PlotBackend::render(ChartType type) {
 
         int pad = config_.padding;
         int pw = w - 2 * pad, ph = h - 2 * pad;
+
+        int denom_ph = std::max(1, ph);
+        int denom_pw = std::max(1, pw);
+        double range = mx - mn;
+
         for (int y = 0; y < ph; y++) {
-            int sy = std::min(heat_h_ - 1, y * heat_h_ / std::max(1, ph));
+            int sy = std::min(heat_h_ - 1, y * heat_h_ / denom_ph);
+            size_t sy_offset = (size_t)sy * (size_t)heat_w_;
+
+            // pad + x and pad + y are guaranteed to be within [pad, pad+pw) and [pad, pad+ph)
+            // config_.width = w, config_.height = h
+            // Since pad >= 0, pad+pw = w-pad <= w. Thus bounds checking is completely redundant here.
+            int dst_i = ((pad + y) * w + pad) * 4;
+
             for (int x = 0; x < pw; x++) {
-                int sx = std::min(heat_w_ - 1, x * heat_w_ / std::max(1, pw));
-                double t = (heatmap_[(size_t)sy * (size_t)heat_w_ + (size_t)sx] - mn) / (mx - mn);
-                setPixel(pad + x, pad + y, heatColor(t));
+                int sx = std::min(heat_w_ - 1, x * heat_w_ / denom_pw);
+                double t = (heatmap_[sy_offset + (size_t)sx] - mn) / range;
+                uint32_t color = heatColor(t);
+
+                uint8_t r = (color >> 24) & 0xFF;
+                uint8_t g = (color >> 16) & 0xFF;
+                uint8_t b = (color >> 8) & 0xFF;
+                uint8_t a = color & 0xFF;
+
+                if (a == 0xFF) {
+                    framebuffer_[dst_i] = r;
+                    framebuffer_[dst_i+1] = g;
+                    framebuffer_[dst_i+2] = b;
+                    framebuffer_[dst_i+3] = 255;
+                } else if (a > 0) {
+                    float aa = a / 255.0f;
+                    framebuffer_[dst_i]   = (uint8_t)(r * aa + framebuffer_[dst_i] * (1 - aa));
+                    framebuffer_[dst_i+1] = (uint8_t)(g * aa + framebuffer_[dst_i+1] * (1 - aa));
+                    framebuffer_[dst_i+2] = (uint8_t)(b * aa + framebuffer_[dst_i+2] * (1 - aa));
+                    framebuffer_[dst_i+3] = 255;
+                }
+                dst_i += 4;
             }
         }
         if (!config_.title.empty()) {
