@@ -342,12 +342,32 @@ void PlotBackend::render(ChartType type) {
 
         int pad = config_.padding;
         int pw = w - 2 * pad, ph = h - 2 * pad;
-        for (int y = 0; y < ph; y++) {
-            int sy = std::min(heat_h_ - 1, y * heat_h_ / std::max(1, ph));
+
+        if (pw > 0 && ph > 0) {
+            int ph_div = std::max(1, ph);
+            int pw_div = std::max(1, pw);
+            double inv_diff = 1.0 / (mx - mn);
+
+            std::vector<int> sx_cache(pw);
             for (int x = 0; x < pw; x++) {
-                int sx = std::min(heat_w_ - 1, x * heat_w_ / std::max(1, pw));
-                double t = (heatmap_[(size_t)sy * (size_t)heat_w_ + (size_t)sx] - mn) / (mx - mn);
-                setPixel(pad + x, pad + y, heatColor(t));
+                sx_cache[x] = std::min(heat_w_ - 1, x * heat_w_ / pw_div);
+            }
+
+            for (int y = 0; y < ph; y++) {
+                int sy = std::min(heat_h_ - 1, y * heat_h_ / ph_div);
+                size_t sy_offset = (size_t)sy * (size_t)heat_w_;
+
+                size_t row_start_idx = ((size_t)(pad + y) * (size_t)w + pad) * 4;
+                for (int x = 0; x < pw; x++) {
+                    double t = (heatmap_[sy_offset + (size_t)sx_cache[x]] - mn) * inv_diff;
+                    uint32_t c = heatColor(t);
+
+                    size_t i = row_start_idx + x * 4;
+                    framebuffer_[i]   = (c >> 24) & 0xFF;
+                    framebuffer_[i+1] = (c >> 16) & 0xFF;
+                    framebuffer_[i+2] = (c >> 8) & 0xFF;
+                    framebuffer_[i+3] = 0xFF;
+                }
             }
         }
         if (!config_.title.empty()) {
