@@ -1070,18 +1070,14 @@ MF_API void manifast_printfmt(Any* fmt, Any* any) {
 }
 
 MF_API Any* manifast_input() {
-    std::string line;
-    if (std::getline(std::cin, line)) {
-        // Strip carriage return if it exists (for Windows compatibility)
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
+    std::string result;
+    int c;
+    while ((c = fgetc(stdin)) != EOF && c != '\n') {
+        if (c != '\r') {
+            result += static_cast<char>(c);
         }
-        if (line.size() > 1024 * 1024) {
-            MANIFAST_THROW("Error: Input line exceeds the 1 MiB limit");
-        }
-        return manifast_create_string(line.c_str());
     }
-    return manifast_create_string("");
+    return manifast_create_string(result.c_str());
 }
 
 #ifndef __EMSCRIPTEN__

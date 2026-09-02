@@ -1,4 +1,5 @@
 #include "manifast/PlotBackend.h"
+#include "manifast/Utils/Process.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -469,13 +470,13 @@ bool PlotBackend::showWindow(ChartType type) {
     std::string tmpPath = "manifast_plot_tmp.bmp";
     writePNG(tmpPath.c_str(), framebuffer_.data(), config_.width, config_.height);
 #ifdef _WIN32
-    std::string cmd = "start \"\" \"" + tmpPath + "\"";
+    std::vector<std::string> args = {"cmd.exe", "/c", "start", "\"\"", tmpPath};
 #elif __APPLE__
-    std::string cmd = "open \"" + tmpPath + "\"";
+    std::vector<std::string> args = {"open", tmpPath};
 #else
-    std::string cmd = "xdg-open \"" + tmpPath + "\" &";
+    std::vector<std::string> args = {"xdg-open", tmpPath};
 #endif
-    return system(cmd.c_str()) == 0;
+    return manifast::utils::runCommand(args) == 0;
 #endif
 }
 
