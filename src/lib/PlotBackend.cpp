@@ -283,6 +283,18 @@ int PlotBackend::mapY(double val, double ymin, double ymax) {
 
 void PlotBackend::drawText(int x, int y, const std::string& text, uint32_t color, int scale) {
     int cur_x = x;
+
+    uint8_t r = (color >> 24) & 0xFF;
+    uint8_t g = (color >> 16) & 0xFF;
+    uint8_t b = (color >> 8) & 0xFF;
+    uint8_t a = color & 0xFF;
+    bool fast_path = (a == 0xFF);
+    float af = a / 255.0f;
+    float iaf = 1.0f - af;
+    uint8_t ra = (uint8_t)(r * af);
+    uint8_t ga = (uint8_t)(g * af);
+    uint8_t ba = (uint8_t)(b * af);
+
     for (char c : text) {
         const uint8_t* bmp = getCharBmp(c);
         for (int col = 0; col < 5; col++) {
@@ -291,7 +303,36 @@ void PlotBackend::drawText(int x, int y, const std::string& text, uint32_t color
                     if (scale == 1) {
                         setPixel(cur_x + col, y + row, color);
                     } else {
-                        drawRect(cur_x + col * scale, y + row * scale, scale, scale, color);
+                        int base_x = cur_x + col * scale;
+                        int base_y = y + row * scale;
+                        int px = std::max(0, base_x);
+                        int py = std::max(0, base_y);
+                        int pw = std::min(config_.width - px, base_x + scale - px);
+                        int ph = std::min(config_.height - py, base_y + scale - py);
+
+                        if (pw > 0 && ph > 0) {
+                            if (fast_path) {
+                                for (int dy = 0; dy < ph; dy++) {
+                                    int idx = ((py + dy) * config_.width + px) * 4;
+                                    for (int dx = 0; dx < pw; dx++) {
+                                        framebuffer_[idx++] = r;
+                                        framebuffer_[idx++] = g;
+                                        framebuffer_[idx++] = b;
+                                        framebuffer_[idx++] = 0xFF;
+                                    }
+                                }
+                            } else if (a > 0) {
+                                for (int dy = 0; dy < ph; dy++) {
+                                    int idx = ((py + dy) * config_.width + px) * 4;
+                                    for (int dx = 0; dx < pw; dx++) {
+                                        framebuffer_[idx] = ra + (uint8_t)(framebuffer_[idx] * iaf); idx++;
+                                        framebuffer_[idx] = ga + (uint8_t)(framebuffer_[idx] * iaf); idx++;
+                                        framebuffer_[idx] = ba + (uint8_t)(framebuffer_[idx] * iaf); idx++;
+                                        framebuffer_[idx] = 0xFF; idx++;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
